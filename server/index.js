@@ -66,41 +66,59 @@ async function startPuppeteer() {
       }/${MAX_PUPPETEER_RESTARTS}`
     );
 
-  try {
     browserInstance = await puppeteer.launch({
       executablePath: "/usr/bin/google-chrome",
-      args: ["--no-sandbox"],
-      // Add more robust launch options
+      args: ["--disable-dev-shm-usage", "--no-sandbox"],
       timeout: 30000,
       ignoreHTTPSErrors: true,
+      headless: true, // Ensure headless operation
+      defaultViewport: { width: 1280, height: 720 }, // Set default viewport
     });
 
-    // Verify browser health with a test page
+    // Advanced browser health checks
     const testPage = await browserInstance.newPage();
-    await testPage.goto("about:blank");
+    await testPage.goto("data:text/html,<h1>Health Check</h1>");
+    if (testPage.isClosed()) {
+      throw new Error("Health check page closed unexpectedly");
+    }
     await testPage.close();
 
-    serviceState.puppeteer.ready = true;
-    serviceState.puppeteer.transitioning = false;
-    serviceState.puppeteer.lastError = null;
-    serviceState.puppeteer.startupPhase = "ready";
-    serviceState.puppeteer.successfulHealthChecks = 0;
+    // Update state variables post-success
+    Object.assign(serviceState.puppeteer, {
+      ready: true,
+      transitioning: false,
+      lastError: null,
+      startupPhase: "ready",
+      successfulHealthChecks: 0,
+    });
+
     console.log("[Puppeteer] Initialization successful");
 
-    // Enhanced disconnect handler
+    // Enhanced disconnect handler with delay
     browserInstance.on("disconnected", async () => {
       console.error("[Puppeteer] Browser disconnected");
-      serviceState.puppeteer.ready = false;
-      serviceState.puppeteer.transitioning = true;
-      serviceState.puppeteer.startupPhase = "connecting";
-      serviceState.puppeteer.lastError = "Browser disconnected";
+      Object.assign(serviceState.puppeteer, {
+        ready: false,
+        transitioning: true,
+        startupPhase: "reconnecting",
+        lastError: "Browser disconnected",
+      });
+      await delay(5000); // Add a delay before retry
       await attemptPuppeteerRestart();
     });
   } catch (err) {
     handlePuppeteerError(err);
   } finally {
-    // Ensure cleanup happens even if there's an error
+    // Always cleanup residual state
+    if (!serviceState.puppeteer.ready) {
+      console.error("[Puppeteer] Cleanup incomplete state");
+    }
   }
+}
+
+// Helper function for retry delay
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function handlePuppeteerError(err) {
