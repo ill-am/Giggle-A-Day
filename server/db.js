@@ -18,81 +18,90 @@ if (!fs.existsSync(dbDir)) {
  * Initialize the SQLite database with all required tables
  * @returns {Promise<import('sqlite3').Database>}
  */
-function initializeDb() {
+/**/
+/**/
+// A simple helper function to promisify db.run
+function runPromise(db, sql) {
   return new Promise((resolve, reject) => {
-    const db = new sqlite3.Database(dbPath, (err) => {
+    db.run(sql, (err) => {
       if (err) {
-        console.error("Failed to connect to SQLite database:", err.message);
         return reject(err);
       }
-      console.log("Connected to SQLite database at", dbPath);
-      
-      // Enable foreign key constraints and create tables
-      db.serialize(() => {
-        db.run("PRAGMA foreign_keys = ON;", (err) => {
-          if (err) {
-            console.error("Failed to enable foreign keys:", err.message);
-            return reject(err);
-          }
-          console.log("Foreign key constraints enabled");
-        });
-      db.run(`CREATE TABLE IF NOT EXISTS prompts (
+      resolve();
+    });
+  });
+}
+
+/**
+ * Initializes the SQLite database, enabling foreign keys and creating all necessary tables.
+ * @returns {Promise<sqlite3.Database>} The database instance.
+ */
+async function initializeDb() {
+  const dbPath = "./your-database-name.db"; // Make sure to define dbPath
+  const sqlite3 = require('sqlite3').verbose(); // and require sqlite3
+
+  try {
+    const db = await new Promise((resolve, reject) => {
+      const newDb = new sqlite3.Database(dbPath, (err) => {
+        if (err) {
+          console.error("Failed to connect to SQLite database:", err.message);
+          return reject(err);
+        }
+        console.log("Connected to SQLite database at", dbPath);
+        resolve(newDb);
+      });
+    });
+
+    // All table creation queries in a single array
+    const createTables = [
+      "PRAGMA foreign_keys = ON;",
+      `CREATE TABLE IF NOT EXISTS prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         prompt TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS ai_results (
+      )`,
+      `CREATE TABLE IF NOT EXISTS ai_results (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         prompt_id INTEGER NOT NULL,
         result TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (prompt_id) REFERENCES prompts(id)
-      )`);
-
-      db.run(`CREATE TABLE IF NOT EXISTS overrides (
+      )`,
+      `CREATE TABLE IF NOT EXISTS overrides (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         ai_result_id INTEGER NOT NULL,
         override TEXT NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (ai_result_id) REFERENCES ai_results(id)
-      )`);
+      )`,
+      `CREATE TABLE IF NOT EXISTS pdf_exports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ai_result_id INTEGER NOT NULL,
+        file_path TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ai_result_id) REFERENCES ai_results(id)
+      )`,
+    ];
 
-      // Create tables in sequence
-      /** @type {string[]} */
-      const createTables = [
-        [
-          "CREATE TABLE IF NOT EXISTS pdf_exports (",
-          "  id INTEGER PRIMARY KEY AUTOINCREMENT,",
-          "  ai_result_id INTEGER NOT NULL,",
-          "  file_path TEXT NOT NULL,",
-          "  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,",
-          "  FOREIGN KEY (ai_result_id) REFERENCES ai_results(id)",
-          ")"
-        ].join("\n")
-      ];
-
-      // Execute each table creation in sequence
-      let currentTable = 0;
-      const executeNextTable = () => {
-        if (currentTable >= createTables.length) {
-          resolve(db);
-          return;
-        }
-
-        db.run(createTables[currentTable], (err) => {
-          if (err) {
-            console.error(`Failed to create table ${currentTable}:`, err.message);
-            return reject(err);
+    await new Promise((resolve, reject) => {
+      db.serialize(async () => {
+        try {
+          for (const sql of createTables) {
+            await runPromise(db, sql);
           }
-          currentTable++;
-          executeNextTable();
-        });
-      };
-
-      executeNextTable();
+          console.log("All tables and pragmas initialized successfully.");
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
-  });
+
+    return db;
+  } catch (err) {
+    console.error("Database initialization failed:", err.message);
+    throw err; // Re-throw the error for the caller to handle
+  }
 }
 
 /** @type {import('sqlite3').Database | null} */
@@ -149,13 +158,3 @@ const dbInterface = {
 
 // Export the database interface
 module.exports = dbInterface;
-        ai_result_id INTEGER NOT NULL,
-        file_path TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (ai_result_id) REFERENCES ai_results(id)
-      )`);
-    });
-  }
-});
-
-module.exports = db;
