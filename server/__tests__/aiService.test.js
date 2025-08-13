@@ -22,19 +22,28 @@ describe("API: /prompt (AI Processing Layer)", () => {
     // Clean up AI results first (foreign key constraint)
     for (const id of createdResultIds) {
       try {
-        await request(baseUrl).delete(`/api/ai_results/${id}`);
+        const res = await request(baseUrl).delete(`/api/ai_results/${id}`);
+        if (!res.ok) {
+          console.warn(`Cleanup failed for AI result ${id}: ${res.status}`);
+        }
       } catch (error) {
-        console.warn("Cleanup failed for AI result:", id);
+        console.error("Error during AI result cleanup:", id, error.message);
       }
     }
     // Then clean up prompts
     for (const id of createdPromptIds) {
       try {
-        await request(baseUrl).delete(`/api/prompts/${id}`);
+        const res = await request(baseUrl).delete(`/api/prompts/${id}`);
+        if (!res.ok) {
+          console.warn(`Cleanup failed for prompt ${id}: ${res.status}`);
+        }
       } catch (error) {
-        console.warn("Cleanup failed for prompt:", id);
+        console.error("Error during prompt cleanup:", id, error.message);
       }
     }
+    // Clear the arrays
+    createdResultIds = [];
+    createdPromptIds = [];
   });
 
   it("should return a structured AI response for a valid prompt", async () => {
@@ -44,25 +53,31 @@ describe("API: /prompt (AI Processing Layer)", () => {
       .send({ prompt: testPrompt });
 
     expect(res.status).toBe(201);
-    expect(res.body).toHaveProperty("success", true);
-    expect(res.body).toHaveProperty("data");
+    expect(res.body).toMatchObject({
+      success: true,
+      data: {
+        content: {
+          title: expect.any(String),
+          body: expect.any(String),
+          layout: expect.any(String),
+        },
+        metadata: {
+          model: expect.any(String),
+          tokens: expect.any(Number),
+        },
+        promptId: expect.any(Number),
+        resultId: expect.any(Number),
+      },
+    });
 
-    const { data } = res.body;
-    expect(data).toHaveProperty("content");
-    expect(data).toHaveProperty("metadata");
-    expect(data).toHaveProperty("promptId");
-    expect(data).toHaveProperty("resultId");
-
-    // Content validation
-    expect(data.content).toHaveProperty("title");
-    expect(data.content).toHaveProperty("body");
-    expect(data.content).toHaveProperty("layout");
-    expect(typeof data.content.body).toBe("string");
-    expect(data.content.body.length).toBeGreaterThan(0);
+    // Additional content validation
+    expect(res.body.data.content.body.length).toBeGreaterThan(0);
 
     // Metadata validation
-    expect(data.metadata).toHaveProperty("model", "mock-1");
-    expect(data.metadata).toHaveProperty("tokens");
+    expect(res.body.data.metadata).toMatchObject({
+      model: "mock-1",
+      tokens: expect.any(Number),
+    });
 
     // Store IDs for cleanup
     createdPromptIds.push(res.body.data.promptId);
@@ -87,13 +102,16 @@ describe("API: /prompt (AI Processing Layer)", () => {
   it("should return 400 for missing or empty prompt", async () => {
     const res = await request(baseUrl).post("/prompt").send({ prompt: "   " });
     expect(res.status).toBe(400);
-    expect(res.body).toHaveProperty("error");
-    expect(res.body.error).toHaveProperty("code", "VALIDATION_ERROR");
-    expect(res.body.error).toHaveProperty("message");
-    expect(res.body.error).toHaveProperty("status", 400);
-    expect(res.body.error).toHaveProperty("timestamp");
-    expect(res.body.error).toHaveProperty("requestId");
-    expect(res.body.error).toHaveProperty("details");
+    expect(res.body).toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: expect.any(String),
+        status: 400,
+        timestamp: expect.any(String),
+        requestId: expect.any(String),
+        details: expect.any(Object),
+      },
+    });
   });
 
   it("should return 400 for missing prompt field", async () => {
