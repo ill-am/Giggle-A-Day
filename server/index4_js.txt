@@ -12,30 +12,22 @@ const db = require("./db");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// --- Main Server Initialization Sequence ---
+// Initialize database and start server
 async function startServer() {
   try {
-    // 1. Initialize database first
+    // Initialize database first
     await db.initialize();
-    serviceState.db.ready = true;
-    serviceState.db.startupPhase = "ready";
     console.log("Database initialized successfully");
-
-    // 2. Then initialize Puppeteer
-    await startPuppeteer();
-
-    // 3. Start the server only after all dependencies are ready
+    
+    // Start the server
     app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
     });
   } catch (err) {
-    console.error("Failed to start the server:", err);
-    process.exit(1); // Exit if critical services fail to start
+    console.error("Failed to start server:", err);
+    process.exit(1);
   }
 }
-
-// Start the application
-startServer();
 
 // Graceful startup configuration
 const STARTUP_GRACE_PERIOD_MS = 30000; // 30 seconds grace period
@@ -74,59 +66,41 @@ async function startPuppeteer() {
       }/${MAX_PUPPETEER_RESTARTS}`
     );
 
+  try {
     browserInstance = await puppeteer.launch({
       executablePath: "/usr/bin/google-chrome",
-      args: ["--disable-dev-shm-usage", "--no-sandbox"],
+      args: ["--no-sandbox"],
+      // Add more robust launch options
       timeout: 30000,
       ignoreHTTPSErrors: true,
-      headless: true, // Ensure headless operation
-      defaultViewport: { width: 1280, height: 720 }, // Set default viewport
     });
 
-    // Advanced browser health checks
+    // Verify browser health with a test page
     const testPage = await browserInstance.newPage();
-    await testPage.goto("data:text/html,<h1>Health Check</h1>");
-    if (testPage.isClosed()) {
-      throw new Error("Health check page closed unexpectedly");
-    }
+    await testPage.goto("about:blank");
     await testPage.close();
 
-    // Update state variables post-success
-    Object.assign(serviceState.puppeteer, {
-      ready: true,
-      transitioning: false,
-      lastError: null,
-      startupPhase: "ready",
-      successfulHealthChecks: 0,
-    });
-
+    serviceState.puppeteer.ready = true;
+    serviceState.puppeteer.transitioning = false;
+    serviceState.puppeteer.lastError = null;
+    serviceState.puppeteer.startupPhase = "ready";
+    serviceState.puppeteer.successfulHealthChecks = 0;
     console.log("[Puppeteer] Initialization successful");
 
-    // Enhanced disconnect handler with delay
+    // Enhanced disconnect handler
     browserInstance.on("disconnected", async () => {
       console.error("[Puppeteer] Browser disconnected");
-      Object.assign(serviceState.puppeteer, {
-        ready: false,
-        transitioning: true,
-        startupPhase: "reconnecting",
-        lastError: "Browser disconnected",
-      });
-      await delay(5000); // Add a delay before retry
+      serviceState.puppeteer.ready = false;
+      serviceState.puppeteer.transitioning = true;
+      serviceState.puppeteer.startupPhase = "connecting";
+      serviceState.puppeteer.lastError = "Browser disconnected";
       await attemptPuppeteerRestart();
     });
   } catch (err) {
     handlePuppeteerError(err);
   } finally {
-    // Always cleanup residual state
-    if (!serviceState.puppeteer.ready) {
-      console.error("[Puppeteer] Cleanup incomplete state");
-    }
+    // Ensure cleanup happens even if there's an error
   }
-}
-
-// Helper function for retry delay
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function handlePuppeteerError(err) {
@@ -147,9 +121,9 @@ function handlePuppeteerError(err) {
 }
 
 function attemptPuppeteerRestart() {
-  if (serviceState.puppeteer.retryCount < MAX_PUPPETEER_RESTARTS) {
-    console.log("[Puppeteer] Attempting to restart Puppeteer...");
-    startPuppeteer();
+  if (puppeteerRestartAttempts < MAX_PUPPETEER_RESTARTS) {
+    puppeteerRestartAttempts++;
+    setTimeout(startPuppeteer, 2000 * puppeteerRestartAttempts);
   } else {
     console.error(
       "Max Puppeteer restart attempts reached. Manual intervention required."
@@ -159,6 +133,31 @@ function attemptPuppeteerRestart() {
 
 // Trust proxy for rate limiting
 app.set("trust proxy", 1);
+
+// Update startServer to handle all initialization
+async function startServer() {
+  try {
+    // Initialize database first
+    await db.initialize();
+    console.log("Database initialized successfully");
+    serviceState.db.ready = true;
+    serviceState.db.startupPhase = "ready";
+    
+    // Then initialize Puppeteer
+    await startPuppeteer();
+    
+    // Start the server only after both are ready
+    app.listen(PORT, () => {
+      console.log(`Server listening on port ${PORT}`);
+    });
+  } catch (err) {
+    console.error("Failed to start server:", err);
+    process.exit(1);
+  }
+}
+
+// Start the server with proper initialization sequence
+startServer();
 
 // Middleware
 app.use(express.json());
@@ -210,6 +209,7 @@ app.use((req, res, next) => {
 
 // Health endpoint
 // Checks both SQLite3 and Puppeteer status
+const db = require("./db");
 app.get("/health", async (req, res) => {
   try {
     // Throttle health checks during startup
@@ -233,11 +233,8 @@ app.get("/health", async (req, res) => {
 
     // Regular health check
     const [puppeteerStatus, dbStatus] = await Promise.all([
-      checkPuppeteerHealth().catch((err) => ({
-        ok: false,
-        error: err.message,
-      })),
-      checkDatabaseHealth().catch((err) => ({ ok: false, error: err.message })),
+      checkPuppeteerHealth().catch(err => ({ ok: false, error: err.message })),
+      checkDatabaseHealth().catch(err => ({ ok: false, error: err.message }))
     ]);
 
     const health = {
@@ -251,15 +248,15 @@ app.get("/health", async (req, res) => {
           error: puppeteerStatus.error,
           healthChecks: serviceState.puppeteer.successfulHealthChecks,
           ready: serviceState.puppeteer.ready,
-          transitioning: serviceState.puppeteer.transitioning,
+          transitioning: serviceState.puppeteer.transitioning
         },
         db: {
           status: dbStatus.ok ? "ok" : "error",
           error: dbStatus.error,
           phase: serviceState.db.startupPhase,
-          ready: serviceState.db.ready,
-        },
-      },
+          ready: serviceState.db.ready
+        }
+      }
     };
 
     if (health.status === "ok") {
@@ -280,14 +277,14 @@ app.get("/health", async (req, res) => {
         puppeteer: {
           status: "error",
           phase: serviceState.puppeteer.startupPhase,
-          error: error.message,
+          error: error.message
         },
         db: {
           status: "error",
           phase: serviceState.db.startupPhase,
-          error: error.message,
-        },
-      },
+          error: error.message
+        }
+      }
     });
   }
 });
@@ -321,6 +318,9 @@ app.use((err, req, res, next) => {
     ...(isDev && { stack: err.stack }),
   });
 });
+
+// Database initialization
+require("./db");
 
 const crud = require("./crud");
 
@@ -483,12 +483,12 @@ app.post("/export", async (req, res, next) => {
   }
 
   // Service availability check
-  if (!serviceState.puppeteer.ready || !browserInstance) {
+  if (!puppeteerReady || !browserInstance) {
     const err = new Error("PDF generation service not ready");
     err.status = 503;
     err.code = "SERVICE_UNAVAILABLE";
     err.details = {
-      puppeteer: serviceState.puppeteer.ready ? "ready" : "initializing",
+      puppeteer: puppeteerReady ? "ready" : "initializing",
       browser: browserInstance ? "available" : "not available",
     };
     return next(err);
@@ -1141,6 +1141,7 @@ app.post("/api/overrides", (req, res, next) => {
       provided:
         typeof ai_result_id === "number" ? ai_result_id : typeof ai_result_id,
       required: "positive integer",
+      details: "ai_result_id must be a valid AI result reference",
     });
   }
 
@@ -1149,70 +1150,167 @@ app.post("/api/overrides", (req, res, next) => {
     return sendValidationError(res, "override must be a valid object", {
       provided: Array.isArray(override) ? "array" : typeof override,
       required: "object",
+      details: "override must contain the modifications to the AI result",
     });
   }
 
-  crud.createOverride(ai_result_id, override, (err, result) => {
+  // Validate override properties
+  const allowedProps = ["content", "metadata", "changes"];
+  const invalidProps = Object.keys(override).filter(
+    (prop) => !allowedProps.includes(prop)
+  );
+  if (invalidProps.length > 0) {
+    return sendValidationError(res, "Invalid properties in override object", {
+      invalid: invalidProps,
+      allowed: allowedProps,
+      provided: Object.keys(override),
+    });
+  }
+
+  // Ensure at least one valid modification
+  if (Object.keys(override).length === 0) {
+    return sendValidationError(
+      res,
+      "Override must contain at least one modification",
+      {
+        provided: "empty object",
+        required: "at least one of: content, metadata, changes",
+        details: "Override cannot be empty",
+      }
+    );
+  }
+
+  crud.createOverride(ai_result_id, override, (err, resultObj) => {
     if (err) {
+      // Handle specific database errors
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
+      } else if (err.code === "SQLITE_CONSTRAINT") {
+        err.status = 409;
+        err.message = "Duplicate override not allowed";
       } else {
         err.status = 500;
         err.message = "Failed to create override";
       }
       return next(err);
     }
-    res.status(201).json({ success: true, data: result });
+
+    // Return standardized success response
+    res.status(201).json({
+      success: true,
+      data: {
+        ...resultObj,
+        created_at: new Date().toISOString(),
+      },
+    });
   });
 });
 
 app.get("/api/overrides", (req, res, next) => {
+  console.log("DEBUG: Entering GET /api/overrides");
+  console.log("DEBUG: Query params:", req.query);
+
+  // Parse and validate pagination parameters
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
+  const ai_result_id = req.query.ai_result_id
+    ? parseInt(req.query.ai_result_id)
+    : null;
 
+  console.log("DEBUG: Parsed params:", { page, limit, ai_result_id });
+
+  // Validate pagination parameters
   if (page < 1 || limit < 1) {
     return sendValidationError(res, "Invalid pagination parameters", {
       provided: { page, limit },
       required: "positive integers",
+      details: "Page and limit must be greater than 0",
     });
   }
 
+  // Validate ai_result_id if provided
+  if (ai_result_id !== null && (isNaN(ai_result_id) || ai_result_id < 1)) {
+    return sendValidationError(res, "Invalid ai_result_id filter", {
+      provided: req.query.ai_result_id,
+      required: "positive integer",
+      details: "ai_result_id must be a positive integer",
+    });
+  }
+
+  // Calculate offset
   const offset = (page - 1) * limit;
 
+  console.log("DEBUG: About to call crud.getOverrides");
   crud.getOverrides((err, rows) => {
+    console.log("DEBUG: getOverrides callback received:", {
+      err,
+      rowCount: rows?.length,
+    });
     if (err) {
+      console.error("DEBUG: Error in getOverrides:", err);
       err.status = 500;
       err.message = "Failed to retrieve overrides";
       return next(err);
     }
 
-    if (!rows || rows.length === 0) {
+    // Filter by ai_result_id if provided
+    let filteredRows = rows;
+    if (ai_result_id) {
+      filteredRows = rows.filter((row) => row.ai_result_id === ai_result_id);
+    }
+
+    // Handle empty results
+    if (!filteredRows || filteredRows.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
-        pagination: { page, limit, total: 0, pages: 0 },
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+        },
       });
     }
 
-    const total = rows.length;
+    // Calculate pagination
+    const total = filteredRows.length;
     const pages = Math.ceil(total / limit);
-    const paginatedRows = rows.slice(offset, offset + limit);
+    const paginatedRows = filteredRows.slice(offset, offset + limit);
 
+    // Parse override JSON if stored as string
+    const processedRows = paginatedRows.map((row) => ({
+      ...row,
+      override:
+        typeof row.override === "string"
+          ? JSON.parse(row.override)
+          : row.override,
+    }));
+
+    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: paginatedRows,
-      pagination: { page, limit, total, pages },
+      data: processedRows,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages,
+        ai_result_id: ai_result_id || undefined,
+      },
     });
   });
 });
 
 app.get("/api/overrides/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "Override ID must be a positive integer",
     });
   }
 
@@ -1222,76 +1320,161 @@ app.get("/api/overrides/:id", (req, res, next) => {
       err.message = "Failed to retrieve override";
       return next(err);
     }
+
+    // Handle not found
     if (!row) {
       return res.status(404).json({
         success: false,
-        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "Override not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
-    res.status(200).json({ success: true, data: row });
+
+    // Parse override JSON if stored as string
+    const processedRow = {
+      ...row,
+      override:
+        typeof row.override === "string"
+          ? JSON.parse(row.override)
+          : row.override,
+    };
+
+    // Return standardized success response
+    res.status(200).json({
+      success: true,
+      data: processedRow,
+    });
   });
 });
 
 app.put("/api/overrides/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "Override ID must be a positive integer",
     });
   }
 
+  // Validate override object
   const { override } = req.body;
   if (!override || typeof override !== "object" || Array.isArray(override)) {
     return sendValidationError(res, "override must be a valid object", {
       provided: Array.isArray(override) ? "array" : typeof override,
       required: "object",
+      details: "override must contain the modifications to the AI result",
     });
   }
 
-  crud.updateOverride(id, override, (err, result) => {
+  // Validate override properties
+  const allowedProps = ["content", "metadata", "changes"];
+  const invalidProps = Object.keys(override).filter(
+    (prop) => !allowedProps.includes(prop)
+  );
+  if (invalidProps.length > 0) {
+    return sendValidationError(res, "Invalid properties in override object", {
+      invalid: invalidProps,
+      allowed: allowedProps,
+      provided: Object.keys(override),
+    });
+  }
+
+  // Ensure at least one valid modification
+  if (Object.keys(override).length === 0) {
+    return sendValidationError(
+      res,
+      "Override must contain at least one modification",
+      {
+        provided: "empty object",
+        required: "at least one of: content, metadata, changes",
+        details: "Override cannot be empty",
+      }
+    );
+  }
+
+  crud.updateOverride(id, override, (err, resultObj) => {
     if (err) {
       err.status = 500;
       err.message = "Failed to update override";
       return next(err);
     }
-    if (!result || result.changes === 0) {
+
+    if (!resultObj || resultObj.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "Override not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
+
+    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: { id, ...override },
+      data: {
+        id,
+        override,
+        updated_at: new Date().toISOString(),
+      },
     });
   });
 });
 
 app.delete("/api/overrides/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "Override ID must be a positive integer",
     });
   }
 
-  crud.deleteOverride(id, (err, result) => {
+  crud.deleteOverride(id, (err, resultObj) => {
     if (err) {
-      err.status = 500;
-      err.message = "Failed to delete override";
+      // Handle specific database errors
+      if (err.code === "SQLITE_FOREIGN_KEY") {
+        err.status = 409;
+        err.message =
+          "Cannot delete override: It is referenced by other records";
+      } else {
+        err.status = 500;
+        err.message = "Failed to delete override";
+      }
       return next(err);
     }
-    if (!result || result.changes === 0) {
+
+    // Handle not found case
+    if (!resultObj || resultObj.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "Override not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
+
+    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: { message: "Override deleted successfully" },
+      data: {
+        message: "Override deleted successfully",
+        id,
+        deleted_at: new Date().toISOString(),
+      },
     });
   });
 });
@@ -1300,46 +1483,89 @@ app.delete("/api/overrides/:id", (req, res, next) => {
 app.post("/api/pdf_exports", (req, res, next) => {
   const { ai_result_id, file_path } = req.body;
 
+  // Validate ai_result_id
   if (!Number.isInteger(ai_result_id) || ai_result_id < 1) {
     return sendValidationError(res, "ai_result_id must be a positive integer", {
-      provided: ai_result_id,
+      provided:
+        typeof ai_result_id === "number" ? ai_result_id : typeof ai_result_id,
       required: "positive integer",
+      details: "ai_result_id must be a valid AI result reference",
     });
   }
 
+  // Validate file_path
   if (typeof file_path !== "string" || !file_path.trim()) {
-    return sendValidationError(res, "file_path is required", {
-      provided: file_path,
+    return sendValidationError(res, "file_path must be a non-empty string", {
+      provided: typeof file_path,
       required: "non-empty string",
+      details: "file_path must be a valid path string",
     });
   }
 
-  crud.createPDFExport(ai_result_id, file_path, (err, result) => {
+  // Validate file path format
+  const validPathPattern = /^[a-zA-Z0-9\-_\/\.]+\.(pdf|PDF)$/;
+  if (!validPathPattern.test(file_path)) {
+    return sendValidationError(res, "Invalid file path format", {
+      provided: file_path,
+      required: "valid PDF file path",
+      details: "File path must be a valid path ending with .pdf",
+    });
+  }
+
+  crud.createPDFExport(ai_result_id, file_path, (err, resultObj) => {
     if (err) {
+      // Handle foreign key constraint violation
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
+      } else if (err.code === "SQLITE_CONSTRAINT") {
+        err.status = 409;
+        err.message = "Duplicate PDF export not allowed";
       } else {
         err.status = 500;
-        err.message = "Failed to create PDF export record";
+        err.message = "Failed to create PDF export";
       }
       return next(err);
     }
-    res.status(201).json({ success: true, data: result });
+
+    // Return standardized success response
+    res.status(201).json({
+      success: true,
+      data: {
+        ...resultObj,
+        created_at: new Date().toISOString(),
+      },
+    });
   });
 });
 
 app.get("/api/pdf_exports", (req, res, next) => {
+  // Parse and validate pagination parameters
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
+  const ai_result_id = req.query.ai_result_id
+    ? parseInt(req.query.ai_result_id)
+    : null;
 
+  // Validate pagination parameters
   if (page < 1 || limit < 1) {
     return sendValidationError(res, "Invalid pagination parameters", {
       provided: { page, limit },
       required: "positive integers",
+      details: "Page and limit must be greater than 0",
     });
   }
 
+  // Validate ai_result_id if provided
+  if (ai_result_id !== null && (isNaN(ai_result_id) || ai_result_id < 1)) {
+    return sendValidationError(res, "Invalid ai_result_id filter", {
+      provided: req.query.ai_result_id,
+      required: "positive integer",
+      details: "ai_result_id must be a positive integer",
+    });
+  }
+
+  // Calculate offset
   const offset = (page - 1) * limit;
 
   crud.getPDFExports((err, rows) => {
@@ -1349,32 +1575,54 @@ app.get("/api/pdf_exports", (req, res, next) => {
       return next(err);
     }
 
-    if (!rows || rows.length === 0) {
+    // Filter by ai_result_id if provided
+    let filteredRows = rows;
+    if (ai_result_id) {
+      filteredRows = rows.filter((row) => row.ai_result_id === ai_result_id);
+    }
+
+    // Handle empty results
+    if (!filteredRows || filteredRows.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
-        pagination: { page, limit, total: 0, pages: 0 },
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          pages: 0,
+        },
       });
     }
 
-    const total = rows.length;
+    // Calculate pagination
+    const total = filteredRows.length;
     const pages = Math.ceil(total / limit);
-    const paginatedRows = rows.slice(offset, offset + limit);
+    const paginatedRows = filteredRows.slice(offset, offset + limit);
 
+    // Return standardized success response
     res.status(200).json({
       success: true,
       data: paginatedRows,
-      pagination: { page, limit, total, pages },
+      pagination: {
+        page,
+        limit,
+        total,
+        pages,
+        ai_result_id: ai_result_id || undefined,
+      },
     });
   });
 });
 
 app.get("/api/pdf_exports/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "PDF export ID must be a positive integer",
     });
   }
 
@@ -1384,118 +1632,168 @@ app.get("/api/pdf_exports/:id", (req, res, next) => {
       err.message = "Failed to retrieve PDF export";
       return next(err);
     }
+
+    // Handle not found
     if (!row) {
       return res.status(404).json({
         success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "PDF export not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
-    res.status(200).json({ success: true, data: row });
+
+    // Return standardized success response
+    res.status(200).json({
+      success: true,
+      data: row,
+    });
   });
 });
 
 app.put("/api/pdf_exports/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "PDF export ID must be a positive integer",
     });
   }
 
+  // Validate file_path in request body
   const { file_path } = req.body;
   if (typeof file_path !== "string" || !file_path.trim()) {
-    return sendValidationError(res, "file_path is required", {
-      provided: file_path,
+    return sendValidationError(res, "file_path must be a non-empty string", {
+      provided: typeof file_path,
       required: "non-empty string",
+      details: "file_path must be a valid path string",
     });
   }
 
-  crud.updatePDFExport(id, file_path, (err, result) => {
+  // Validate file path format
+  const validPathPattern = /^[a-zA-Z0-9\-_\/\.]+\.(pdf|PDF)$/;
+  if (!validPathPattern.test(file_path)) {
+    return sendValidationError(res, "Invalid file path format", {
+      provided: file_path,
+      required: "valid PDF file path",
+      details: "File path must be a valid path ending with .pdf",
+    });
+  }
+
+  crud.updatePDFExport(id, file_path, (err, resultObj) => {
     if (err) {
-      err.status = 500;
-      err.message = "Failed to update PDF export";
+      // Handle database errors
+      if (err.code === "SQLITE_CONSTRAINT") {
+        err.status = 409;
+        err.message = "Duplicate file path not allowed";
+      } else {
+        err.status = 500;
+        err.message = "Failed to update PDF export";
+      }
       return next(err);
     }
-    if (!result || result.changes === 0) {
+
+    // Handle not found case
+    if (!resultObj || resultObj.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "PDF export not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
+
+    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: { id, file_path },
+      data: {
+        id,
+        file_path,
+        updated_at: new Date().toISOString(),
+      },
     });
   });
 });
 
 app.delete("/api/pdf_exports/:id", (req, res, next) => {
+  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
+      details: "PDF export ID must be a positive integer",
     });
   }
 
-  crud.deletePDFExport(id, (err, result) => {
+  crud.deletePDFExport(id, (err, resultObj) => {
     if (err) {
-      err.status = 500;
-      err.message = "Failed to delete PDF export";
+      // Handle specific database errors
+      if (err.code === "SQLITE_FOREIGN_KEY") {
+        err.status = 409;
+        err.message =
+          "Cannot delete PDF export: It is referenced by other records";
+      } else {
+        err.status = 500;
+        err.message = "Failed to delete PDF export";
+      }
       return next(err);
     }
-    if (!result || result.changes === 0) {
+
+    // Handle not found case
+    if (!resultObj || resultObj.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
+        error: {
+          message: "PDF export not found",
+          code: "RESOURCE_NOT_FOUND",
+          status: 404,
+          details: { id },
+        },
       });
     }
+
+    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: { message: "PDF export deleted successfully" },
+      data: {
+        message: "PDF export deleted successfully",
+        id,
+        deleted_at: new Date().toISOString(),
+      },
     });
   });
 });
 
-// --- HEALTH AND UTILITY FUNCTIONS ---
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
 
-const HEALTH_CHECK_TIMEOUT_MS = 5000; // 5 seconds
-
-// Utility to add a timeout to any promise
-function withTimeout(promise, ms) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error("Operation timed out"));
-    }, ms);
-
-    promise
-      .then((value) => {
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((err) => {
-        clearTimeout(timer);
-        reject(err);
-      });
-  });
-}
+// Graceful shutdown for Puppeteer and DB
+process.on("SIGINT", async () => {
+  console.log("Received SIGINT. Closing resources...");
+  if (browserInstance) await browserInstance.close();
+  db.close();
+  process.exit(0);
+});
 
 async function checkPuppeteerHealth() {
-  if (!browserInstance || !serviceState.puppeteer.ready) {
-    return {
-      ok: false,
-      error: "Puppeteer instance not available or not ready.",
-    };
+  if (!browserInstance) {
+    return { ok: false, error: "No browser instance" };
   }
+
   try {
-    await withTimeout(
-      (async () => {
-        const page = await browserInstance.newPage();
-        await page.close();
-      })(),
-      HEALTH_CHECK_TIMEOUT_MS
-    );
+    const page = await browserInstance.newPage();
+    await page.close();
     return { ok: true, error: null };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -1503,12 +1801,13 @@ async function checkPuppeteerHealth() {
 }
 
 async function checkDatabaseHealth() {
-  try {
-    // db.get returns a promise, so we await it.
-    await db.get("SELECT 1");
-    return { ok: true, error: null };
-  } catch (err) {
-    // If the promise rejects, we catch the error.
-    return { ok: false, error: err.message };
-  }
+  return new Promise((resolve) => {
+    db.get("SELECT 1", (err) => {
+      if (err) {
+        resolve({ ok: false, error: err.message });
+      } else {
+        resolve({ ok: true, error: null });
+      }
+    });
+  });
 }

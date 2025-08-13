@@ -9,13 +9,9 @@ BACKEND_URL="http://localhost:3000"
 FRONTEND_URL="http://localhost:5173"
 
 # ─── Prerequisite Check
-# Ensure lsof and jq are installed before proceeding.
+# Ensure lsof is installed before proceeding.
 if ! command -v lsof &> /dev/null; then
     echo -e "${RED}Error: 'lsof' command is not found. Please install it to continue.${NC}"
-    exit 1
-fi
-if ! command -v jq &> /dev/null; then
-    echo -e "${RED}Error: 'jq' command is not found. It is required for parsing health check responses. Please install it to continue.${NC}"
     exit 1
 fi
 
@@ -89,15 +85,15 @@ await_health() {
                 continue
             fi
 
-            # Parse status components using jq for reliable JSON parsing
-            status=$(echo "$response" | jq -r '.status')
-            db_status=$(echo "$response" | jq -r '.services.db.status')
-            puppeteer_status=$(echo "$response" | jq -r '.services.puppeteer.status')
+            # Parse status components
+            status=$(echo "$response" | grep -o '"status":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+            db_status=$(echo "$response" | grep -o '"db":"[^"]*"' | cut -d':' -f2 | tr -d '"')
+            puppeteer_status=$(echo "$response" | grep -o '"puppeteer":"[^"]*"' | cut -d':' -f2 | tr -d '"')
 
-            echo -e "${RED}Health check status [$((attempts + 1))/${max_attempts}] - Overall: \"$status\", DB: \"$db_status\", Puppeteer: \"$puppeteer_status\"${NC}"
+            echo -e "${RED}Health check status [$((attempts + 1))/${max_attempts}] - Status: \"$status\", DB: \"$db_status\", Puppeteer: \"$puppeteer_status\"${NC}"
 
             # For backend, check all components
-            if [[ "$status" == "ok" && "$db_status" == "ok" && "$puppeteer_status" == "ok" ]]; then
+            if [[ "$status" == "ok" && "$db_status" == "sqlite3" && "$puppeteer_status" == "ok" ]]; then
                 echo -e "${GREEN}Health check passed: All systems ready${NC}"
                 break
             fi
