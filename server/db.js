@@ -37,7 +37,7 @@ function runPromise(db, sql) {
  * @returns {Promise<sqlite3.Database>} The database instance.
  */
 async function initializeDb() {
-  const dbPath = "./your-database-name.db"; // Make sure to define dbPath
+  const dbPath = "../data/your-database-name.db"; // Make sure to define dbPath
   const sqlite3 = require('sqlite3').verbose(); // and require sqlite3
 
   try {

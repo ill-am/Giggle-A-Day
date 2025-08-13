@@ -12,22 +12,30 @@ const db = require("./db");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Initialize database and start server
+// --- Main Server Initialization Sequence ---
 async function startServer() {
   try {
-    // Initialize database first
+    // 1. Initialize database first
     await db.initialize();
+    serviceState.db.ready = true;
+    serviceState.db.startupPhase = "ready";
     console.log("Database initialized successfully");
-    
-    // Start the server
+
+    // 2. Then initialize Puppeteer
+    await startPuppeteer();
+
+    // 3. Start the server only after all dependencies are ready
     app.listen(PORT, () => {
       console.log(`Server listening on port ${PORT}`);
     });
   } catch (err) {
-    console.error("Failed to start server:", err);
-    process.exit(1);
+    console.error("Failed to start the server:", err);
+    process.exit(1); // Exit if critical services fail to start
   }
 }
+
+// Start the application
+startServer();
 
 // Graceful startup configuration
 const STARTUP_GRACE_PERIOD_MS = 30000; // 30 seconds grace period
@@ -66,41 +74,59 @@ async function startPuppeteer() {
       }/${MAX_PUPPETEER_RESTARTS}`
     );
 
-  try {
     browserInstance = await puppeteer.launch({
       executablePath: "/usr/bin/google-chrome",
-      args: ["--no-sandbox"],
-      // Add more robust launch options
+      args: ["--disable-dev-shm-usage", "--no-sandbox"],
       timeout: 30000,
       ignoreHTTPSErrors: true,
+      headless: true, // Ensure headless operation
+      defaultViewport: { width: 1280, height: 720 }, // Set default viewport
     });
 
-    // Verify browser health with a test page
+    // Advanced browser health checks
     const testPage = await browserInstance.newPage();
-    await testPage.goto("about:blank");
+    await testPage.goto("data:text/html,<h1>Health Check</h1>");
+    if (testPage.isClosed()) {
+      throw new Error("Health check page closed unexpectedly");
+    }
     await testPage.close();
 
-    serviceState.puppeteer.ready = true;
-    serviceState.puppeteer.transitioning = false;
-    serviceState.puppeteer.lastError = null;
-    serviceState.puppeteer.startupPhase = "ready";
-    serviceState.puppeteer.successfulHealthChecks = 0;
+    // Update state variables post-success
+    Object.assign(serviceState.puppeteer, {
+      ready: true,
+      transitioning: false,
+      lastError: null,
+      startupPhase: "ready",
+      successfulHealthChecks: 0,
+    });
+
     console.log("[Puppeteer] Initialization successful");
 
-    // Enhanced disconnect handler
+    // Enhanced disconnect handler with delay
     browserInstance.on("disconnected", async () => {
       console.error("[Puppeteer] Browser disconnected");
-      serviceState.puppeteer.ready = false;
-      serviceState.puppeteer.transitioning = true;
-      serviceState.puppeteer.startupPhase = "connecting";
-      serviceState.puppeteer.lastError = "Browser disconnected";
+      Object.assign(serviceState.puppeteer, {
+        ready: false,
+        transitioning: true,
+        startupPhase: "reconnecting",
+        lastError: "Browser disconnected",
+      });
+      await delay(5000); // Add a delay before retry
       await attemptPuppeteerRestart();
     });
   } catch (err) {
     handlePuppeteerError(err);
   } finally {
-    // Ensure cleanup happens even if there's an error
+    // Always cleanup residual state
+    if (!serviceState.puppeteer.ready) {
+      console.error("[Puppeteer] Cleanup incomplete state");
+    }
   }
+}
+
+// Helper function for retry delay
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function handlePuppeteerError(err) {
@@ -121,9 +147,9 @@ function handlePuppeteerError(err) {
 }
 
 function attemptPuppeteerRestart() {
-  if (puppeteerRestartAttempts < MAX_PUPPETEER_RESTARTS) {
-    puppeteerRestartAttempts++;
-    setTimeout(startPuppeteer, 2000 * puppeteerRestartAttempts);
+  if (serviceState.puppeteer.retryCount < MAX_PUPPETEER_RESTARTS) {
+    console.log("[Puppeteer] Attempting to restart Puppeteer...");
+    startPuppeteer();
   } else {
     console.error(
       "Max Puppeteer restart attempts reached. Manual intervention required."
@@ -133,31 +159,6 @@ function attemptPuppeteerRestart() {
 
 // Trust proxy for rate limiting
 app.set("trust proxy", 1);
-
-// Update startServer to handle all initialization
-async function startServer() {
-  try {
-    // Initialize database first
-    await db.initialize();
-    console.log("Database initialized successfully");
-    serviceState.db.ready = true;
-    serviceState.db.startupPhase = "ready";
-    
-    // Then initialize Puppeteer
-    await startPuppeteer();
-    
-    // Start the server only after both are ready
-    app.listen(PORT, () => {
-      console.log(`Server listening on port ${PORT}`);
-    });
-  } catch (err) {
-    console.error("Failed to start server:", err);
-    process.exit(1);
-  }
-}
-
-// Start the server with proper initialization sequence
-startServer();
 
 // Middleware
 app.use(express.json());
@@ -209,7 +210,6 @@ app.use((req, res, next) => {
 
 // Health endpoint
 // Checks both SQLite3 and Puppeteer status
-const db = require("./db");
 app.get("/health", async (req, res) => {
   try {
     // Throttle health checks during startup
@@ -233,8 +233,11 @@ app.get("/health", async (req, res) => {
 
     // Regular health check
     const [puppeteerStatus, dbStatus] = await Promise.all([
-      checkPuppeteerHealth().catch(err => ({ ok: false, error: err.message })),
-      checkDatabaseHealth().catch(err => ({ ok: false, error: err.message }))
+      checkPuppeteerHealth().catch((err) => ({
+        ok: false,
+        error: err.message,
+      })),
+      checkDatabaseHealth().catch((err) => ({ ok: false, error: err.message })),
     ]);
 
     const health = {
@@ -248,15 +251,15 @@ app.get("/health", async (req, res) => {
           error: puppeteerStatus.error,
           healthChecks: serviceState.puppeteer.successfulHealthChecks,
           ready: serviceState.puppeteer.ready,
-          transitioning: serviceState.puppeteer.transitioning
+          transitioning: serviceState.puppeteer.transitioning,
         },
         db: {
           status: dbStatus.ok ? "ok" : "error",
           error: dbStatus.error,
           phase: serviceState.db.startupPhase,
-          ready: serviceState.db.ready
-        }
-      }
+          ready: serviceState.db.ready,
+        },
+      },
     };
 
     if (health.status === "ok") {
@@ -277,14 +280,14 @@ app.get("/health", async (req, res) => {
         puppeteer: {
           status: "error",
           phase: serviceState.puppeteer.startupPhase,
-          error: error.message
+          error: error.message,
         },
         db: {
           status: "error",
           phase: serviceState.db.startupPhase,
-          error: error.message
-        }
-      }
+          error: error.message,
+        },
+      },
     });
   }
 });
@@ -318,9 +321,6 @@ app.use((err, req, res, next) => {
     ...(isDev && { stack: err.stack }),
   });
 });
-
-// Database initialization
-require("./db");
 
 const crud = require("./crud");
 
@@ -483,12 +483,12 @@ app.post("/export", async (req, res, next) => {
   }
 
   // Service availability check
-  if (!puppeteerReady || !browserInstance) {
+  if (!serviceState.puppeteer.ready || !browserInstance) {
     const err = new Error("PDF generation service not ready");
     err.status = 503;
     err.code = "SERVICE_UNAVAILABLE";
     err.details = {
-      puppeteer: puppeteerReady ? "ready" : "initializing",
+      puppeteer: serviceState.puppeteer.ready ? "ready" : "initializing",
       browser: browserInstance ? "available" : "not available",
     };
     return next(err);
@@ -1774,26 +1774,49 @@ app.delete("/api/pdf_exports/:id", (req, res, next) => {
 });
 
 // Start server
+/**
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
 });
+**/
 
 // Graceful shutdown for Puppeteer and DB
 process.on("SIGINT", async () => {
   console.log("Received SIGINT. Closing resources...");
   if (browserInstance) await browserInstance.close();
-  db.close();
-  process.exit(0);
+  db.close((err) => {
+    if (err) {
+      console.error("Error closing database:", err.message);
+    }
+    process.exit(0);
+  });
 });
 
-async function checkPuppeteerHealth() {
-  if (!browserInstance) {
-    return { ok: false, error: "No browser instance" };
-  }
+// --- Health Check Helper Functions ---
+const HEALTH_CHECK_TIMEOUT_MS = 5000;
 
+function withTimeout(promise, ms) {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
+async function checkPuppeteerHealth() {
+  if (!browserInstance || !serviceState.puppeteer.ready) {
+    return {
+      ok: false,
+      error: "Puppeteer instance not available or not ready.",
+    };
+  }
   try {
-    const page = await browserInstance.newPage();
-    await page.close();
+    await withTimeout(
+      (async () => {
+        const page = await browserInstance.newPage();
+        await page.close();
+      })(),
+      HEALTH_CHECK_TIMEOUT_MS
+    );
     return { ok: true, error: null };
   } catch (err) {
     return { ok: false, error: err.message };

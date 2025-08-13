@@ -1141,7 +1141,6 @@ app.post("/api/overrides", (req, res, next) => {
       provided:
         typeof ai_result_id === "number" ? ai_result_id : typeof ai_result_id,
       required: "positive integer",
-      details: "ai_result_id must be a valid AI result reference",
     });
   }
 
@@ -1150,167 +1149,70 @@ app.post("/api/overrides", (req, res, next) => {
     return sendValidationError(res, "override must be a valid object", {
       provided: Array.isArray(override) ? "array" : typeof override,
       required: "object",
-      details: "override must contain the modifications to the AI result",
     });
   }
 
-  // Validate override properties
-  const allowedProps = ["content", "metadata", "changes"];
-  const invalidProps = Object.keys(override).filter(
-    (prop) => !allowedProps.includes(prop)
-  );
-  if (invalidProps.length > 0) {
-    return sendValidationError(res, "Invalid properties in override object", {
-      invalid: invalidProps,
-      allowed: allowedProps,
-      provided: Object.keys(override),
-    });
-  }
-
-  // Ensure at least one valid modification
-  if (Object.keys(override).length === 0) {
-    return sendValidationError(
-      res,
-      "Override must contain at least one modification",
-      {
-        provided: "empty object",
-        required: "at least one of: content, metadata, changes",
-        details: "Override cannot be empty",
-      }
-    );
-  }
-
-  crud.createOverride(ai_result_id, override, (err, resultObj) => {
+  crud.createOverride(ai_result_id, override, (err, result) => {
     if (err) {
-      // Handle specific database errors
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
-      } else if (err.code === "SQLITE_CONSTRAINT") {
-        err.status = 409;
-        err.message = "Duplicate override not allowed";
       } else {
         err.status = 500;
         err.message = "Failed to create override";
       }
       return next(err);
     }
-
-    // Return standardized success response
-    res.status(201).json({
-      success: true,
-      data: {
-        ...resultObj,
-        created_at: new Date().toISOString(),
-      },
-    });
+    res.status(201).json({ success: true, data: result });
   });
 });
 
 app.get("/api/overrides", (req, res, next) => {
-  console.log("DEBUG: Entering GET /api/overrides");
-  console.log("DEBUG: Query params:", req.query);
-
-  // Parse and validate pagination parameters
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
-  const ai_result_id = req.query.ai_result_id
-    ? parseInt(req.query.ai_result_id)
-    : null;
 
-  console.log("DEBUG: Parsed params:", { page, limit, ai_result_id });
-
-  // Validate pagination parameters
   if (page < 1 || limit < 1) {
     return sendValidationError(res, "Invalid pagination parameters", {
       provided: { page, limit },
       required: "positive integers",
-      details: "Page and limit must be greater than 0",
     });
   }
 
-  // Validate ai_result_id if provided
-  if (ai_result_id !== null && (isNaN(ai_result_id) || ai_result_id < 1)) {
-    return sendValidationError(res, "Invalid ai_result_id filter", {
-      provided: req.query.ai_result_id,
-      required: "positive integer",
-      details: "ai_result_id must be a positive integer",
-    });
-  }
-
-  // Calculate offset
   const offset = (page - 1) * limit;
 
-  console.log("DEBUG: About to call crud.getOverrides");
   crud.getOverrides((err, rows) => {
-    console.log("DEBUG: getOverrides callback received:", {
-      err,
-      rowCount: rows?.length,
-    });
     if (err) {
-      console.error("DEBUG: Error in getOverrides:", err);
       err.status = 500;
       err.message = "Failed to retrieve overrides";
       return next(err);
     }
 
-    // Filter by ai_result_id if provided
-    let filteredRows = rows;
-    if (ai_result_id) {
-      filteredRows = rows.filter((row) => row.ai_result_id === ai_result_id);
-    }
-
-    // Handle empty results
-    if (!filteredRows || filteredRows.length === 0) {
+    if (!rows || rows.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pages: 0,
-        },
+        pagination: { page, limit, total: 0, pages: 0 },
       });
     }
 
-    // Calculate pagination
-    const total = filteredRows.length;
+    const total = rows.length;
     const pages = Math.ceil(total / limit);
-    const paginatedRows = filteredRows.slice(offset, offset + limit);
+    const paginatedRows = rows.slice(offset, offset + limit);
 
-    // Parse override JSON if stored as string
-    const processedRows = paginatedRows.map((row) => ({
-      ...row,
-      override:
-        typeof row.override === "string"
-          ? JSON.parse(row.override)
-          : row.override,
-    }));
-
-    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: processedRows,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages,
-        ai_result_id: ai_result_id || undefined,
-      },
+      data: paginatedRows,
+      pagination: { page, limit, total, pages },
     });
   });
 });
 
 app.get("/api/overrides/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "Override ID must be a positive integer",
     });
   }
 
@@ -1320,161 +1222,76 @@ app.get("/api/overrides/:id", (req, res, next) => {
       err.message = "Failed to retrieve override";
       return next(err);
     }
-
-    // Handle not found
     if (!row) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "Override not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Parse override JSON if stored as string
-    const processedRow = {
-      ...row,
-      override:
-        typeof row.override === "string"
-          ? JSON.parse(row.override)
-          : row.override,
-    };
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: processedRow,
-    });
+    res.status(200).json({ success: true, data: row });
   });
 });
 
 app.put("/api/overrides/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "Override ID must be a positive integer",
     });
   }
 
-  // Validate override object
   const { override } = req.body;
   if (!override || typeof override !== "object" || Array.isArray(override)) {
     return sendValidationError(res, "override must be a valid object", {
       provided: Array.isArray(override) ? "array" : typeof override,
       required: "object",
-      details: "override must contain the modifications to the AI result",
     });
   }
 
-  // Validate override properties
-  const allowedProps = ["content", "metadata", "changes"];
-  const invalidProps = Object.keys(override).filter(
-    (prop) => !allowedProps.includes(prop)
-  );
-  if (invalidProps.length > 0) {
-    return sendValidationError(res, "Invalid properties in override object", {
-      invalid: invalidProps,
-      allowed: allowedProps,
-      provided: Object.keys(override),
-    });
-  }
-
-  // Ensure at least one valid modification
-  if (Object.keys(override).length === 0) {
-    return sendValidationError(
-      res,
-      "Override must contain at least one modification",
-      {
-        provided: "empty object",
-        required: "at least one of: content, metadata, changes",
-        details: "Override cannot be empty",
-      }
-    );
-  }
-
-  crud.updateOverride(id, override, (err, resultObj) => {
+  crud.updateOverride(id, override, (err, result) => {
     if (err) {
       err.status = 500;
       err.message = "Failed to update override";
       return next(err);
     }
-
-    if (!resultObj || resultObj.changes === 0) {
+    if (!result || result.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "Override not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: {
-        id,
-        override,
-        updated_at: new Date().toISOString(),
-      },
+      data: { id, ...override },
     });
   });
 });
 
 app.delete("/api/overrides/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid override ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "Override ID must be a positive integer",
     });
   }
 
-  crud.deleteOverride(id, (err, resultObj) => {
+  crud.deleteOverride(id, (err, result) => {
     if (err) {
-      // Handle specific database errors
-      if (err.code === "SQLITE_FOREIGN_KEY") {
-        err.status = 409;
-        err.message =
-          "Cannot delete override: It is referenced by other records";
-      } else {
-        err.status = 500;
-        err.message = "Failed to delete override";
-      }
+      err.status = 500;
+      err.message = "Failed to delete override";
       return next(err);
     }
-
-    // Handle not found case
-    if (!resultObj || resultObj.changes === 0) {
+    if (!result || result.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "Override not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "Override not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: {
-        message: "Override deleted successfully",
-        id,
-        deleted_at: new Date().toISOString(),
-      },
+      data: { message: "Override deleted successfully" },
     });
   });
 });
@@ -1483,89 +1300,46 @@ app.delete("/api/overrides/:id", (req, res, next) => {
 app.post("/api/pdf_exports", (req, res, next) => {
   const { ai_result_id, file_path } = req.body;
 
-  // Validate ai_result_id
   if (!Number.isInteger(ai_result_id) || ai_result_id < 1) {
     return sendValidationError(res, "ai_result_id must be a positive integer", {
-      provided:
-        typeof ai_result_id === "number" ? ai_result_id : typeof ai_result_id,
+      provided: ai_result_id,
       required: "positive integer",
-      details: "ai_result_id must be a valid AI result reference",
     });
   }
 
-  // Validate file_path
   if (typeof file_path !== "string" || !file_path.trim()) {
-    return sendValidationError(res, "file_path must be a non-empty string", {
-      provided: typeof file_path,
-      required: "non-empty string",
-      details: "file_path must be a valid path string",
-    });
-  }
-
-  // Validate file path format
-  const validPathPattern = /^[a-zA-Z0-9\-_\/\.]+\.(pdf|PDF)$/;
-  if (!validPathPattern.test(file_path)) {
-    return sendValidationError(res, "Invalid file path format", {
+    return sendValidationError(res, "file_path is required", {
       provided: file_path,
-      required: "valid PDF file path",
-      details: "File path must be a valid path ending with .pdf",
+      required: "non-empty string",
     });
   }
 
-  crud.createPDFExport(ai_result_id, file_path, (err, resultObj) => {
+  crud.createPDFExport(ai_result_id, file_path, (err, result) => {
     if (err) {
-      // Handle foreign key constraint violation
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
-      } else if (err.code === "SQLITE_CONSTRAINT") {
-        err.status = 409;
-        err.message = "Duplicate PDF export not allowed";
       } else {
         err.status = 500;
-        err.message = "Failed to create PDF export";
+        err.message = "Failed to create PDF export record";
       }
       return next(err);
     }
-
-    // Return standardized success response
-    res.status(201).json({
-      success: true,
-      data: {
-        ...resultObj,
-        created_at: new Date().toISOString(),
-      },
-    });
+    res.status(201).json({ success: true, data: result });
   });
 });
 
 app.get("/api/pdf_exports", (req, res, next) => {
-  // Parse and validate pagination parameters
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
-  const ai_result_id = req.query.ai_result_id
-    ? parseInt(req.query.ai_result_id)
-    : null;
 
-  // Validate pagination parameters
   if (page < 1 || limit < 1) {
     return sendValidationError(res, "Invalid pagination parameters", {
       provided: { page, limit },
       required: "positive integers",
-      details: "Page and limit must be greater than 0",
     });
   }
 
-  // Validate ai_result_id if provided
-  if (ai_result_id !== null && (isNaN(ai_result_id) || ai_result_id < 1)) {
-    return sendValidationError(res, "Invalid ai_result_id filter", {
-      provided: req.query.ai_result_id,
-      required: "positive integer",
-      details: "ai_result_id must be a positive integer",
-    });
-  }
-
-  // Calculate offset
   const offset = (page - 1) * limit;
 
   crud.getPDFExports((err, rows) => {
@@ -1575,54 +1349,32 @@ app.get("/api/pdf_exports", (req, res, next) => {
       return next(err);
     }
 
-    // Filter by ai_result_id if provided
-    let filteredRows = rows;
-    if (ai_result_id) {
-      filteredRows = rows.filter((row) => row.ai_result_id === ai_result_id);
-    }
-
-    // Handle empty results
-    if (!filteredRows || filteredRows.length === 0) {
+    if (!rows || rows.length === 0) {
       return res.status(200).json({
         success: true,
         data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pages: 0,
-        },
+        pagination: { page, limit, total: 0, pages: 0 },
       });
     }
 
-    // Calculate pagination
-    const total = filteredRows.length;
+    const total = rows.length;
     const pages = Math.ceil(total / limit);
-    const paginatedRows = filteredRows.slice(offset, offset + limit);
+    const paginatedRows = rows.slice(offset, offset + limit);
 
-    // Return standardized success response
     res.status(200).json({
       success: true,
       data: paginatedRows,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages,
-        ai_result_id: ai_result_id || undefined,
-      },
+      pagination: { page, limit, total, pages },
     });
   });
 });
 
 app.get("/api/pdf_exports/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "PDF export ID must be a positive integer",
     });
   }
 
@@ -1632,176 +1384,81 @@ app.get("/api/pdf_exports/:id", (req, res, next) => {
       err.message = "Failed to retrieve PDF export";
       return next(err);
     }
-
-    // Handle not found
     if (!row) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "PDF export not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: row,
-    });
+    res.status(200).json({ success: true, data: row });
   });
 });
 
 app.put("/api/pdf_exports/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "PDF export ID must be a positive integer",
     });
   }
 
-  // Validate file_path in request body
   const { file_path } = req.body;
   if (typeof file_path !== "string" || !file_path.trim()) {
-    return sendValidationError(res, "file_path must be a non-empty string", {
-      provided: typeof file_path,
-      required: "non-empty string",
-      details: "file_path must be a valid path string",
-    });
-  }
-
-  // Validate file path format
-  const validPathPattern = /^[a-zA-Z0-9\-_\/\.]+\.(pdf|PDF)$/;
-  if (!validPathPattern.test(file_path)) {
-    return sendValidationError(res, "Invalid file path format", {
+    return sendValidationError(res, "file_path is required", {
       provided: file_path,
-      required: "valid PDF file path",
-      details: "File path must be a valid path ending with .pdf",
+      required: "non-empty string",
     });
   }
 
-  crud.updatePDFExport(id, file_path, (err, resultObj) => {
+  crud.updatePDFExport(id, file_path, (err, result) => {
     if (err) {
-      // Handle database errors
-      if (err.code === "SQLITE_CONSTRAINT") {
-        err.status = 409;
-        err.message = "Duplicate file path not allowed";
-      } else {
-        err.status = 500;
-        err.message = "Failed to update PDF export";
-      }
+      err.status = 500;
+      err.message = "Failed to update PDF export";
       return next(err);
     }
-
-    // Handle not found case
-    if (!resultObj || resultObj.changes === 0) {
+    if (!result || result.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "PDF export not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: {
-        id,
-        file_path,
-        updated_at: new Date().toISOString(),
-      },
+      data: { id, file_path },
     });
   });
 });
 
 app.delete("/api/pdf_exports/:id", (req, res, next) => {
-  // Validate ID parameter
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
     return sendValidationError(res, "Invalid PDF export ID", {
       provided: req.params.id,
       required: "positive integer",
-      details: "PDF export ID must be a positive integer",
     });
   }
 
-  crud.deletePDFExport(id, (err, resultObj) => {
+  crud.deletePDFExport(id, (err, result) => {
     if (err) {
-      // Handle specific database errors
-      if (err.code === "SQLITE_FOREIGN_KEY") {
-        err.status = 409;
-        err.message =
-          "Cannot delete PDF export: It is referenced by other records";
-      } else {
-        err.status = 500;
-        err.message = "Failed to delete PDF export";
-      }
+      err.status = 500;
+      err.message = "Failed to delete PDF export";
       return next(err);
     }
-
-    // Handle not found case
-    if (!resultObj || resultObj.changes === 0) {
+    if (!result || result.changes === 0) {
       return res.status(404).json({
         success: false,
-        error: {
-          message: "PDF export not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
+        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
       });
     }
-
-    // Return standardized success response
     res.status(200).json({
       success: true,
-      data: {
-        message: "PDF export deleted successfully",
-        id,
-        deleted_at: new Date().toISOString(),
-      },
+      data: { message: "PDF export deleted successfully" },
     });
   });
 });
 
-// Start server
-/**
-app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
-});
-**/
-
-// Graceful shutdown for Puppeteer and DB
-process.on("SIGINT", async () => {
-  console.log("Received SIGINT. Closing resources...");
-  if (browserInstance) await browserInstance.close();
-  db.close((err) => {
-    if (err) {
-      console.error("Error closing database:", err.message);
-    }
-    process.exit(0);
-  });
-});
-
-// --- Health Check Helper Functions ---
-const HEALTH_CHECK_TIMEOUT_MS = 5000;
-
-function withTimeout(promise, ms) {
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms)
-  );
-  return Promise.race([promise, timeout]);
-}
-
+// --- HEALTH AND UTILITY FUNCTIONS ---
 async function checkPuppeteerHealth() {
   if (!browserInstance || !serviceState.puppeteer.ready) {
     return {

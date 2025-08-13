@@ -176,5 +176,5 @@ All CRUD API endpoints need to be updated to match our established error handlin
 
 - [x] Prompts CRUD Complete
 - [x] AI Results CRUD Complete
-- [ ] Overrides CRUD Complete
-- [ ] PDF Exports CRUD Complete
+- [x] Overrides CRUD Complete
+- [x] PDF Exports CRUD Complete
