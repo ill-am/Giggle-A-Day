@@ -3,6 +3,8 @@
 services:
   # 1. This is your main application/development container service
   app:
+    ports:
+      - "3000:3000"
     # We will build the dev container image using the instructions in devcontainer.json
     # The context '.' refers to the current directory
     build:
@@ -18,14 +20,15 @@ services:
 
     # Depend on the 'db' service. This ensures 'db' starts before 'app'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 10
+      start_period: 90s
 
   # 2. This is your PostgreSQL database service
   db:
@@ -47,8 +50,8 @@ services:
         ]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 30s
+      retries: 10
+      start_period: 90s
 
     # Restart the container automatically if it stops
     restart: unless-stopped

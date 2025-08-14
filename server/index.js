@@ -25,7 +25,7 @@ async function startServer() {
     await startPuppeteer();
 
     // 3. Start the server only after all dependencies are ready
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server listening on port ${PORT}`);
     });
   } catch (err) {
@@ -212,64 +212,72 @@ app.use((req, res, next) => {
 // Checks both SQLite3 and Puppeteer status
 app.get("/health", async (req, res) => {
   try {
-    // Throttle health checks during startup
-    if (isInGracePeriod()) {
-      return res.status(503).json({
-        status: "initializing",
-        timestamp: new Date().toISOString(),
-        uptime: Date.now() - serviceState.startupTime,
-        services: {
-          puppeteer: {
-            phase: serviceState.puppeteer.startupPhase,
-            retryCount: serviceState.puppeteer.retryCount,
-            transitioning: serviceState.puppeteer.transitioning,
-          },
-          db: {
-            phase: serviceState.db.startupPhase,
-          },
-        },
-      });
+    const now = Date.now();
+    const grace = isInGracePeriod();
+    // Check Puppeteer readiness
+    const puppeteerReady = serviceState.puppeteer.ready && browserInstance;
+    // Check DB readiness
+    const dbReady = serviceState.db.ready;
+
+    // Run deeper health checks if not in grace period
+    let puppeteerStatus = { ok: puppeteerReady, error: null };
+    let dbStatus = { ok: dbReady, error: null };
+    if (!grace) {
+      [puppeteerStatus, dbStatus] = await Promise.all([
+        checkPuppeteerHealth().catch((err) => ({
+          ok: false,
+          error: err.message,
+        })),
+        checkDatabaseHealth().catch((err) => ({
+          ok: false,
+          error: err.message,
+        })),
+      ]);
     }
 
-    // Regular health check
-    const [puppeteerStatus, dbStatus] = await Promise.all([
-      checkPuppeteerHealth().catch((err) => ({
-        ok: false,
-        error: err.message,
-      })),
-      checkDatabaseHealth().catch((err) => ({ ok: false, error: err.message })),
-    ]);
-
+    // Compose detailed health object
     const health = {
-      status: puppeteerStatus.ok && dbStatus.ok ? "ok" : "error",
+      status: grace
+        ? "initializing"
+        : puppeteerStatus.ok && dbStatus.ok
+        ? "ok"
+        : "error",
       timestamp: new Date().toISOString(),
-      uptime: Date.now() - serviceState.startupTime,
+      uptime: now - serviceState.startupTime,
+      gracePeriod: grace,
       services: {
         puppeteer: {
           status: puppeteerStatus.ok ? "ok" : "error",
           phase: serviceState.puppeteer.startupPhase,
-          error: puppeteerStatus.error,
+          error: puppeteerStatus.error || serviceState.puppeteer.lastError,
           healthChecks: serviceState.puppeteer.successfulHealthChecks,
           ready: serviceState.puppeteer.ready,
           transitioning: serviceState.puppeteer.transitioning,
+          retryCount: serviceState.puppeteer.retryCount,
         },
         db: {
           status: dbStatus.ok ? "ok" : "error",
-          error: dbStatus.error,
+          error: dbStatus.error || serviceState.db.lastError,
           phase: serviceState.db.startupPhase,
           ready: serviceState.db.ready,
         },
       },
     };
 
+    // Log health check details for diagnostics
+    if (health.status !== "ok") {
+      console.warn("[Health] Not ready:", JSON.stringify(health, null, 2));
+    }
+
     if (health.status === "ok") {
       serviceState.puppeteer.successfulHealthChecks++;
       serviceState.db.ready = true;
       serviceState.db.lastError = null;
+      return res.status(200).json(health);
     }
 
-    const statusCode = health.status === "ok" ? 200 : 503;
-    res.status(statusCode).json(health);
+    // If not ready, return 503 with details
+    res.status(503).json(health);
   } catch (error) {
     console.error("[Health Check Error]", error);
     res.status(500).json({
