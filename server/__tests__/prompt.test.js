@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
 import db from "../db";
 
@@ -10,17 +10,12 @@ describe("API: /api/prompts", () => {
 
   // Setup: clean database + verify server
   beforeAll(async () => {
-    await new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run("DELETE FROM prompts");
-        db.run("DELETE FROM ai_results");
-        db.run("DELETE FROM overrides");
-        db.run("DELETE FROM pdf_exports", [], (err) => {
-          if (err) return reject(err);
-          resolve();
-        });
-      });
-    });
+    // The db object is a promise-based wrapper, so we can await directly.
+    // Deletion order matters due to foreign key constraints.
+    await db.run("DELETE FROM pdf_exports");
+    await db.run("DELETE FROM overrides");
+    await db.run("DELETE FROM ai_results");
+    await db.run("DELETE FROM prompts");
 
     try {
       const health = await request(baseUrl).get("/health");
@@ -31,9 +26,7 @@ describe("API: /api/prompts", () => {
     } catch (error) {
       throw new Error("Server must be running on " + baseUrl);
     }
-  });
-
-  // Cleanup: delete test-created data only
+  }); // Cleanup: delete test-created data only
   afterAll(async () => {
     if (createdId) {
       try {
@@ -78,7 +71,9 @@ describe("API: /api/prompts", () => {
 
   it("should update a prompt", async () => {
     const updatedPrompt = { prompt: "Updated prompt" };
-    const res = await request(baseUrl).put(`/api/prompts/${createdId}`).send(updatedPrompt);
+    const res = await request(baseUrl)
+      .put(`/api/prompts/${createdId}`)
+      .send(updatedPrompt);
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty("changes");
 
