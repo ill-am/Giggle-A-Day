@@ -211,3 +211,44 @@ export async function saveOverride(content, changes) {
     throw error;
   }
 }
+
+export async function exportToPdf(content) {
+  Logger.debug("Exporting to PDF", {
+    contentKeys: content ? Object.keys(content) : "no content",
+  });
+
+  if (!content || !content.title || !content.body) {
+    const error = new Error("Export content must include title and body");
+    Logger.error("Export validation failed", { error });
+    throw error;
+  }
+
+  try {
+    const response = await fetchWithRetry("/export", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(content),
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Export failed: ${response.status}`);
+      Logger.error("Export request failed", { error, status: response.status });
+      throw error;
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `AetherPress-Export-${Date.now()}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+
+    Logger.info("PDF exported successfully");
+  } catch (error) {
+    Logger.error("PDF export error", { error });
+    throw error;
+  }
+}
