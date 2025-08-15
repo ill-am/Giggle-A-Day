@@ -9,6 +9,9 @@ const cors = require("cors");
 const rateLimit = require("express-rate-limit");
 const puppeteer = require("puppeteer");
 const db = require("./db");
+const fs = require("fs");
+const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -164,7 +167,39 @@ app.set("trust proxy", 1);
 app.use(express.json());
 app.use(morgan("dev"));
 app.use(cors());
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+// Apply rate limiting, but allow a dev-only bypass via DISABLE_RATE_LIMIT=1
+if (process.env.DISABLE_RATE_LIMIT === "1") {
+  console.log("Rate limit disabled via DISABLE_RATE_LIMIT=1");
+} else {
+  app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+}
+
+// Ensure logs directory exists
+const logsDir = path.resolve(__dirname, "../server-logs");
+if (!fs.existsSync(logsDir)) {
+  try {
+    fs.mkdirSync(logsDir);
+  } catch (e) {
+    console.warn("Failed to create logs directory:", e.message);
+  }
+}
+
+// Request ID middleware - help trace requests through proxies
+app.use((req, res, next) => {
+  try {
+    req.id = uuidv4();
+    res.setHeader("X-Request-Id", req.id);
+    // Allow these headers to be visible to browser clients
+    const existing = res.getHeader("Access-Control-Expose-Headers");
+    const expose = existing
+      ? `${existing},X-Request-Id,X-Backend-Error`
+      : "X-Request-Id,X-Backend-Error";
+    res.setHeader("Access-Control-Expose-Headers", expose);
+  } catch (e) {
+    // Don't block requests if UUID generation fails
+  }
+  next();
+});
 
 // Helper to check if we're still in grace period
 function isInGracePeriod() {
@@ -315,19 +350,49 @@ app.get("/test-error", (req, res, next) => {
 // Centralized error handler
 app.use((err, req, res, next) => {
   // Log error details
+  const timestamp = new Date().toISOString();
+  const requestId = req && req.id ? req.id : "-";
   console.error("--- Error Handler ---");
-  console.error("Time:", new Date().toISOString());
+  console.error("Time:", timestamp);
+  console.error("RequestId:", requestId);
   console.error("Method:", req.method);
   console.error("URL:", req.originalUrl);
   console.error("Body:", req.body);
   console.error("Error Stack:", err.stack);
 
+  // Append a compact structured error line to server-logs/errors.log for quick lookups
+  try {
+    const logLine = JSON.stringify({
+      t: timestamp,
+      id: requestId,
+      method: req.method,
+      url: req.originalUrl,
+      status: err.status || 500,
+      message: err.message,
+      stack: err.stack ? err.stack.split("\n")[0] : null,
+    });
+    fs.appendFileSync(path.join(logsDir, "errors.log"), logLine + "\n");
+  } catch (e) {
+    console.warn("Failed to write error log:", e.message);
+  }
+
+  // Surface a short error header to aid proxied requests / reverse-proxies
+  try {
+    res.setHeader(
+      "X-Backend-Error",
+      err.message ? String(err.message).slice(0, 200) : "error"
+    );
+    res.setHeader("X-Request-Id", requestId);
+  } catch (e) {}
+
   // Differentiate error response by environment
   const isDev = process.env.NODE_ENV !== "production";
-  res.status(err.status || 500).json({
+  const payload = {
     error: isDev ? err.message : "Internal Server Error",
+    requestId,
     ...(isDev && { stack: err.stack }),
-  });
+  };
+  res.status(err.status || 500).json(payload);
 });
 
 const crud = require("./crud");
@@ -354,31 +419,17 @@ app.post("/prompt", async (req, res, next) => {
   try {
     // Use AI service abstraction with new content format
     const aiResponse = await aiService.generateContent(prompt);
+    // Use Promise-style CRUD for clarity
+    const dbResult = await crud.createPrompt(prompt);
+    const aiResult = await crud.createAIResult(dbResult.id, aiResponse.content);
 
-    crud.createPrompt(prompt, (err, dbResult) => {
-      if (err) {
-        err.status = 500;
-        err.message = "Failed to store prompt in database";
-        return next(err);
-      }
-
-      // Store both prompt and generated content
-      crud.createAIResult(dbResult.id, aiResponse.content, (err, aiResult) => {
-        if (err) {
-          err.status = 500;
-          err.message = "Failed to store AI result in database";
-          return next(err);
-        }
-
-        res.status(201).json({
-          success: true,
-          data: {
-            ...aiResponse,
-            promptId: dbResult.id,
-            resultId: aiResult.id,
-          },
-        });
-      });
+    res.status(201).json({
+      success: true,
+      data: {
+        ...aiResponse,
+        promptId: dbResult.id,
+        resultId: aiResult.id,
+      },
     });
   } catch (err) {
     // Enhanced AI service error handling
@@ -490,16 +541,13 @@ app.post("/export", async (req, res, next) => {
     });
   }
 
-  // Service availability check
-  if (!serviceState.puppeteer.ready || !browserInstance) {
-    const err = new Error("PDF generation service not ready");
-    err.status = 503;
-    err.code = "SERVICE_UNAVAILABLE";
-    err.details = {
-      puppeteer: serviceState.puppeteer.ready ? "ready" : "initializing",
-      browser: browserInstance ? "available" : "not available",
-    };
-    return next(err);
+  // Prefer async export via queue when available. If BullMQ is not installed,
+  // gracefully fall back to the synchronous in-request generation.
+  let Queue;
+  try {
+    ({ Queue } = require("bullmq"));
+  } catch (e) {
+    Queue = null;
   }
 
   // Log request for debugging (optional)
@@ -513,8 +561,59 @@ app.post("/export", async (req, res, next) => {
     console.warn("Failed to write debug log:", e.message);
   }
 
+  // If we have BullMQ available, enqueue an export job and return 202 with a
+  // status URL. Otherwise fall back to in-request generation (original path).
+  if (Queue) {
+    try {
+      const { Queue: Q } = require("bullmq");
+      const IORedis = require("ioredis");
+      const connection = new IORedis(
+        process.env.REDIS_URL || "redis://127.0.0.1:6379"
+      );
+      const exportQueue = new Q("export_queue", { connection });
+
+      // Create a pdf_exports DB record to track the job (best-effort)
+      let exportRecord = null;
+      try {
+        exportRecord = await crud.createPDFExport(null, "queued");
+      } catch (e) {
+        // ignore DB errors here; we'll still enqueue the job
+      }
+
+      const jobData = {
+        title,
+        body,
+        exportId: exportRecord ? exportRecord.id : null,
+      };
+      const job = await exportQueue.add("exportPdf", jobData, {
+        removeOnComplete: true,
+      });
+
+      const statusUrl = `/api/pdf_exports/${
+        exportRecord ? exportRecord.id : job.id
+      }`;
+      res.status(202).json({ success: true, jobId: job.id, statusUrl });
+      return;
+    } catch (enqueueErr) {
+      console.warn(
+        "Failed to enqueue export job, falling back to sync generation:",
+        enqueueErr && enqueueErr.message
+      );
+      // fallthrough to synchronous generation below
+    }
+  }
+
+  // FALLBACK: synchronous generation (original behaviour)
   let page;
   try {
+    // Service availability check for fallback path
+    if (!serviceState.puppeteer.ready || !browserInstance) {
+      const err = new Error("PDF generation service not ready");
+      err.status = 503;
+      err.code = "SERVICE_UNAVAILABLE";
+      return next(err);
+    }
+
     // PDF Generation process
     page = await browserInstance.newPage();
     if (!page) {
@@ -533,64 +632,26 @@ app.post("/export", async (req, res, next) => {
       path: outputPath, // Save to file
       format: "A4",
       printBackground: true,
-      margin: {
-        top: "1cm",
-        right: "1cm",
-        bottom: "1cm",
-        left: "1cm",
-      },
+      margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
     });
 
-    // Verify file was created
-    if (!fs.existsSync(outputPath)) {
+    if (!fs.existsSync(outputPath))
       throw new Error("PDF file was not created successfully");
-    }
-
-    // Read the generated file
     const pdfBuffer = fs.readFileSync(outputPath);
 
-    // Optional debug logging
-    try {
-      const pdfFirst16Path = path.resolve(
-        __dirname,
-        "../samples/export_pdf_first16.bin"
-      );
-      fs.writeFileSync(pdfFirst16Path, pdf.slice(0, 16));
-    } catch (e) {
-      console.warn("Failed to write debug sample:", e.message);
-    }
-
-    // Set response headers
     res.setHeader("Content-Disposition", `inline; filename=${filename}`);
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", pdfBuffer.length);
-
-    // Send PDF response
     res.end(pdfBuffer);
 
-    // Clean up: Remove the temporary file
     try {
       fs.unlinkSync(outputPath);
-    } catch (cleanupError) {
-      console.warn(
-        "Failed to clean up temporary PDF file:",
-        cleanupError.message
-      );
-    }
+    } catch (e) {}
+    return;
   } catch (err) {
     const exportError = new Error(`PDF Generation Failed: ${err.message}`);
     exportError.status = 500;
     exportError.code = "PDF_GENERATION_ERROR";
-    exportError.details = {
-      step: err.message.includes("browser page")
-        ? "page_creation"
-        : err.message.includes("setContent")
-        ? "content_rendering"
-        : err.message.includes("generation failed")
-        ? "pdf_creation"
-        : "unknown",
-      originalError: err.message,
-    };
     next(exportError);
   } finally {
     if (page) await page.close();
@@ -614,9 +675,11 @@ app.post("/api/prompts", (req, res, next) => {
     );
   }
 
-  crud.createPrompt(prompt, (err, result) => {
-    if (err) {
-      // Handle specific database errors
+  (async () => {
+    try {
+      const result = await crud.createPrompt(prompt);
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
       if (err.code === "SQLITE_CONSTRAINT") {
         err.status = 409;
         err.message = "Duplicate prompt not allowed";
@@ -624,15 +687,9 @@ app.post("/api/prompts", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to create prompt";
       }
-      return next(err);
+      next(err);
     }
-
-    // Return standardized success response
-    res.status(201).json({
-      success: true,
-      data: result,
-    });
-  });
+  })();
 });
 
 app.get("/api/prompts", (req, res, next) => {
@@ -652,46 +709,30 @@ app.get("/api/prompts", (req, res, next) => {
   // Calculate offset
   const offset = (page - 1) * limit;
 
-  crud.getPrompts((err, rows) => {
-    if (err) {
+  (async () => {
+    try {
+      const rows = await crud.getPrompts();
+      if (!rows || rows.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        });
+      }
+      const total = rows.length;
+      const pages = Math.ceil(total / limit);
+      const paginatedRows = rows.slice(offset, offset + limit);
+      res.status(200).json({
+        success: true,
+        data: paginatedRows,
+        pagination: { page, limit, total, pages },
+      });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to retrieve prompts";
-      return next(err);
+      next(err);
     }
-
-    // Handle empty results
-    if (!rows || rows.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: {
-          page,
-          limit,
-          total: 0,
-          pages: 0,
-        },
-      });
-    }
-
-    // Calculate total pages
-    const total = rows.length;
-    const pages = Math.ceil(total / limit);
-
-    // Paginate results
-    const paginatedRows = rows.slice(offset, offset + limit);
-
-    // Return standardized success response with pagination
-    res.status(200).json({
-      success: true,
-      data: paginatedRows,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages,
-      },
-    });
-  });
+  })();
 });
 
 app.get("/api/prompts/:id", (req, res, next) => {
@@ -705,32 +746,27 @@ app.get("/api/prompts/:id", (req, res, next) => {
     });
   }
 
-  crud.getPromptById(id, (err, row) => {
-    if (err) {
+  (async () => {
+    try {
+      const row = await crud.getPromptById(id);
+      if (!row) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "Prompt not found",
+            code: "RESOURCE_NOT_FOUND",
+            status: 404,
+            details: { id },
+          },
+        });
+      }
+      res.status(200).json({ success: true, data: row });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to retrieve prompt";
-      return next(err);
+      next(err);
     }
-
-    // Handle not found
-    if (!row) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "Prompt not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
-      });
-    }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: row,
-    });
-  });
+  })();
 });
 
 app.put("/api/prompts/:id", (req, res, next) => {
@@ -758,9 +794,25 @@ app.put("/api/prompts/:id", (req, res, next) => {
     );
   }
 
-  crud.updatePrompt(id, prompt, (err, result) => {
-    if (err) {
-      // Handle specific database errors
+  (async () => {
+    try {
+      const result = await crud.updatePrompt(id, prompt);
+      if (!result || result.changes === 0) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "Prompt not found",
+            code: "RESOURCE_NOT_FOUND",
+            status: 404,
+            details: { id },
+          },
+        });
+      }
+      res.status(200).json({
+        success: true,
+        data: { id, prompt, updated_at: new Date().toISOString() },
+      });
+    } catch (err) {
       if (err.code === "SQLITE_CONSTRAINT") {
         err.status = 409;
         err.message = "Duplicate prompt not allowed";
@@ -768,32 +820,9 @@ app.put("/api/prompts/:id", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to update prompt";
       }
-      return next(err);
+      next(err);
     }
-
-    // Handle not found case
-    if (!result || result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "Prompt not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
-      });
-    }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: {
-        id,
-        prompt,
-        updated_at: new Date().toISOString(),
-      },
-    });
-  });
+  })();
 });
 
 app.delete("/api/prompts/:id", (req, res, next) => {
@@ -807,9 +836,29 @@ app.delete("/api/prompts/:id", (req, res, next) => {
     });
   }
 
-  crud.deletePrompt(id, (err, result) => {
-    if (err) {
-      // Handle specific database errors
+  (async () => {
+    try {
+      const result = await crud.deletePrompt(id);
+      if (!result || result.changes === 0) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "Prompt not found",
+            code: "RESOURCE_NOT_FOUND",
+            status: 404,
+            details: { id },
+          },
+        });
+      }
+      res.status(200).json({
+        success: true,
+        data: {
+          message: "Prompt deleted successfully",
+          id,
+          deleted_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 409;
         err.message = "Cannot delete prompt: It is referenced by other records";
@@ -817,32 +866,9 @@ app.delete("/api/prompts/:id", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to delete prompt";
       }
-      return next(err);
+      next(err);
     }
-
-    // Handle not found case
-    if (!result || result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "Prompt not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
-      });
-    }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: {
-        message: "Prompt deleted successfully",
-        id,
-        deleted_at: new Date().toISOString(),
-      },
-    });
-  });
+  })();
 });
 
 // --- AI_RESULTS CRUD API ---
@@ -878,9 +904,14 @@ app.post("/api/ai_results", (req, res, next) => {
     });
   }
 
-  crud.createAIResult(prompt_id, result, (err, resultObj) => {
-    if (err) {
-      // Handle specific database errors
+  (async () => {
+    try {
+      const resultObj = await crud.createAIResult(prompt_id, result);
+      res.status(201).json({
+        success: true,
+        data: { ...resultObj, created_at: new Date().toISOString() },
+      });
+    } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced prompt not found";
@@ -891,18 +922,9 @@ app.post("/api/ai_results", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to create AI result";
       }
-      return next(err);
+      next(err);
     }
-
-    // Return standardized success response
-    res.status(201).json({
-      success: true,
-      data: {
-        ...resultObj,
-        created_at: new Date().toISOString(),
-      },
-    });
-  });
+  })();
 });
 
 app.get("/api/ai_results", (req, res, next) => {
@@ -932,51 +954,38 @@ app.get("/api/ai_results", (req, res, next) => {
   // Calculate offset
   const offset = (page - 1) * limit;
 
-  crud.getAIResults((err, rows) => {
-    if (err) {
-      err.status = 500;
-      err.message = "Failed to retrieve AI results";
-      return next(err);
-    }
-
-    // Filter by prompt_id if provided
-    let filteredRows = rows;
-    if (prompt_id) {
-      filteredRows = rows.filter((row) => row.prompt_id === prompt_id);
-    }
-
-    // Handle empty results
-    if (!filteredRows || filteredRows.length === 0) {
-      return res.status(200).json({
+  (async () => {
+    try {
+      const rows = await crud.getAIResults();
+      let filteredRows = rows;
+      if (prompt_id)
+        filteredRows = rows.filter((row) => row.prompt_id === prompt_id);
+      if (!filteredRows || filteredRows.length === 0)
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        });
+      const total = filteredRows.length;
+      const pages = Math.ceil(total / limit);
+      const paginatedRows = filteredRows.slice(offset, offset + limit);
+      res.status(200).json({
         success: true,
-        data: [],
+        data: paginatedRows,
         pagination: {
           page,
           limit,
-          total: 0,
-          pages: 0,
+          total,
+          pages,
+          prompt_id: prompt_id || undefined,
         },
       });
+    } catch (err) {
+      err.status = 500;
+      err.message = "Failed to retrieve AI results";
+      next(err);
     }
-
-    // Calculate pagination
-    const total = filteredRows.length;
-    const pages = Math.ceil(total / limit);
-    const paginatedRows = filteredRows.slice(offset, offset + limit);
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: paginatedRows,
-      pagination: {
-        page,
-        limit,
-        total,
-        pages,
-        prompt_id: prompt_id || undefined,
-      },
-    });
-  });
+  })();
 });
 
 app.get("/api/ai_results/:id", (req, res, next) => {
@@ -990,36 +999,35 @@ app.get("/api/ai_results/:id", (req, res, next) => {
     });
   }
 
-  crud.getAIResultById(id, (err, row) => {
-    if (err) {
-      err.status = 500;
-      err.message = "Failed to retrieve AI result";
-      return next(err);
-    }
-
-    // Handle not found
-    if (!row) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "AI result not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
+  (async () => {
+    try {
+      const row = await crud.getAIResultById(id);
+      if (!row)
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "AI result not found",
+            code: "RESOURCE_NOT_FOUND",
+            status: 404,
+            details: { id },
+          },
+        });
+      res.status(200).json({
+        success: true,
+        data: {
+          ...row,
+          result:
+            typeof row.result === "string"
+              ? JSON.parse(row.result)
+              : row.result,
         },
       });
+    } catch (err) {
+      err.status = 500;
+      err.message = "Failed to retrieve AI result";
+      next(err);
     }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: {
-        ...row,
-        result:
-          typeof row.result === "string" ? JSON.parse(row.result) : row.result,
-      },
-    });
-  });
+  })();
 });
 
 app.put("/api/ai_results/:id", (req, res, next) => {
@@ -1054,13 +1062,10 @@ app.put("/api/ai_results/:id", (req, res, next) => {
     });
   }
 
-  crud.updateAIResult(id, result, (err, resultObj) => {
-    if (err) {
-      // Handle specific database errors
-      if (err.code === "SQLITE_CONSTRAINT") {
-        err.status = 409;
-        err.message = "Constraint violation in update";
-      } else if (!resultObj || resultObj.changes === 0) {
+  (async () => {
+    try {
+      const resultObj = await crud.updateAIResult(id, result);
+      if (!resultObj || resultObj.changes === 0)
         return res.status(404).json({
           success: false,
           error: {
@@ -1070,23 +1075,21 @@ app.put("/api/ai_results/:id", (req, res, next) => {
             details: { id },
           },
         });
+      res.status(200).json({
+        success: true,
+        data: { id, result, updated_at: new Date().toISOString() },
+      });
+    } catch (err) {
+      if (err.code === "SQLITE_CONSTRAINT") {
+        err.status = 409;
+        err.message = "Constraint violation in update";
       } else {
         err.status = 500;
         err.message = "Failed to update AI result";
       }
-      return next(err);
+      next(err);
     }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: {
-        id,
-        result,
-        updated_at: new Date().toISOString(),
-      },
-    });
-  });
+  })();
 });
 
 app.delete("/api/ai_results/:id", (req, res, next) => {
@@ -1100,9 +1103,28 @@ app.delete("/api/ai_results/:id", (req, res, next) => {
     });
   }
 
-  crud.deleteAIResult(id, (err, resultObj) => {
-    if (err) {
-      // Handle specific database errors
+  (async () => {
+    try {
+      const resultObj = await crud.deleteAIResult(id);
+      if (!resultObj || resultObj.changes === 0)
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "AI result not found",
+            code: "RESOURCE_NOT_FOUND",
+            status: 404,
+            details: { id },
+          },
+        });
+      res.status(200).json({
+        success: true,
+        data: {
+          message: "AI result deleted successfully",
+          id,
+          deleted_at: new Date().toISOString(),
+        },
+      });
+    } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 409;
         err.message =
@@ -1111,32 +1133,9 @@ app.delete("/api/ai_results/:id", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to delete AI result";
       }
-      return next(err);
+      next(err);
     }
-
-    // Handle not found case
-    if (!resultObj || resultObj.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          message: "AI result not found",
-          code: "RESOURCE_NOT_FOUND",
-          status: 404,
-          details: { id },
-        },
-      });
-    }
-
-    // Return standardized success response
-    res.status(200).json({
-      success: true,
-      data: {
-        message: "AI result deleted successfully",
-        id,
-        deleted_at: new Date().toISOString(),
-      },
-    });
-  });
+  })();
 });
 
 // --- OVERRIDES CRUD API ---
@@ -1160,8 +1159,11 @@ app.post("/api/overrides", (req, res, next) => {
     });
   }
 
-  crud.createOverride(ai_result_id, override, (err, result) => {
-    if (err) {
+  (async () => {
+    try {
+      const result = await crud.createOverride(ai_result_id, override);
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
@@ -1169,10 +1171,9 @@ app.post("/api/overrides", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to create override";
       }
-      return next(err);
+      next(err);
     }
-    res.status(201).json({ success: true, data: result });
-  });
+  })();
 });
 
 app.get("/api/overrides", (req, res, next) => {
@@ -1213,6 +1214,29 @@ app.get("/api/overrides", (req, res, next) => {
       pagination: { page, limit, total, pages },
     });
   });
+  (async () => {
+    try {
+      const rows = await crud.getOverrides();
+      if (!rows || rows.length === 0)
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        });
+      const total = rows.length;
+      const pages = Math.ceil(total / limit);
+      const paginatedRows = rows.slice(offset, offset + limit);
+      res.status(200).json({
+        success: true,
+        data: paginatedRows,
+        pagination: { page, limit, total, pages },
+      });
+    } catch (err) {
+      err.status = 500;
+      err.message = "Failed to retrieve overrides";
+      next(err);
+    }
+  })();
 });
 
 app.get("/api/overrides/:id", (req, res, next) => {
@@ -1322,8 +1346,11 @@ app.post("/api/pdf_exports", (req, res, next) => {
     });
   }
 
-  crud.createPDFExport(ai_result_id, file_path, (err, result) => {
-    if (err) {
+  (async () => {
+    try {
+      const result = await crud.createPDFExport(ai_result_id, file_path);
+      res.status(201).json({ success: true, data: result });
+    } catch (err) {
       if (err.code === "SQLITE_FOREIGN_KEY") {
         err.status = 404;
         err.message = "Referenced AI result not found";
@@ -1331,10 +1358,9 @@ app.post("/api/pdf_exports", (req, res, next) => {
         err.status = 500;
         err.message = "Failed to create PDF export record";
       }
-      return next(err);
+      next(err);
     }
-    res.status(201).json({ success: true, data: result });
-  });
+  })();
 });
 
 app.get("/api/pdf_exports", (req, res, next) => {
@@ -1350,31 +1376,29 @@ app.get("/api/pdf_exports", (req, res, next) => {
 
   const offset = (page - 1) * limit;
 
-  crud.getPDFExports((err, rows) => {
-    if (err) {
+  (async () => {
+    try {
+      const rows = await crud.getPDFExports();
+      if (!rows || rows.length === 0)
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: { page, limit, total: 0, pages: 0 },
+        });
+      const total = rows.length;
+      const pages = Math.ceil(total / limit);
+      const paginatedRows = rows.slice(offset, offset + limit);
+      res.status(200).json({
+        success: true,
+        data: paginatedRows,
+        pagination: { page, limit, total, pages },
+      });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to retrieve PDF exports";
-      return next(err);
+      next(err);
     }
-
-    if (!rows || rows.length === 0) {
-      return res.status(200).json({
-        success: true,
-        data: [],
-        pagination: { page, limit, total: 0, pages: 0 },
-      });
-    }
-
-    const total = rows.length;
-    const pages = Math.ceil(total / limit);
-    const paginatedRows = rows.slice(offset, offset + limit);
-
-    res.status(200).json({
-      success: true,
-      data: paginatedRows,
-      pagination: { page, limit, total, pages },
-    });
-  });
+  })();
 });
 
 app.get("/api/pdf_exports/:id", (req, res, next) => {
@@ -1386,20 +1410,24 @@ app.get("/api/pdf_exports/:id", (req, res, next) => {
     });
   }
 
-  crud.getPDFExportById(id, (err, row) => {
-    if (err) {
+  (async () => {
+    try {
+      const row = await crud.getPDFExportById(id);
+      if (!row)
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "PDF export not found",
+            code: "RESOURCE_NOT_FOUND",
+          },
+        });
+      res.status(200).json({ success: true, data: row });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to retrieve PDF export";
-      return next(err);
+      next(err);
     }
-    if (!row) {
-      return res.status(404).json({
-        success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
-      });
-    }
-    res.status(200).json({ success: true, data: row });
-  });
+  })();
 });
 
 app.put("/api/pdf_exports/:id", (req, res, next) => {
@@ -1419,23 +1447,24 @@ app.put("/api/pdf_exports/:id", (req, res, next) => {
     });
   }
 
-  crud.updatePDFExport(id, file_path, (err, result) => {
-    if (err) {
+  (async () => {
+    try {
+      const result = await crud.updatePDFExport(id, file_path);
+      if (!result || result.changes === 0)
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "PDF export not found",
+            code: "RESOURCE_NOT_FOUND",
+          },
+        });
+      res.status(200).json({ success: true, data: { id, file_path } });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to update PDF export";
-      return next(err);
+      next(err);
     }
-    if (!result || result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
-      });
-    }
-    res.status(200).json({
-      success: true,
-      data: { id, file_path },
-    });
-  });
+  })();
 });
 
 app.delete("/api/pdf_exports/:id", (req, res, next) => {
@@ -1447,23 +1476,27 @@ app.delete("/api/pdf_exports/:id", (req, res, next) => {
     });
   }
 
-  crud.deletePDFExport(id, (err, result) => {
-    if (err) {
+  (async () => {
+    try {
+      const result = await crud.deletePDFExport(id);
+      if (!result || result.changes === 0)
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: "PDF export not found",
+            code: "RESOURCE_NOT_FOUND",
+          },
+        });
+      res.status(200).json({
+        success: true,
+        data: { message: "PDF export deleted successfully" },
+      });
+    } catch (err) {
       err.status = 500;
       err.message = "Failed to delete PDF export";
-      return next(err);
+      next(err);
     }
-    if (!result || result.changes === 0) {
-      return res.status(404).json({
-        success: false,
-        error: { message: "PDF export not found", code: "RESOURCE_NOT_FOUND" },
-      });
-    }
-    res.status(200).json({
-      success: true,
-      data: { message: "PDF export deleted successfully" },
-    });
-  });
+  })();
 });
 
 // --- HEALTH AND UTILITY FUNCTIONS ---

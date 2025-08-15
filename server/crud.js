@@ -4,72 +4,130 @@ const db = require("./db");
 
 // Retry wrapper for DB operations (handles SQLITE_BUSY)
 function withDbRetry(fn, args, cb, maxAttempts = 5, baseDelay = 50) {
+  // If caller provided a callback, operate in callback mode; otherwise return a Promise
+  const useCallback = typeof cb === "function";
+
   let attempt = 1;
-  function tryOp() {
-    fn(...args, (err, result) => {
+
+  function runOnce(resolve, reject) {
+    fn(...args, function (err, result) {
       if (err && err.code === "SQLITE_BUSY" && attempt < maxAttempts) {
         const delay = baseDelay * Math.pow(2, attempt - 1);
         console.warn(
           `[DB RETRY] SQLITE_BUSY, retrying in ${delay}ms (attempt ${attempt})`
         );
         attempt++;
-        setTimeout(tryOp, delay);
-      } else {
-        if (err) {
-          console.error(`[DB ERROR]`, err);
+        setTimeout(() => runOnce(resolve, reject), delay);
+        return;
+      }
+      if (err) {
+        console.error(`[DB ERROR]`, err);
+      }
+
+      if (useCallback) {
+        // Preserve sqlite3's `this` for callback callers
+        try {
+          cb.apply(this, [err, result]);
+        } catch (invokeErr) {
+          console.error("[DB CALLBACK ERROR]", invokeErr);
         }
-        cb(err, result);
+        // In callback mode we don't use resolve/reject
+        return;
+      }
+
+      // Promise mode - prefer resolving with sqlite3 Statement `this` when available
+      if (err) reject(err);
+      else {
+        try {
+          // if `this` is the sqlite3 Statement, return it so callers can read lastID/changes
+          if (typeof this !== "undefined" && this) return resolve(this);
+        } catch (e) {
+          // ignore and fall back
+        }
+        resolve(result);
       }
     });
   }
-  tryOp();
+
+  if (useCallback) {
+    runOnce();
+    return;
+  }
+
+  return new Promise((resolve, reject) => runOnce(resolve, reject));
 }
 
 // --- PROMPTS ---
 exports.createPrompt = (prompt, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`INSERT INTO prompts (prompt) VALUES (?)`, [prompt]],
-    function (err) {
-      cb(err, this ? { id: this.lastID } : null);
-    }
+  console.debug(
+    "[crud.createPrompt] called with prompt type:",
+    typeof prompt,
+    "cb type:",
+    typeof cb
   );
+  const sql = `INSERT INTO prompts (prompt) VALUES (?)`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [prompt]], function (err) {
+      try {
+        cb.call(this, err, this ? { id: this.lastID } : null);
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [prompt]]);
+  return op.then((stmt) => ({ id: stmt ? stmt.lastID : null }));
 };
 
 exports.getPrompts = (cb) => {
-  withDbRetry(
+  const op = withDbRetry(
     db.all.bind(db),
     [`SELECT * FROM prompts ORDER BY created_at DESC`, []],
     cb
   );
+  if (!cb) return op;
 };
 
 exports.getPromptById = (id, cb) => {
-  withDbRetry(
+  const op = withDbRetry(
     db.get.bind(db),
     [`SELECT * FROM prompts WHERE id = ?`, [id]],
     cb
   );
+  if (!cb) return op;
 };
 
 exports.updatePrompt = (id, prompt, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`UPDATE prompts SET prompt = ? WHERE id = ?`, [prompt, id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `UPDATE prompts SET prompt = ? WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [prompt, id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [prompt, id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 exports.deletePrompt = (id, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`DELETE FROM prompts WHERE id = ?`, [id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `DELETE FROM prompts WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 // --- AI_RESULTS ---
@@ -78,45 +136,56 @@ exports.createAIResult = (prompt_id, result, cb) => {
   try {
     jsonResult = JSON.stringify(result);
   } catch (e) {
-    return cb(new Error("Invalid result object for JSON serialization"));
+    if (cb)
+      return cb(new Error("Invalid result object for JSON serialization"));
+    return Promise.reject(
+      new Error("Invalid result object for JSON serialization")
+    );
   }
 
-  withDbRetry(
-    db.run.bind(db),
-    [
-      `INSERT INTO ai_results (prompt_id, result) VALUES (?, ?)`,
-      [prompt_id, jsonResult],
-    ],
-    function (err) {
-      cb(err, this ? { id: this.lastID } : null);
-    }
-  );
+  const sql = `INSERT INTO ai_results (prompt_id, result) VALUES (?, ?)`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [prompt_id, jsonResult]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [prompt_id, jsonResult]]);
+  return op.then((stmt) => ({ id: stmt ? stmt.lastID : null }));
 };
 
 exports.getAIResults = (cb) => {
-  withDbRetry(
-    db.all.bind(db),
-    [`SELECT * FROM ai_results ORDER BY created_at DESC`, []],
-    (err, rows) => {
+  const sql = `SELECT * FROM ai_results ORDER BY created_at DESC`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.all.bind(db), [sql, []], (err, rows) => {
       if (err) return cb(err);
       try {
-        rows = rows.map((row) => ({
-          ...row,
-          result: JSON.parse(row.result),
-        }));
+        rows = rows.map((row) => ({ ...row, result: JSON.parse(row.result) }));
         cb(null, rows);
       } catch (e) {
         cb(new Error("Invalid JSON in database"));
       }
-    }
+    });
+  }
+
+  const op = withDbRetry(db.all.bind(db), [sql, []]);
+  return op.then((rows) =>
+    rows.map((row) => ({ ...row, result: JSON.parse(row.result) }))
   );
 };
 
 exports.getAIResultById = (id, cb) => {
-  withDbRetry(
-    db.get.bind(db),
-    [`SELECT * FROM ai_results WHERE id = ?`, [id]],
-    (err, row) => {
+  const sql = `SELECT * FROM ai_results WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [id]], (err, row) => {
       if (err || !row) return cb(err, row);
       try {
         row.result = JSON.parse(row.result);
@@ -124,61 +193,87 @@ exports.getAIResultById = (id, cb) => {
       } catch (e) {
         cb(new Error("Invalid JSON in database"));
       }
-    }
+    });
+  }
+
+  const op = withDbRetry(db.get.bind(db), [sql, [id]]);
+  return op.then((row) =>
+    row ? { ...row, result: JSON.parse(row.result) } : null
   );
 };
 
 exports.updateAIResult = (id, result, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`UPDATE ai_results SET result = ? WHERE id = ?`, [result, id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `UPDATE ai_results SET result = ? WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [result, id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [result, id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 exports.deleteAIResult = (id, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`DELETE FROM ai_results WHERE id = ?`, [id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `DELETE FROM ai_results WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 // --- OVERRIDES ---
+// --- OVERRIDES ---
+// Convert to dual-mode (Promise or callback)
 exports.createOverride = (ai_result_id, override, cb) => {
   let jsonOverride;
   try {
     jsonOverride = JSON.stringify(override);
   } catch (e) {
-    return cb(new Error("Invalid override object for JSON serialization"));
+    if (typeof cb === "function")
+      return cb(new Error("Invalid override object for JSON serialization"));
+    return Promise.reject(
+      new Error("Invalid override object for JSON serialization")
+    );
   }
 
-  withDbRetry(
-    db.run.bind(db),
-    [
-      `INSERT INTO overrides (ai_result_id, override) VALUES (?, ?)`,
-      [ai_result_id, jsonOverride],
-    ],
-    function (err) {
-      cb(err, this ? { id: this.lastID } : null);
-    }
-  );
+  const sql = `INSERT INTO overrides (ai_result_id, override) VALUES (?, ?)`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [ai_result_id, jsonOverride]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [ai_result_id, jsonOverride]]);
+  return op.then((stmt) => ({ id: stmt ? stmt.lastID : null }));
 };
 
 exports.getOverrides = (cb) => {
   console.log("DEBUG: crud.getOverrides called");
-  withDbRetry(
-    db.all.bind(db),
-    [`SELECT * FROM overrides ORDER BY created_at DESC`, []],
-    (err, rows) => {
-      if (err) {
-        console.error("DEBUG: Database error:", err);
-        return cb(err);
-      }
+  const sql = `SELECT * FROM overrides ORDER BY created_at DESC`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.all.bind(db), [sql, []], (err, rows) => {
+      if (err) return cb(err);
       try {
         rows = rows.map((row) => ({
           ...row,
@@ -189,18 +284,27 @@ exports.getOverrides = (cb) => {
         }));
         cb(null, rows);
       } catch (e) {
-        console.error("DEBUG: JSON parsing error:", e);
         cb(new Error("Invalid JSON in database"));
       }
-    }
+    });
+  }
+
+  const op = withDbRetry(db.all.bind(db), [sql, []]);
+  return op.then((rows) =>
+    rows.map((row) => ({
+      ...row,
+      override:
+        typeof row.override === "string"
+          ? JSON.parse(row.override)
+          : row.override,
+    }))
   );
 };
 
 exports.getOverrideById = (id, cb) => {
-  withDbRetry(
-    db.get.bind(db),
-    [`SELECT * FROM overrides WHERE id = ?`, [id]],
-    (err, row) => {
+  const sql = `SELECT * FROM overrides WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [id]], (err, row) => {
       if (err || !row) return cb(err, row);
       try {
         row.override =
@@ -211,85 +315,135 @@ exports.getOverrideById = (id, cb) => {
       } catch (e) {
         cb(new Error("Invalid JSON in database"));
       }
-    }
+    });
+  }
+
+  const op = withDbRetry(db.get.bind(db), [sql, [id]]);
+  return op.then((row) =>
+    row
+      ? {
+          ...row,
+          override:
+            typeof row.override === "string"
+              ? JSON.parse(row.override)
+              : row.override,
+        }
+      : null
   );
 };
+
+// (old callback-only updateOverride removed; using dual-mode implementation below)
 
 exports.updateOverride = (id, override, cb) => {
   let jsonOverride;
   try {
     jsonOverride = JSON.stringify(override);
   } catch (e) {
-    return cb(new Error("Invalid override object for JSON serialization"));
+    if (typeof cb === "function")
+      return cb(new Error("Invalid override object for JSON serialization"));
+    return Promise.reject(
+      new Error("Invalid override object for JSON serialization")
+    );
   }
 
-  withDbRetry(
-    db.run.bind(db),
-    [`UPDATE overrides SET override = ? WHERE id = ?`, [jsonOverride, id]],
-    function (err) {
-      if (err) return cb(err);
-      if (this.changes === 0) return cb(null, { changes: 0 });
-      cb(null, { changes: this.changes });
-    }
-  );
+  const sql = `UPDATE overrides SET override = ? WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [jsonOverride, id]],
+      function (err) {
+        if (err) return cb(err);
+        if (this.changes === 0) return cb(null, { changes: 0 });
+        cb(null, { changes: this.changes });
+      }
+    );
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [jsonOverride, id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 exports.deleteOverride = (id, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`DELETE FROM overrides WHERE id = ?`, [id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `DELETE FROM overrides WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 // --- PDF_EXPORTS ---
 exports.createPDFExport = (ai_result_id, file_path, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [
-      `INSERT INTO pdf_exports (ai_result_id, file_path) VALUES (?, ?)`,
-      [ai_result_id, file_path],
-    ],
-    function (err) {
-      cb(err, this ? { id: this.lastID } : null);
-    }
-  );
+  const sql = `INSERT INTO pdf_exports (ai_result_id, file_path) VALUES (?, ?)`;
+  if (typeof cb === "function") {
+    return withDbRetry(
+      db.run.bind(db),
+      [sql, [ai_result_id, file_path]],
+      function (err) {
+        try {
+          cb.call(this, err, this ? { id: this.lastID } : null);
+        } catch (e) {
+          console.error("[DB CALLBACK ERROR]", e);
+        }
+      }
+    );
+  }
+
+  const op = withDbRetry(db.run.bind(db), [sql, [ai_result_id, file_path]]);
+  return op.then((stmt) => ({ id: stmt ? stmt.lastID : null }));
 };
 
 exports.getPDFExports = (cb) => {
-  withDbRetry(
-    db.all.bind(db),
-    [`SELECT * FROM pdf_exports ORDER BY created_at DESC`, []],
-    cb
-  );
+  const sql = `SELECT * FROM pdf_exports ORDER BY created_at DESC`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.all.bind(db), [sql, []], cb);
+  }
+  const op = withDbRetry(db.all.bind(db), [sql, []]);
+  return op;
 };
 
 exports.getPDFExportById = (id, cb) => {
-  withDbRetry(
-    db.get.bind(db),
-    [`SELECT * FROM pdf_exports WHERE id = ?`, [id]],
-    cb
-  );
+  const sql = `SELECT * FROM pdf_exports WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.get.bind(db), [sql, [id]], cb);
+  }
+  const op = withDbRetry(db.get.bind(db), [sql, [id]]);
+  return op;
 };
 
 exports.updatePDFExport = (id, file_path, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`UPDATE pdf_exports SET file_path = ? WHERE id = ?`, [file_path, id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `UPDATE pdf_exports SET file_path = ? WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [file_path, id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+  const op = withDbRetry(db.run.bind(db), [sql, [file_path, id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };
 
 exports.deletePDFExport = (id, cb) => {
-  withDbRetry(
-    db.run.bind(db),
-    [`DELETE FROM pdf_exports WHERE id = ?`, [id]],
-    function (err) {
-      cb(err, { changes: this.changes });
-    }
-  );
+  const sql = `DELETE FROM pdf_exports WHERE id = ?`;
+  if (typeof cb === "function") {
+    return withDbRetry(db.run.bind(db), [sql, [id]], function (err) {
+      try {
+        cb.call(this, err, { changes: this.changes });
+      } catch (e) {
+        console.error("[DB CALLBACK ERROR]", e);
+      }
+    });
+  }
+  const op = withDbRetry(db.run.bind(db), [sql, [id]]);
+  return op.then((stmt) => ({ changes: stmt ? stmt.changes : 0 }));
 };

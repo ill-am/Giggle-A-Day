@@ -7,7 +7,8 @@ const path = require("path");
 const fs = require("fs");
 
 const dbDir = path.join(__dirname, "../data");
-const dbPath = path.join(dbDir, "aetherpress.db");
+// Use the project's data file (provided by workspace)
+const dbPath = path.join(dbDir, "your-database-name.db");
 
 // Ensure /data directory exists
 if (!fs.existsSync(dbDir)) {
@@ -37,9 +38,6 @@ function runPromise(db, sql) {
  * @returns {Promise<sqlite3.Database>} The database instance.
  */
 async function initializeDb() {
-  const dbPath = "../data/your-database-name.db"; // Make sure to define dbPath
-  const sqlite3 = require('sqlite3').verbose(); // and require sqlite3
-
   try {
     const db = await new Promise((resolve, reject) => {
       const newDb = new sqlite3.Database(dbPath, (err) => {
@@ -116,7 +114,22 @@ const dbInterface = {
     return db;
   },
   get(...args) {
-    if (!db) return Promise.reject(new Error("Database not initialized"));
+    if (!db) {
+      const err = new Error("Database not initialized");
+      // If caller passed a callback, call it
+      const last = args[args.length - 1];
+      if (typeof last === "function") return last(err);
+      return Promise.reject(err);
+    }
+
+    const last = args[args.length - 1];
+    // If caller provided a callback, use the callback-style API
+    if (typeof last === "function") {
+      db.get(...args);
+      return;
+    }
+
+    // Otherwise return a Promise
     return new Promise((resolve, reject) => {
       db.get(...args, (err, row) => {
         if (err) reject(err);
@@ -125,16 +138,42 @@ const dbInterface = {
     });
   },
   run(...args) {
-    if (!db) return Promise.reject(new Error("Database not initialized"));
+    if (!db) {
+      const err = new Error("Database not initialized");
+      const last = args[args.length - 1];
+      if (typeof last === "function") return last(err);
+      return Promise.reject(err);
+    }
+
+    const last = args[args.length - 1];
+    // If caller provided a callback, call underlying db.run directly so the
+    // callback receives (err) as expected by older code paths.
+    if (typeof last === "function") {
+      db.run(...args);
+      return;
+    }
+
     return new Promise((resolve, reject) => {
-      db.run(...args, function(err) {
+      db.run(...args, function (err) {
         if (err) reject(err);
         else resolve(this);
       });
     });
   },
   all(...args) {
-    if (!db) return Promise.reject(new Error("Database not initialized"));
+    if (!db) {
+      const err = new Error("Database not initialized");
+      const last = args[args.length - 1];
+      if (typeof last === "function") return last(err);
+      return Promise.reject(err);
+    }
+
+    const last = args[args.length - 1];
+    if (typeof last === "function") {
+      db.all(...args);
+      return;
+    }
+
     return new Promise((resolve, reject) => {
       db.all(...args, (err, rows) => {
         if (err) reject(err);
@@ -153,7 +192,7 @@ const dbInterface = {
         resolve();
       }
     });
-  }
+  },
 };
 
 // Export the database interface
