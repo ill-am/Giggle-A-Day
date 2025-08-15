@@ -115,11 +115,11 @@ await_health() {
 
 # ─── Start Services
 start_backend() {
-    echo -e "${GREEN}→ Installing backend dependencies...${NC}"
-    (cd server && npm install) || {
-        echo -e "${RED}Failed to install backend dependencies${NC}"
-        exit 1
-    }
+    #echo -e "${GREEN}→ Installing backend dependencies...${NC}"
+    #(cd server && npm install) || {
+    #    echo -e "${RED}Failed to install backend dependencies${NC}"
+    #    exit 1
+    #}
     
     echo -e "${GREEN}→ Starting backend...${NC}"
     # Start with debug logging enabled
@@ -136,11 +136,11 @@ start_backend() {
 }
 
 start_frontend() {
-    echo -e "${GREEN}→ Installing frontend dependencies...${NC}"
-    (cd client && npm install) || {
-        echo -e "${RED}Failed to install frontend dependencies${NC}"
-        exit 1
-    }
+    #echo -e "${GREEN}→ Installing frontend dependencies...${NC}"
+    #(cd client && npm install) || {
+    #    echo -e "${RED}Failed to install frontend dependencies${NC}"
+    #    exit 1
+    #}
     
     echo -e "${GREEN}→ Starting frontend...${NC}"
     (cd client && npm run dev) &
@@ -152,7 +152,8 @@ kill_port 3000
 kill_port 5173
 
 echo -e "${GREEN}🚧 Building shared package...${NC}"
-(cd shared && npm install && npm run build)
+(cd shared && npm run build)
+#(cd shared && npm install && npm run build)
 
 # ─── Launch and Enforce Staging
 start_backend

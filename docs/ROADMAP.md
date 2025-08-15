@@ -38,10 +38,21 @@
 4. **API Architecture Enhancement** (Pending)
    Goal: Complete and optimize API endpoint structure
    Acceptance Criteria:
-   - RESTful endpoint organization
-   - Comprehensive route documentation
-   - Standardized response formats
-   - Security best practices implemented
+
+---
+
+## Future Feature: Centralized Error Code System
+
+- Implement a database or mapping of error codes to human-readable messages for all endpoints and client error handling.
+- Error codes will be exchanged in API responses and logs; messages will be referenced via lookup for display and documentation.
+- Benefits: Consistent error handling, easier localization, improved maintainability, and robust automated testing.
+
+---
+
+- RESTful endpoint organization
+- Comprehensive route documentation
+- Standardized response formats
+- Security best practices implemented
 
 5. **Project Structure Optimization** (Pending)
    Goal: Establish maintainable and scalable project organization
@@ -56,6 +67,7 @@
 1. **Prompt Handling** (Pending)
    Goal: Accept user input for AI processing and route it to the backend.
    Acceptance Criteria:
+
    - User can submit a prompt via the frontend.
    - Backend receives and processes the prompt.
    - System provides feedback on submission success or failure.
@@ -63,6 +75,7 @@
 2. **AI Processing** (Pending)
    Goal: Simulate AI content generation using a service abstraction layer.
    Acceptance Criteria:
+
    - Backend generates content using hardcoded logic or a mock AI service.
    - Service abstraction layer is in place for future real AI integration.
    - Errors in AI processing are handled gracefully.
@@ -70,6 +83,7 @@
 3. **Preview Generation** (Pending)
    Goal: Provide a basic HTML preview of generated content.
    Acceptance Criteria:
+
    - User can preview generated content in the frontend.
    - Preview updates in real time as content changes.
    - Preview matches the structure of the final export.
@@ -77,6 +91,7 @@
 4. **Basic Override** (Pending)
    Goal: Allow minimal user edits to generated content before export.
    Acceptance Criteria:
+
    - User can edit content in the frontend.
    - Edits are reflected in the preview.
    - Edits are included in the exported PDF.
@@ -84,6 +99,7 @@
 5. **PDF Export (Prototype)** (Pending)
    Goal: Generate PDFs using pdf-lib for prototype purposes.
    Acceptance Criteria:
+
    - User can export content as a PDF.
    - Exported PDF matches the preview layout.
    - PDF generation is reliable for basic content.
@@ -102,6 +118,7 @@
 1. **AI Integration** (Planned)
    Goal: Integrate real AI services for text and image generation.
    Acceptance Criteria:
+
    - System can connect to at least one external AI provider (e.g., OpenAI, Gemini).
    - User can select between simulated and real AI processing.
    - AI-generated content is distinguishable from simulated content.
@@ -110,6 +127,7 @@
 2. **PDF Generation Upgrade** (Planned)
    Goal: Migrate from pdf-lib to Puppeteer for advanced PDF export.
    Acceptance Criteria:
+
    - PDFs support advanced HTML/CSS layouts and images.
    - Exported PDFs match the on-screen preview.
    - Generation time is reasonable for complex documents.
@@ -118,6 +136,7 @@
 3. **Performance Optimization** (Planned)
    Goal: Implement asynchronous processing and improve system responsiveness.
    Acceptance Criteria:
+
    - Backend supports async request handling for long-running tasks.
    - UI remains responsive during heavy processing.
    - System can queue and process multiple requests efficiently.
@@ -126,6 +145,7 @@
 4. **UI/UX Enhancement** (Planned)
    Goal: Improve the frontend for a more interactive and accessible user experience.
    Acceptance Criteria:
+
    - UI updates in real time as data changes.
    - Accessibility standards (WCAG 2.1) are met.
    - User feedback is collected and incorporated into design.
@@ -134,6 +154,7 @@
 5. **User Authentication & Session Management** (Planned)
    Goal: Add secure user authentication and session management.
    Acceptance Criteria:
+
    - Users can register, log in, and log out securely.
    - Sessions persist across browser reloads.
    - Role-based access control is implemented.
@@ -142,6 +163,7 @@
 6. **Database Migration to PostgreSQL** (Planned)
    Goal: Transition from SQLite to PostgreSQL for production scalability and advanced features.
    Acceptance Criteria:
+
    - PostgreSQL is set up and integrated as the primary database.
    - Data is migrated from SQLite to PostgreSQL with integrity.
    - New features leverage PostgreSQL capabilities.
