@@ -37,8 +37,15 @@ async function startServer() {
   }
 }
 
-// Start the application
-startServer();
+// Start the application only when running this file directly.
+if (require.main === module) {
+  startServer();
+}
+
+// Export the Express app for programmatic use in tests
+module.exports = app;
+// Also expose startServer so tests can programmatically initialize DB/Puppeteer
+module.exports.startServer = startServer;
 
 // Graceful startup configuration
 const STARTUP_GRACE_PERIOD_MS = 30000; // 30 seconds grace period

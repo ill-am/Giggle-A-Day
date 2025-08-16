@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
-
-const baseUrl = "http://localhost:3000";
+import app from "../index";
 
 describe("API: /prompt (AI Processing Layer)", () => {
   let createdPromptIds = [];
@@ -10,10 +9,14 @@ describe("API: /prompt (AI Processing Layer)", () => {
   // Verify server is running before tests
   beforeAll(async () => {
     try {
-      const res = await request(baseUrl).get("/health");
+      // Ensure programmatic initialization is performed when running in-process
+      if (typeof app.startServer === "function") {
+        await app.startServer();
+      }
+      const res = await request(app).get("/health");
       expect(res.status).toBe(200);
     } catch (error) {
-      throw new Error("Server must be running on " + baseUrl);
+      throw new Error("Server must be running (app import failed)");
     }
   });
 
@@ -22,7 +25,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
     // Clean up AI results first (foreign key constraint)
     for (const id of createdResultIds) {
       try {
-        const res = await request(baseUrl).delete(`/api/ai_results/${id}`);
+        const res = await request(app).delete(`/api/ai_results/${id}`);
         if (!res.ok) {
           console.warn(`Cleanup failed for AI result ${id}: ${res.status}`);
         }
@@ -33,7 +36,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
     // Then clean up prompts
     for (const id of createdPromptIds) {
       try {
-        const res = await request(baseUrl).delete(`/api/prompts/${id}`);
+        const res = await request(app).delete(`/api/prompts/${id}`);
         if (!res.ok) {
           console.warn(`Cleanup failed for prompt ${id}: ${res.status}`);
         }
@@ -48,9 +51,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
 
   it("should return a structured AI response for a valid prompt", async () => {
     const testPrompt = "Write a poem about the sea.";
-    const res = await request(baseUrl)
-      .post("/prompt")
-      .send({ prompt: testPrompt });
+    const res = await request(app).post("/prompt").send({ prompt: testPrompt });
 
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
@@ -84,23 +85,24 @@ describe("API: /prompt (AI Processing Layer)", () => {
     createdResultIds.push(res.body.data.resultId);
 
     // Verify prompt storage
-    const storedPrompt = await request(baseUrl).get(
+    const storedPrompt = await request(app).get(
       `/api/prompts/${res.body.data.promptId}`
     );
     expect(storedPrompt.status).toBe(200);
-    expect(storedPrompt.body).toHaveProperty("prompt", testPrompt);
+    // API returns { success, data }
+    expect(storedPrompt.body.data).toHaveProperty("prompt", testPrompt);
 
     // Verify AI result storage
-    const storedResult = await request(baseUrl).get(
+    const storedResult = await request(app).get(
       `/api/ai_results/${res.body.data.resultId}`
     );
     expect(storedResult.status).toBe(200);
-    expect(storedResult.body).toHaveProperty("result");
-    expect(storedResult.body.result).toEqual(res.body.data.content);
+    expect(storedResult.body.data).toHaveProperty("result");
+    expect(storedResult.body.data.result).toEqual(res.body.data.content);
   });
 
   it("should return 400 for missing or empty prompt", async () => {
-    const res = await request(baseUrl).post("/prompt").send({ prompt: "   " });
+    const res = await request(app).post("/prompt").send({ prompt: "   " });
     expect(res.status).toBe(400);
     expect(res.body).toMatchObject({
       error: {
@@ -115,7 +117,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
   });
 
   it("should return 400 for missing prompt field", async () => {
-    const res = await request(baseUrl).post("/prompt").send({});
+    const res = await request(app).post("/prompt").send({});
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
     expect(res.body.error).toHaveProperty("code", "VALIDATION_ERROR");
@@ -126,7 +128,7 @@ describe("API: /prompt (AI Processing Layer)", () => {
   });
 
   it("should return 400 for invalid prompt type", async () => {
-    const res = await request(baseUrl)
+    const res = await request(app)
       .post("/prompt")
       .send({ prompt: { invalid: "object" } });
     expect(res.status).toBe(400);
