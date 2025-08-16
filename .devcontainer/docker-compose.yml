@@ -17,6 +17,10 @@ services:
     # Mount your project code into the container
     volumes:
       - ..:/workspaces:cached
+    environment:
+      # Allow container runtime to provide a system Chrome path and opt out of Puppeteer's bundled Chromium
+      - CHROME_PATH=/usr/bin/google-chrome-stable
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
     # Depend on the 'db' service. This ensures 'db' starts before 'app'
     depends_on:

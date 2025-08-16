@@ -7,7 +7,7 @@ const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const db = require("./db");
 const fs = require("fs");
 const path = require("path");
@@ -77,12 +77,56 @@ async function startPuppeteer() {
       }/${MAX_PUPPETEER_RESTARTS}`
     );
 
+    // Resolve Chrome executable path: prefer CHROME_PATH env var, then common system locations
+    const preferredChrome = process.env.CHROME_PATH || process.env.CHROME_BIN;
+    const possiblePaths = [
+      preferredChrome,
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/google-chrome",
+      "/usr/bin/chromium-browser",
+      "/usr/bin/chromium",
+    ].filter(Boolean);
+
+    let executablePath;
+    for (const p of possiblePaths) {
+      try {
+        if (p && fs.existsSync(p)) {
+          executablePath = p;
+          break;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    if (!executablePath) {
+      console.warn(
+        `[Puppeteer] No system Chrome found in ${JSON.stringify(
+          possiblePaths
+        )}; falling back to Puppeteer's bundled Chromium if available.`
+      );
+    } else {
+      console.log(`[Puppeteer] Using Chrome executable at: ${executablePath}`);
+    }
+
+    // Respect PUPPETEER_SKIP_CHROMIUM_DOWNLOAD during image build/install
+    if (process.env.PUPPETEER_SKIP_CHROMIUM_DOWNLOAD === "true") {
+      console.log(
+        "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true - will not download bundled Chromium on install."
+      );
+    }
+
     browserInstance = await puppeteer.launch({
-      executablePath: "/usr/bin/google-chrome",
-      args: ["--disable-dev-shm-usage", "--no-sandbox"],
+      ...(executablePath ? { executablePath } : {}),
+      args: [
+        "--disable-dev-shm-usage",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
+      ],
       timeout: 30000,
       ignoreHTTPSErrors: true,
-      headless: true, // Ensure headless operation
+      headless: "new", // use newer headless mode when supported
       defaultViewport: { width: 1280, height: 720 }, // Set default viewport
     });
 
