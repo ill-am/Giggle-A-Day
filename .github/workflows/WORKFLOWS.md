@@ -78,3 +78,12 @@ To improve the reliability and robustness of the CI pipeline, a pre-flight check
 - [x] Update `ci-smoke-puppeteer.yml` to use the new script.
 - [x] Update `verify-export.yml` to use the new script.
 - [x] Update this document to reflect the completed changes.
+
+### Successful Local Test
+
+- `export GITHUB_ENV=$(mktemp) && ./scripts/verify-ci-env.sh && cat $GITHUB_ENV && rm $GITHUB_ENV`
+    - Google Chrome is already installed.
+    - Chrome path set to: /usr/bin/google-chrome-stable
+    - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD set to true.
+    - CHROME_PATH=/usr/bin/google-chrome-stable
+    - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true

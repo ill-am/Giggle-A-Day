@@ -51,3 +51,7 @@ If you have state that's important to retain within a component, consider creati
 import { writable } from "svelte/store";
 export default writable(0);
 ```
+
+## CI/CD Workflows
+
+For a detailed summary and assessment of the GitHub Actions workflows used in this project, please see the `WORKFLOWS.md` document located in the `.github/workflows/` directory of the root of this repository.

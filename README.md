@@ -127,6 +127,10 @@ See the `docs/` directory for devcontainer setup, dependency management, and arc
 - **Frontend**: [http://localhost:5173](http://localhost:5173)
 - **Backend API**: [http://localhost:3000](http://localhost:3000)
 
+## CI/CD Workflows
+
+For a detailed summary and assessment of the GitHub Actions workflows used in this project, please see the `WORKFLOWS.md` document located in the `.github/workflows/` directory. This document provides an overview of each workflow's purpose, the triggers, and the key jobs they perform.
+
 CI and local artifact handling
 
 - The repository ignores runtime test artifacts (`test-artifacts/`, `server/test-artifacts/`, `client/test-artifacts/`) to avoid committing large or temporary files. CI jobs still upload runner-produced artifacts for debugging. To reproduce artifact generation locally, run the headless preview script or smoke-export script and check the `test-artifacts/` directory (created locally):

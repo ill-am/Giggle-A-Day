@@ -139,3 +139,7 @@ Notes:
 
 - The extraction script `server/scripts/extract-pdf-text.js` uses a lightweight PDF parser to extract text for assertions.
 - The Vitest export test runs the server programmatically (does not bind to a network port) and closes the Puppeteer browser on teardown.
+
+## CI/CD Workflows
+
+For a detailed summary and assessment of the GitHub Actions workflows used in this project, please see the `WORKFLOWS.md` document located in the `.github/workflows/` directory of the root of this repository.
