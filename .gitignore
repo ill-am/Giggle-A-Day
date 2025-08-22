@@ -12,3 +12,6 @@ client/test-artifacts/
 # Ignore top-level and nested tmp-pdf* directories
 tmp-pdf*/
 **/tmp-pdf*/
+
+# Generated Vitest config files in shared package
+shared/dist/vitest.config.*
