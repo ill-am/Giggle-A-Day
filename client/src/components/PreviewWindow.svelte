@@ -50,8 +50,8 @@
 
 <div class="preview-container">
   <div class="preview-controls">
-    <label><input type="checkbox" bind:checked={autoPreview} /> Auto-preview</label>
-    <button on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>Preview Now</button>
+    <label><input type="checkbox" data-testid="auto-preview-checkbox" bind:checked={autoPreview} /> Auto-preview</label>
+    <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>Preview Now</button>
   </div>
 
   {#if uiState.status === 'loading'}
@@ -59,7 +59,7 @@
       <p>Loading Preview...</p>
     </div>
   {:else if $previewStore}
-    <div class="preview-content">
+    <div class="preview-content" data-testid="preview-content">
       {@html $previewStore}
     </div>
   {:else}

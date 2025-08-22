@@ -56,19 +56,20 @@
   <label for="prompt-textarea">Prompt</label>
   <textarea
     id="prompt-textarea"
+    data-testid="prompt-textarea"
     bind:value={$promptStore}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
     disabled={uiState.status === 'loading'}
   ></textarea>
-  <button on:click={handleSubmit} disabled={uiState.status === 'loading'}>
+  <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading'}>
     {#if uiState.status === 'loading'}
       Generating...
     {:else}
       Generate
     {/if}
   </button>
-  <button on:click={handlePreviewNow} disabled={uiState.status === 'loading'}>
+  <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading'}>
     Preview
   </button>
   
