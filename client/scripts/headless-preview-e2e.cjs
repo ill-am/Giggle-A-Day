@@ -55,9 +55,34 @@ async function run() {
   });
   const page = await browser.newPage();
   await page.setContent(html, { waitUntil: "domcontentloaded" });
+
+  // Wait for the preview-content to appear using data-testid for stability.
+  // Retry a few times with short backoff before giving up and dumping DOM for debugging.
+  const maxAttempts = 5;
+  let attempt = 0;
+  let found = false;
+  while (attempt < maxAttempts && !found) {
+    try {
+      await page.waitForSelector('[data-testid="preview-content"]', {
+        timeout: 1000,
+      });
+      found = true;
+      break;
+    } catch (e) {
+      attempt += 1;
+      // small backoff
+      await new Promise((r) => setTimeout(r, 250 * attempt));
+    }
+  }
+
   const snapshot = await page.evaluate(
     () => document.documentElement.outerHTML
   );
+  if (!found) {
+    console.warn(
+      "preview-content not found after retries; snapshot saved for debugging"
+    );
+  }
   fs.writeFileSync(path.join(outDir, "snapshot.html"), snapshot, "utf8");
   console.log("Saved DOM snapshot to test-artifacts/snapshot.html");
   await browser.close();

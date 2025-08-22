@@ -47,7 +47,7 @@
       <button on:click={loadPreview}>Retry</button>
     </div>
   {:else}
-    <div class="preview-content">
+    <div class="preview-content" data-testid="preview-content">
       {@html previewHtml}
     </div>
   {/if}

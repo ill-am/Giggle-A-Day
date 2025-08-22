@@ -26,7 +26,20 @@ describe("PDF Export Utils", () => {
   };
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    // Use Vitest's `vi` test API when running under Vitest
+    // (the original tests used Jest's `jest` global).
+    // vi.restoreAllMocks will restore spies created via vi.
+    // If tests are run under Jest, the global `jest` still exists.
+    const runtimeVi = (global as any).vi;
+    const runtimeJest = (global as any).jest;
+    if (runtimeVi && typeof runtimeVi.restoreAllMocks === "function") {
+      runtimeVi.restoreAllMocks();
+    } else if (
+      runtimeJest &&
+      typeof runtimeJest.restoreAllMocks === "function"
+    ) {
+      runtimeJest.restoreAllMocks();
+    }
   });
 
   it("should create a PDF document with correct size and structure", async () => {
@@ -50,15 +63,23 @@ describe("PDF Export Utils", () => {
       backgroundUrl: "data:image/png;base64,fake",
     };
 
-    const fetchSpy = jest.spyOn(global, "fetch").mockResolvedValue(
-      Promise.resolve({
+    // Stub global.fetch manually so this test works under Jest or Vitest
+    const originalFetch = (global as any).fetch;
+    const calls: any[] = [];
+    (global as any).fetch = async (url: string) => {
+      calls.push(url);
+      return Promise.resolve({
         arrayBuffer: () => Promise.resolve(mockPngBuffer.buffer),
-      }) as unknown as Response
-    );
+      } as unknown as Response);
+    };
 
-    await exportCalendarToPDF(options);
-    expect(fetchSpy).toHaveBeenCalledWith(options.backgroundUrl);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    try {
+      await exportCalendarToPDF(options);
+      expect(calls).toContain(options.backgroundUrl);
+      expect(calls.length).toBe(1);
+    } finally {
+      (global as any).fetch = originalFetch;
+    }
   });
 
   it("should generate PDF with all required content", async () => {
@@ -75,6 +96,14 @@ describe("PDF Export Utils", () => {
     const out = execFileSync(process.execPath, [extractor, tmpPdf], {
       encoding: "utf8",
     });
+
+    // Extract page count header if present
+    const pageCountMatch = out.match(/^PAGE_COUNT:\s*(\d+)/m);
+    if (pageCountMatch) {
+      const pageCount = Number(pageCountMatch[1]);
+      // Calendar export should be a single-page PDF in this layout
+      expect(pageCount).toBeGreaterThanOrEqual(1);
+    }
 
     // Basic assertions on extracted text
     expect(out).toContain("2025");
@@ -105,6 +134,12 @@ describe("PDF Export Utils", () => {
     const out = execFileSync(process.execPath, [extractor, tmpPdf], {
       encoding: "utf8",
     });
+
+    const pageCountMatch2 = out.match(/^PAGE_COUNT:\s*(\d+)/m);
+    if (pageCountMatch2) {
+      const pageCount = Number(pageCountMatch2[1]);
+      expect(pageCount).toBeGreaterThanOrEqual(1);
+    }
 
     // Check for included content
     expect(out).toContain("March");

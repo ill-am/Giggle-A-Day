@@ -23,7 +23,8 @@ async function extractText(pdfPath) {
       .join(" ");
     fullText += pageText + "\n\n";
   }
-  return fullText;
+  // Return an object so callers can get both combined text and page count
+  return { text: fullText, __numPages: doc.numPages };
 }
 
 async function run() {
@@ -38,8 +39,13 @@ async function run() {
   }
   try {
     const text = await extractText(pdfPath);
+    // Print a machine-friendly page count header so callers (tests) can
+    // assert the produced PDF has the expected number of pages.
+    if (typeof text.__numPages === "number") {
+      console.log(`PAGE_COUNT: ${text.__numPages}`);
+    }
     console.log("--- Extracted text (first 240 lines) ---");
-    console.log(text.split("\n").slice(0, 240).join("\n"));
+    console.log(text.text.split("\n").slice(0, 240).join("\n"));
   } catch (err) {
     console.error(
       "Failed to parse PDF:",

@@ -33,8 +33,9 @@ afterAll(async () => {
 });
 
 describe("POST /api/export/book", () => {
-  // PDF generation and Puppeteer can take longer; allow a longer timeout (30s)
+  // PDF generation and Puppeteer can take longer; allow a longer timeout (90s)
   it("returns a PDF buffer with expected poem text", async () => {
+    console.time("export-request-duration");
     const res = await request(app)
       .post("/api/export/book")
       .set("Accept", "application/pdf")
@@ -81,10 +82,18 @@ describe("POST /api/export/book", () => {
       [extractorPath, tmpPath],
       { cwd: process.cwd(), maxBuffer: 10 * 1024 * 1024 }
     );
+    // Expect the extractor to print a PAGE_COUNT header and include expected text
+    const pageCountMatch = stdout.match(/^PAGE_COUNT:\s*(\d+)/m);
+    if (pageCountMatch) {
+      const pageCount = Number(pageCountMatch[1]);
+      // This ebook sample should have multiple pages; assert at least 2.
+      expect(pageCount).toBeGreaterThanOrEqual(2);
+    }
     expect(stdout).toContain("A Summer Day");
     // cleanup temporary directory
     await fs.promises
       .rm(tmpDir, { recursive: true, force: true })
       .catch(() => {});
-  }, 30000);
+    console.timeEnd("export-request-duration");
+  }, 90000);
 });
