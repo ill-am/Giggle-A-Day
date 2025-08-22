@@ -136,6 +136,11 @@ CI and local artifact handling
 
 - The `server` scripts may write artifacts to `server/test-artifacts/` for debugging in CI runs. These directories are ignored locally to avoid accidentally committing temporary outputs. To reproduce artifacts locally run the in-process helper or smoke scripts which will write to a temp dir and (optionally) copy to `server/test-artifacts/` for inspection.
 
+Runtime logs and artifact locations
+
+- Server runtime logs are written to `server/logs/` by the application. This directory is ignored by `server/.gitignore` and should not be committed.
+- CI workflows copy runner-produced artifacts (PDFs, HTML snapshots, debug outputs) into `server/test-artifacts/` for upload. Locally, the scripts write to a temporary directory by default and only copy into `server/test-artifacts/` when `CI` or `GITHUB_ACTIONS` environment is set.
+
 ```bash
 # run in-process export test which writes artifacts to a temp dir (and may copy to server/test-artifacts)
 node server/scripts/run_export_test_inproc.js

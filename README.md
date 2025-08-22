@@ -137,9 +137,13 @@ CI and local artifact handling
 
 ```bash
 # generate preview artifacts (local)
+# When run from the repo root, the client script writes into `client/test-artifacts/`.
 node client/scripts/headless-preview-e2e.cjs || node client/scripts/headless-preview-e2e.js
 
 # run export smoke and extract text
+# run server smoke-export (writes to a temp dir; CI copies artifacts to `server/test-artifacts/`)
 bash server/scripts/smoke-export.sh
 node server/scripts/extract-pdf-text.js /tmp/your-ebook.pdf
+
+Note: runtime server logs are now written to `server/logs/` (ignored by `server/.gitignore`).
 ```
