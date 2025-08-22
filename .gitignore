@@ -15,3 +15,6 @@ tmp-pdf*/
 
 # Generated Vitest config files in shared package
 shared/dist/vitest.config.*
+
+# Next.js build output
+.next/
