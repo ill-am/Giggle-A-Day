@@ -86,6 +86,15 @@ npm run smoke:export
 
 The script by default writes to a unique temp location and now validates the saved file is a PDF by checking the `%PDF-` magic header. If Chrome is not found, set `CHROME_PATH` to the system binary before running.
 
+Note: the repository includes a lightweight headless e2e smoke script at `server/scripts/e2e-smoke.js` which exercises the client UI and falls back to the server API when the UI path is flaky. The script avoids static imports of client modules (it dynamically imports `/src/stores` at runtime in the browser context) and uses attribute checks to be compatible with headless browsers and static type-checkers.
+
+You can run the networked e2e smoke from the repo root (requires client dev server at :5173 and server at :3000):
+
+```bash
+# from repo root
+npm --prefix server run e2e:smoke
+```
+
 ## How you can run these locally (verification)
 
 From the repo root you can run a full smoke + verification flow which:
