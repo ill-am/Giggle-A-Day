@@ -7,3 +7,8 @@ data/*.db
 test-artifacts/
 server/test-artifacts/
 client/test-artifacts/
+
+# Temporary PDF output directories created by tests/smoke scripts
+# Ignore top-level and nested tmp-pdf* directories
+tmp-pdf*/
+**/tmp-pdf*/
