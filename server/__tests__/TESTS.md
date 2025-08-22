@@ -2,7 +2,7 @@
 
 This document consolidates the individual test docs found under `server/__tests__` into a single reference.
 
-**Note:** Update TESTS.md further with a detailed list of test files and how they map to CI steps.  (TODO)
+**Note:** Update TESTS.md further with a detailed list of test files and how they map to CI steps. (TODO)
 
 ## Table of contents
 
@@ -76,7 +76,7 @@ cd server
 npm run test:run -- export.integration.test.js
 ```
 
-CI note: The CI job must install a system Chrome/Chromium binary or set `CHROME_PATH`. See `.github/workflows/ci-server-tests.yml`.
+CI note: The CI job must install a system Chrome/Chromium binary or set `CHROME_PATH`. See `.github/workflows/server-tests-pr.yml`.
 
 ---
 

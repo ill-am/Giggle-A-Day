@@ -23,19 +23,12 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install system dependencies (Chromium)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y chromium-browser
-
-      - name: Set CHROME_PATH
-        run: echo "CHROME_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+      - name: Ensure CI Environment and Dependencies
+        run: ./scripts/verify-ci-env.sh
 
       - name: Install server deps
         working-directory: server
-        run: |
-          export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
-          npm ci
+        run: npm ci
 
       - name: Run Puppeteer smoke export
         working-directory: server

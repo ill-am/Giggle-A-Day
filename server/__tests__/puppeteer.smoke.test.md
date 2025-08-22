@@ -16,5 +16,5 @@ npm run test:run -- puppeteer.smoke.test.js
 
 ## CI notes
 
-- The CI must provide a Chrome/Chromium binary. The workflow in `.github/workflows/ci-server-tests.yml` installs `chromium-browser` on Ubuntu and sets `CHROME_PATH`.
+- The CI must provide a Chrome/Chromium binary. The workflow in `.github/workflows/server-tests-pr.yml` installs `chromium-browser` on Ubuntu and sets `CHROME_PATH`.
 ````

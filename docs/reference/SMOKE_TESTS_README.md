@@ -59,4 +59,4 @@ Quick example workflow is added to `.github/workflows/ci-smoke-puppeteer.yml` in
 Notes
 
 - The devcontainer and `docker-compose.yml` already set `CHROME_PATH` and `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD` — CI must replicate those settings.
-- If Puppeteer export fails in CI, ensure the job installs a matching Chrome/Chromium binary and `CHROME_PATH` points to it (see `.github/workflows/ci-server-tests.yml` for an example pattern used elsewhere in the repo).
+- If Puppeteer export fails in CI, ensure the job installs a matching Chrome/Chromium binary and `CHROME_PATH` points to it (see `.github/workflows/server-tests-pr.yml` for an example pattern used elsewhere in the repo).

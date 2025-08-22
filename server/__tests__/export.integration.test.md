@@ -33,5 +33,5 @@ npm run test:run -- export.integration.test.js
 
 ### CI notes
 
-The CI job must install a system Chromium or set `CHROME_PATH` to a valid Chrome binary. See `.github/workflows/ci-server-tests.yml` for an example job that installs `chromium-browser` on Ubuntu.
+The CI job must install a system Chromium or set `CHROME_PATH` to a valid Chrome binary. See `.github/workflows/server-tests-pr.yml` for an example job that installs `chromium-browser` on Ubuntu.
 ````
