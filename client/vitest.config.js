@@ -13,6 +13,10 @@ export default defineConfig({
     globals: true,
     setupFiles: ["./vitest.setup.js"],
     typecheck: false,
+    // Default per-test timeout for client package (ms). Keep reasonable
+    // so DOM tests that rely on slow rendering or network stubs don't
+    // fail spuriously.
+    testTimeout: 10000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
 });

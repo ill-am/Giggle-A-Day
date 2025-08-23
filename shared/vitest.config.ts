@@ -25,6 +25,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["__tests__/**/*.{test,spec}.{js,ts,mjs,mts}"],
+    // Default per-test timeout for shared package tests (ms). Shared tests
+    // may call utilities that take longer; this avoids repeated per-test
+    // overrides.
+    testTimeout: 10000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
 });

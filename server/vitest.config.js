@@ -10,6 +10,10 @@ export default defineConfig({
     include: ["__tests__/**/*.test.js", "__tests__/**/*.test.mjs"],
     globals: true,
     environment: "node",
+    // Default per-test timeout (ms). Puppeteer-driven PDF exports can take
+    // longer than the default runner timeout, so set a reasonable package-
+    // level default here to avoid sprinkling timeouts in tests.
+    testTimeout: 20000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
 });
