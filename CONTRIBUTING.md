@@ -24,3 +24,59 @@ If you are adding or changing tests and you encounter timeouts, check the packag
 4. Open a PR and include the test run results (or CI link) in the description.
 
 Thanks for keeping our test suite reliable and concise.
+
+## Reproducing CI checks locally
+
+To reproduce the CI checks that run in GitHub Actions, use the package test commands below. These are run from the repository root.
+
+Install dependencies (either a root install or per-package):
+
+```bash
+npm install
+# or per-package
+npm --prefix server ci
+npm --prefix client ci
+npm --prefix shared ci
+```
+
+Run the package test suites:
+
+```bash
+# Server (Node + Puppeteer tests)
+npm --prefix server run test:run
+
+# Client (Svelte + jsdom tests)
+npm --prefix client run test
+
+# Shared (Vitest)
+npm --prefix shared run test:vitest
+```
+
+Environment notes to match CI:
+
+- Chrome / Puppeteer: CI runners include Chrome/Chromium. Locally, install Chrome or point Puppeteer at an existing binary:
+
+```bash
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+export CHROME_PATH=/usr/bin/google-chrome-stable  # adjust to your path
+```
+
+- Secrets: workflow steps that depend on repository secrets will not run equivalently if those secrets are missing locally or for forked PRs. Set equivalent env vars locally for testing (do not commit secrets):
+
+```bash
+export SOME_API_KEY=sk_live_...
+```
+
+- Timeouts: package-level `testTimeout` values live in each package's `vitest.config.*`. If you hit local timeouts, ensure `testTimeout` is set or increase per-test timeout as a last resort.
+
+Optional smoke/export checks:
+
+```bash
+# Generate a PDF artifact with the headless smoke-export script
+bash server/scripts/smoke-export.sh
+
+# Extract page count / text from a generated PDF
+node server/scripts/extract-pdf-text.js /tmp/your-ebook.pdf
+```
+
+If you need help reproducing a CI failure locally, include the Actions run URL and I can help interpret the logs.
