@@ -1,8 +1,6 @@
-CONTRIBUTING
-============
+# CONTRIBUTING
 
-Test timeout policy
--------------------
+## Test timeout policy
 
 This repository is organised as multiple packages (for example: `server`, `client`, `shared`). Each package runs tests from its own package root and therefore maintains its own Vitest configuration. To keep tests stable and avoid sprinkling per-test timeouts across the codebase, we follow this policy:
 
@@ -10,8 +8,7 @@ This repository is organised as multiple packages (for example: `server`, `clien
 - Use a reasonable default per-package (e.g., `20000` ms for `server`, `10000` ms for `client`/`shared`).
 - Keep per-test timeouts only for exceptional cases (e.g., end-to-end jobs that intentionally take much longer). When used, annotate the test with a short comment explaining why the longer timeout is required.
 
-Where to look
--------------
+## Where to look
 
 - Server package config: `server/vitest.config.js`
 - Client package config: `client/vitest.config.js`
@@ -19,8 +16,7 @@ Where to look
 
 If you are adding or changing tests and you encounter timeouts, check the package config before adding per-test timeout overrides. When in doubt, prefer a package-level `testTimeout` and document the reason in the test comment.
 
-Small contribution workflow
----------------------------
+## Small contribution workflow
 
 1. Create a small branch for the change.
 2. Run the package tests locally (e.g., `npm --prefix server run test:run`).
