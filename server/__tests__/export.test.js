@@ -9,6 +9,7 @@ beforeAll(async () => {
   await serverModule.startServer({ listen: false });
 });
 
+// Increase test timeout because Puppeteer-driven PDF export can take longer
 test("POST /api/export/book returns a PDF buffer", async () => {
   const res = await request(app)
     .post("/api/export/book")
@@ -25,7 +26,7 @@ test("POST /api/export/book returns a PDF buffer", async () => {
   const buf = res.body;
   expect(Buffer.isBuffer(buf)).toBe(true);
   expect(buf.length).toBeGreaterThan(500);
-});
+}, 20000);
 
 afterAll(async () => {
   // Attempt graceful shutdown of Puppeteer instance if present
