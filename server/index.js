@@ -260,7 +260,7 @@ if (process.env.DISABLE_RATE_LIMIT === "1") {
 }
 
 // Ensure logs directory exists
-const logsDir = path.resolve(__dirname, "../server-logs");
+const logsDir = path.resolve(__dirname, "logs");
 if (!fs.existsSync(logsDir)) {
   try {
     fs.mkdirSync(logsDir);
