@@ -484,6 +484,7 @@ const crud = require("./crud");
 
 // Ebook renderer helper
 const { renderBookToPDF } = require("./ebook");
+const { generateBackgroundForPoem } = require("./imageGenerator");
 
 // --- PROMPT PROCESSING ENDPOINT ---
 const { MockAIService } = require("./aiService");
@@ -1622,6 +1623,14 @@ app.post("/api/export/book", async (req, res) => {
   }
 
   try {
+    // Ensure each poem has a background image; generate offline stub if missing
+    for (let p of poems) {
+      if (!p.background) {
+        const generated = generateBackgroundForPoem(p);
+        if (generated) p.background = generated;
+      }
+    }
+
     const pdf = await renderBookToPDF(poems, browserInstance);
     res.setHeader("Content-Disposition", "inline; filename=ebook.pdf");
     res.setHeader("Content-Type", "application/pdf");
