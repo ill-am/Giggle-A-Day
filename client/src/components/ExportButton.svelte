@@ -12,19 +12,42 @@
     uiState = value;
   });
 
+  // Local progress for export (0-100)
+  let progress = 0;
+  let progressInterval = null;
+
   const handleExport = async () => {
     if (!content) {
       uiStateStore.set({ status: 'error', message: 'No content to export.' });
       return;
     }
 
-    uiStateStore.set({ status: 'loading', message: 'Exporting PDF...' });
+    // Start staged progress UI
+    uiStateStore.set({ status: 'loading', message: 'Preparing images...' });
+    progress = 5;
+    // Increase progress slowly; real backend jobs would emit progress
+    progressInterval = setInterval(() => {
+      if (progress < 70) progress += Math.random() * 6;
+      else if (progress < 95) progress += Math.random() * 2;
+      progress = Math.min(99, Math.round(progress));
+    }, 400);
+
     try {
+      // Kick off the real export; this returns when download begins
       await exportToPdf(content);
+      // On success, finish progress and clear interval
+      progress = 100;
       uiStateStore.set({ status: 'success', message: 'PDF exported successfully.' });
     } catch (error) {
       const err = error as Error;
       uiStateStore.set({ status: 'error', message: `Export failed: ${err.message}` });
+    } finally {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+      }
+      // reset progress after small delay so UI shows 100 briefly
+      setTimeout(() => (progress = 0), 800);
     }
   };
 </script>
@@ -33,11 +56,14 @@
   <div class="export-container">
     <button on:click={handleExport} disabled={uiState.status === 'loading'}>
       {#if uiState.status === 'loading'}
-        Exporting...
+        Exporting... {progress}%
       {:else}
         Export to PDF
       {/if}
     </button>
+    {#if uiState.status === 'loading'}
+      <div class="progress-bar"><div class="progress" style="width: {progress}%"></div></div>
+    {/if}
   </div>
 {/if}
 
@@ -63,4 +89,6 @@
     background-color: #ccc;
     cursor: not-allowed;
   }
+  .progress-bar { width: 100%; height: 8px; background: #eee; border-radius: 4px; margin-top: 8px; overflow: hidden }
+  .progress { height: 100%; background: linear-gradient(90deg,#16a085,#1abc9c); width: 0 }
 </style>

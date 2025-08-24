@@ -74,6 +74,8 @@ function generateEbookHTML(poems) {
   </html>`;
 }
 
+const { validatePdfBuffer } = require("./pdfGenerator");
+
 async function renderBookToPDF(poems, browser) {
   if (!browser) throw new Error("Browser instance required");
   const page = await browser.newPage();
@@ -81,6 +83,20 @@ async function renderBookToPDF(poems, browser) {
     const html = generateEbookHTML(poems);
     await page.setContent(html, { waitUntil: "networkidle0" });
     const pdf = await page.pdf({ format: "A4", printBackground: true });
+
+    // Run lightweight validation and log results (non-fatal)
+    try {
+      const validation = await validatePdfBuffer(pdf);
+      if (
+        !validation.ok ||
+        (validation.warnings && validation.warnings.length)
+      ) {
+        console.warn("PDF validation results:", validation);
+      }
+    } catch (e) {
+      console.warn("PDF validation failed:", e && e.message);
+    }
+
     return pdf;
   } finally {
     await page.close();

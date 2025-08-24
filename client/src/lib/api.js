@@ -279,3 +279,30 @@ export async function exportToPdf(content) {
     throw error;
   }
 }
+
+// Background export job API helpers
+export async function startExportJob(content) {
+  if (!content || !content.title || !content.body) {
+    throw new Error("Export content must include title and body");
+  }
+
+  const response = await fetchWithRetry("/api/export/job", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(content),
+  });
+  if (!response.ok)
+    throw new Error(`Failed to start export job: ${response.status}`);
+  return response.json(); // { jobId }
+}
+
+export async function getExportJobStatus(jobId) {
+  if (!jobId) throw new Error("jobId required");
+  const response = await fetchWithRetry(
+    `/api/export/job/${encodeURIComponent(jobId)}`,
+    {}
+  );
+  if (!response.ok)
+    throw new Error(`Failed to fetch job status: ${response.status}`);
+  return response.json();
+}

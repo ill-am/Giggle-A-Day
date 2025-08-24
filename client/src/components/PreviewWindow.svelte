@@ -19,6 +19,16 @@
     uiState = value;
   });
 
+  // Background preview URL derived from content.background (filename or absolute URL)
+  $: bgUrl = null;
+  $: if (content && content.background) {
+    if (typeof content.background === 'string' && content.background.startsWith('http')) {
+      bgUrl = content.background;
+    } else {
+      bgUrl = `/samples/images/${encodeURIComponent(content.background)}`;
+    }
+  }
+
   // Preview controls
   let autoPreview = true;
 
@@ -59,8 +69,13 @@
       <p>Loading Preview...</p>
     </div>
   {:else if $previewStore}
-    <div class="preview-content" data-testid="preview-content">
-      {@html $previewStore}
+    <div class="preview-stage">
+      {#if bgUrl}
+        <div class="bg-preview"><img src={bgUrl} alt="background preview" /></div>
+      {/if}
+      <div class="preview-content" data-testid="preview-content">
+        {@html $previewStore}
+      </div>
     </div>
   {:else}
     <div class="placeholder">
@@ -90,4 +105,9 @@
     padding: 1.5rem;
     text-align: left;
   }
+
+  .preview-stage { position: relative; min-height: 300px }
+  .bg-preview { position: absolute; inset: 0; opacity: 0.45; pointer-events: none }
+  .bg-preview img { width: 100%; height: 100%; object-fit: cover }
+  .preview-stage .preview-content { position: relative; z-index: 2 }
 </style>

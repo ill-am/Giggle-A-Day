@@ -1644,6 +1644,77 @@ app.post("/api/export/book", async (req, res) => {
   }
 });
 
+// --- Lightweight background export job API (in-memory) ---
+const exportJobs = {}; // jobId -> { state, progress, error, filePath }
+
+app.post("/api/export/job", async (req, res) => {
+  // Accept same payload as /api/export/book: { poems: [...] }
+  const payload = req.body && Object.keys(req.body).length ? req.body : null;
+  const jobId = uuidv4();
+  exportJobs[jobId] = { state: "queued", progress: 0 };
+
+  // Start background processing
+  (async () => {
+    try {
+      exportJobs[jobId].state = "preparing";
+      exportJobs[jobId].progress = 10;
+
+      // Reuse /api/export/book's logic to resolve poems and prepare backgrounds
+      let poems = payload && payload.poems ? payload.poems : null;
+      if (!poems) {
+        const samplePath = path.resolve(__dirname, "samples", "poems.json");
+        const raw = fs.readFileSync(samplePath, "utf8");
+        const parsed = JSON.parse(raw);
+        poems =
+          Array.isArray(parsed) && parsed.length > 0 && parsed[0].poems
+            ? parsed[0].poems
+            : parsed && parsed.poems
+            ? parsed.poems
+            : parsed;
+      }
+
+      // Generate backgrounds synchronously (stub) and update progress
+      for (let p of poems) {
+        if (!p.background) {
+          const generated = generateBackgroundForPoem(p);
+          if (generated) p.background = generated;
+        }
+      }
+
+      exportJobs[jobId].state = "composing";
+      exportJobs[jobId].progress = 50;
+
+      const pdf = await renderBookToPDF(poems, browserInstance);
+
+      exportJobs[jobId].state = "saving";
+      exportJobs[jobId].progress = 85;
+
+      const outDir = path.resolve(__dirname, "samples", "exports");
+      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+      const outPath = path.join(outDir, `ebook_${jobId}.pdf`);
+      fs.writeFileSync(outPath, pdf);
+
+      exportJobs[jobId].state = "done";
+      exportJobs[jobId].progress = 100;
+      exportJobs[jobId].filePath = outPath;
+    } catch (err) {
+      exportJobs[jobId].state = "error";
+      exportJobs[jobId].error = err && err.message ? err.message : String(err);
+      exportJobs[jobId].progress = 0;
+      console.error("Export job failed", jobId, err);
+    }
+  })();
+
+  res.status(202).json({ jobId });
+});
+
+app.get("/api/export/job/:id", (req, res) => {
+  const id = req.params.id;
+  const job = exportJobs[id];
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  res.json({ jobId: id, ...job });
+});
+
 app.put("/api/pdf_exports/:id", (req, res, next) => {
   const id = parseInt(req.params.id);
   if (isNaN(id) || id < 1) {
