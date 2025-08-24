@@ -1,2 +1,10 @@
 # Ignore runtime server logs directory
 logs/
+
+# Node modules
+node_modules/
+
+# Ignore sample image artifacts created by harnesses
+samples/images/
+
+.env
