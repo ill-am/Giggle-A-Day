@@ -58,6 +58,37 @@ Test coverage is tracked in `docs/ISSUES.md`.
 3. **POST /override** — Accepts `content` and `override`, returns updated content
 4. **GET /export** — Returns a PDF file for given content
 
+## Text → Imagery → Image workflow (Gemini)
+
+This project uses a small, staged pipeline for content + image generation when using Google's Gemini models. The recommended runtime configuration separates the responsibilities so each model and endpoint is explicit and auditable:
+
+- GEMINI_API_URL_TEXT — endpoint for text generation (e.g. `gemini-pro:generateContent`)
+- GEMINI_API_KEY_TEXT — API key or OAuth token used for text calls
+- GEMINI_API_URL_IMAGERY — optional endpoint used for generating image-prompts (an "imagery" specialist model)
+- GEMINI_API_URL_IMAGE — endpoint used for image-generation (model that emits image bytes)
+- GEMINI_API_KEY_IMAGE — API key or OAuth token used for image calls
+
+Process summary:
+
+- 1. Use the TEXT endpoint to generate poems and high-level descriptions.
+- 2. Optionally call the IMAGERY endpoint to transform text into a refined image prompt (subject, style, composition).
+- 3. Call the IMAGE endpoint with the refined prompt to get image bytes (base64/data URI) and save into `server/samples/images/`.
+
+Notes and best practices:
+
+- Use explicit, named env vars instead of packing multiple keys in a single value. Examples: `GEMINI_API_URL_TEXT` and `GEMINI_API_KEY_IMAGE`.
+- Prefer OAuth bearer tokens (e.g. `ya29...`) for full access to multimodal/image generation features. Google API keys (AIza...) may work for text-only endpoints but some image operations require OAuth.
+- During development, set `GEMINI_FALLBACK_TO_STUB=true` to continue using the offline SVG stub when the image API does not return bytes.
+- Harnesses: small test scripts live in `server/scripts/` (`gemini-harness.js`, `gemini-text-harness.js`, `gemini-image-harness.js`) to exercise each modality and save artifacts to `server/samples/images/`.
+
+About the `undici` warning in your editor
+
+- If you see a TypeScript/IDE warning like `Cannot find module 'undici' or its corresponding type declarations.`, it means the code references `undici` as a runtime fallback for `fetch` but the package is not installed. Options:
+  - Install `undici` in the `server` package (`npm --prefix server install undici`) to remove the warning and provide a stable `fetch` on Node < 18.
+  - Or run on Node 18+ where global `fetch` exists and the fallback won't be used. The code already tries `globalThis.fetch` first.
+
+If you'd like, I can add `undici` to `server/package.json` and update `.env.example` with the new env var names.
+
 ## PDF Export Note
 
 **Important:**
