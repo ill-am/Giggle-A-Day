@@ -3,6 +3,10 @@ data/aetherpress.db
 coverage/
 data/*.db
 
+# Generated content and samples
+samples/images/
+samples/*.pdf
+
 # Test/artifact outputs produced by headless e2e and smoke scripts
 test-artifacts/
 server/test-artifacts/
