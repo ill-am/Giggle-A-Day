@@ -154,9 +154,24 @@ async function main() {
     fs.mkdirSync(outputDir, { recursive: true });
   }
 
-  const outputPath = `${outputDir}/poem_image_${Date.now()}.png`;
-  fs.writeFileSync(outputPath, imageBuffer);
-  console.log(`\n✅ Success! Image saved to: ${outputPath}`);
+  // Use the same timestamp for all related files
+  const timestamp = Date.now();
+  const imageOutputPath = `${outputDir}/poem_image_${timestamp}.png`;
+  const poemOutputPath = `${outputDir}/poem_text_${timestamp}.txt`;
+  const poemPromptPath = `${outputDir}/poem_prompt-text_${timestamp}.txt`;
+  const imagePromptPath = `${outputDir}/poem_prompt-image_${timestamp}.txt`;
+
+  // Save all files: generated content and their prompts
+  fs.writeFileSync(imageOutputPath, imageBuffer);
+  fs.writeFileSync(poemOutputPath, poem);
+  fs.writeFileSync(poemPromptPath, poemGenerationPrompt);
+  fs.writeFileSync(imagePromptPath, visualPrompt);
+
+  console.log(`\n✅ Success! Files saved:
+  - Image: ${imageOutputPath}
+  - Poem: ${poemOutputPath}
+  - Poem Prompt: ${poemPromptPath}
+  - Image Prompt: ${imagePromptPath}`);
 }
 
 // Run the main workflow
