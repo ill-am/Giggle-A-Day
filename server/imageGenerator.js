@@ -94,13 +94,184 @@ function escapeXml(s) {
 // placed into server/samples/images. For V0.1 we keep a stub but expose the
 // hook so integrating the real API later is straightforward.
 async function generateWithGemini(prompt, opts = {}) {
-  // For safety avoid network calls in tests — must be gated behind env var
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("Gemini integration not configured");
   }
 
-  // TODO: implement actual Gemini call here. Return filename on success.
-  throw new Error("Gemini integration not implemented in this branch");
+  // get fetch implementation
+  let fetchImpl = globalThis.fetch;
+  if (!fetchImpl) {
+    try {
+      ({ fetch: fetchImpl } = require("undici"));
+    } catch (e) {
+      throw new Error("No fetch available; require Node 18+ or add undici");
+    }
+  }
+
+  const apiUrl = process.env.GEMINI_API_URL;
+  if (!apiUrl) throw new Error("GEMINI_API_URL not configured");
+
+  const rawKey = String(process.env.GEMINI_API_KEY || "");
+  const isGoogleApiKey = /^AIza[0-9A-Za-z-_]+$/.test(rawKey);
+
+  let requestUrl = apiUrl;
+  const headers = { "Content-Type": "application/json" };
+  if (isGoogleApiKey) {
+    headers["X-goog-api-key"] = rawKey;
+  } else if (/^ya29\./.test(rawKey)) {
+    headers.Authorization = `Bearer ${rawKey}`;
+  } else {
+    const sep = requestUrl.includes("?") ? "&" : "?";
+    requestUrl = requestUrl + sep + "key=" + encodeURIComponent(rawKey);
+  }
+
+  const candidateBodies = [
+    { contents: [{ parts: [{ text: String(prompt) }] }] },
+    { instances: [{ input: String(prompt) }] },
+    { input: String(prompt) },
+    { prompt: { text: String(prompt) } },
+  ];
+
+  let resp = null;
+  let text = null;
+  let lastErr = null;
+  for (const b of candidateBodies) {
+    try {
+      resp = await fetchImpl(requestUrl, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(b),
+      });
+      text = await resp.text();
+      if (!resp.ok) {
+        lastErr = text;
+        continue;
+      }
+      break;
+    } catch (e) {
+      lastErr = e.message || String(e);
+      continue;
+    }
+  }
+
+  if (!text) {
+    const allowFallback = process.env.GEMINI_FALLBACK_TO_STUB !== "false";
+    if (allowFallback) {
+      const poem =
+        typeof prompt === "object"
+          ? prompt
+          : { title: String(prompt).slice(0, 80), author: "GeminiFallback" };
+      const fallback = generateBackgroundForPoem(poem, opts);
+      console.warn(
+        "generateWithGemini: API call failed, returning offline stub:",
+        String(lastErr).slice(0, 200)
+      );
+      return fallback;
+    }
+    throw new Error(
+      `Gemini requests failed. Last error: ${String(lastErr).slice(0, 500)}`
+    );
+  }
+
+  const textBody = text;
+
+  let json = null;
+  try {
+    json = JSON.parse(textBody);
+  } catch (e) {
+    const maybeData = textBody.trim();
+    const dataMatch = maybeData.match(
+      /data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\n\r]+)/
+    );
+    if (dataMatch) {
+      const ext = dataMatch[1] === "jpeg" ? "jpg" : "png";
+      const b64 = dataMatch[2].replace(/\s+/g, "");
+      const buf = Buffer.from(b64, "base64");
+      const baseName = `gemini_${Date.now()}`;
+      const outDir = path.resolve(__dirname, "samples", "images");
+      if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+      const filename = `${baseName}.${ext}`;
+      fs.writeFileSync(path.join(outDir, filename), buf);
+      return filename;
+    }
+    const allowFallback = process.env.GEMINI_FALLBACK_TO_STUB !== "false";
+    if (allowFallback) {
+      const poem =
+        typeof prompt === "object"
+          ? prompt
+          : { title: String(prompt).slice(0, 80), author: "GeminiFallback" };
+      const fallback = generateBackgroundForPoem(poem, opts);
+      console.warn(
+        "generateWithGemini: response not JSON and no image data; returning offline stub"
+      );
+      return fallback;
+    }
+    throw new Error(
+      `Gemini response not JSON and did not contain image data: ${maybeData.slice(
+        0,
+        200
+      )}`
+    );
+  }
+
+  function findBase64Image(o) {
+    if (!o) return null;
+    if (typeof o === "string") {
+      const m = o.match(/data:image\/(png|jpeg);base64,([A-Za-z0-9+/=\n\r]+)/);
+      if (m)
+        return {
+          ext: m[1] === "jpeg" ? "jpg" : "png",
+          b64: m[2].replace(/\s+/g, ""),
+        };
+      if (o.length > 1000 && /^[A-Za-z0-9+/=\n\r]+$/.test(o))
+        return { ext: "png", b64: o.replace(/\s+/g, "") };
+      return null;
+    }
+    if (Array.isArray(o)) {
+      for (const v of o) {
+        const found = findBase64Image(v);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (typeof o === "object") {
+      for (const k of Object.keys(o)) {
+        const found = findBase64Image(o[k]);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  const found = findBase64Image(json);
+  if (!found) {
+    const allowFallback = process.env.GEMINI_FALLBACK_TO_STUB !== "false";
+    if (allowFallback) {
+      const poem =
+        typeof prompt === "object"
+          ? prompt
+          : { title: String(prompt).slice(0, 80), author: "GeminiFallback" };
+      const fallback = generateBackgroundForPoem(poem, opts);
+      console.warn(
+        "generateWithGemini: no image found in JSON response; returning offline stub"
+      );
+      return fallback;
+    }
+    throw new Error(
+      `Gemini response did not contain image data: ${JSON.stringify(json).slice(
+        0,
+        1000
+      )}`
+    );
+  }
+
+  const buf = Buffer.from(found.b64, "base64");
+  const baseName = `gemini_${Date.now()}`;
+  const outDir = path.resolve(__dirname, "samples", "images");
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  const filename = `${baseName}.${found.ext}`;
+  fs.writeFileSync(path.join(outDir, filename), buf);
+  return filename;
 }
 
 module.exports = { generateBackgroundForPoem, generateWithGemini };

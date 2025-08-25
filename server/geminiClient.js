@@ -8,15 +8,29 @@ async function callGemini({
   prompt,
   modality = "TEXT",
   generationConfig = {},
+  imageB64 = null, // optional base64 image when using IMAGERY
 }) {
   // choose env vars by modality
   const isText = modality === "TEXT";
+  const isImage = modality === "IMAGE";
+  const isImagery = modality === "IMAGERY"; // image understanding / reverse-check
+
   const apiUrl =
-    process.env[isText ? "GEMINI_API_URL_TEXT" : "GEMINI_API_URL_IMAGE"] ||
-    process.env.GEMINI_API_URL;
+    (isText
+      ? process.env.GEMINI_API_URL_TEXT
+      : isImage
+      ? process.env.GEMINI_API_URL_IMAGE
+      : isImagery
+      ? process.env.GEMINI_API_URL_IMAGERY
+      : null) || process.env.GEMINI_API_URL;
   const rawKey =
-    process.env[isText ? "GEMINI_API_KEY_TEXT" : "GEMINI_API_KEY_IMAGE"] ||
-    process.env.GEMINI_API_KEY;
+    (isText
+      ? process.env.GEMINI_API_KEY_TEXT
+      : isImage
+      ? process.env.GEMINI_API_KEY_IMAGE
+      : isImagery
+      ? process.env.GEMINI_API_KEY_IMAGE
+      : null) || process.env.GEMINI_API_KEY;
 
   if (!apiUrl || !rawKey) {
     return {
@@ -47,9 +61,26 @@ async function callGemini({
   else headers["X-goog-api-key"] = rawKey;
 
   // Build request body: use Google `contents.parts` shape for text and image prompts
+  // For IMAGERY (image understanding) include an image part when provided.
+  const textPart =
+    typeof prompt !== "undefined" && prompt !== null
+      ? { text: String(prompt) }
+      : null;
+  const parts = [];
+  if (textPart) parts.push(textPart);
+  if (imageB64) {
+    // best-effort image part - providers vary on exact field names
+    parts.push({
+      image: {
+        mimeType: "image/png",
+        data: String(imageB64).replace(/\s+/g, ""),
+      },
+    });
+  }
+
   const body = {
-    contents: [{ parts: [{ text: String(prompt) }] }],
-    ...(Object.keys(generationConfig).length ? { generationConfig } : {}),
+    contents: [{ parts }],
+    ...(Object.keys(generationConfig || {}).length ? { generationConfig } : {}),
   };
 
   try {
