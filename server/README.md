@@ -58,28 +58,37 @@ Test coverage is tracked in `docs/ISSUES.md`.
 3. **POST /override** — Accepts `content` and `override`, returns updated content
 4. **GET /export** — Returns a PDF file for given content
 
-## Text → Imagery → Image workflow (Gemini)
+Text → Imagery → Image workflow (Gemini + Cloudflare)
 
-This project uses a small, staged pipeline for content + image generation when using Google's Gemini models. The recommended runtime configuration separates the responsibilities so each model and endpoint is explicit and auditable:
+This repository uses a stable, multi-step pipeline in practice:
 
-- GEMINI_API_URL_TEXT — endpoint for text generation (e.g. `gemini-pro:generateContent`)
-- GEMINI_API_KEY_TEXT — API key or OAuth token used for text calls
-- GEMINI_API_URL_IMAGERY — optional endpoint used for generating image-prompts (an "imagery" specialist model)
-- GEMINI_API_URL_IMAGE — endpoint used for image-generation (model that emits image bytes)
-- GEMINI_API_KEY_IMAGE — API key or OAuth token used for image calls
+- Gemini (TEXT) — generates poems and converts poems into detailed image prompts.
+- Cloudflare Workers AI — generates the actual image bytes (PNG) from the visual prompt. The Cloudflare model is the primary image producer in the current wiring.
+- Gemini (VISION) — optional verification step: post the generated image bytes inline (Base64) along with a verification prompt to assess fidelity.
 
-Process summary:
+Recommended env vars:
 
-- 1. Use the TEXT endpoint to generate poems and high-level descriptions.
-- 2. Optionally call the IMAGERY endpoint to transform text into a refined image prompt (subject, style, composition).
-- 3. Call the IMAGE endpoint with the refined prompt to get image bytes (base64/data URI) and save into `server/samples/images/`.
+- `GEMINI_API_URL` / `GEMINI_API_KEY` — used for poem and prompt generation and for vision verification calls when configured.
+- `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` — used to call Cloudflare Workers AI image models (produces PNG bytes).
+- `GEMINI_VISION_MODEL` — optional; default `gemini-1.0-pro-vision` is a good choice for verification tasks.
 
-Notes and best practices:
+Process summary (what the code does now):
 
-- Use explicit, named env vars instead of packing multiple keys in a single value. Examples: `GEMINI_API_URL_TEXT` and `GEMINI_API_KEY_IMAGE`.
-- Prefer OAuth bearer tokens (e.g. `ya29...`) for full access to multimodal/image generation features. Google API keys (AIza...) may work for text-only endpoints but some image operations require OAuth.
-- During development, set `GEMINI_FALLBACK_TO_STUB=true` to continue using the offline SVG stub when the image API does not return bytes.
-- Harnesses: small test scripts live in `server/scripts/` (`gemini-harness.js`, `gemini-text-harness.js`, `gemini-image-harness.js`) to exercise each modality and save artifacts to `server/samples/images/`.
+1. Use the Gemini TEXT endpoint to create the poem and to produce a detailed visual prompt.
+2. Send the visual prompt to Cloudflare Workers AI (configured via `CLOUDFLARE_*`) and save the returned PNG bytes to `server/samples/images/`.
+3. Optionally, the verifier reads the image bytes, encodes them as Base64 and posts them to the Gemini VISION endpoint along with a short verification prompt to check whether the image matches the original prompt.
+
+Base64 verification example
+
+When calling Gemini VISION you must embed the image data inline as Base64 (the API will not accept a filename). See `docs/IMG_GEN_API.md` for a copy-pasteable example that:
+
+- base64-encodes your image with `base64 -w 0` (Linux) or default macOS `base64`,
+- constructs a JSON payload with an `inline_data` image part, and
+- posts it to the configured Gemini vision endpoint.
+
+Development notes
+
+If you want me to enable direct Gemini image emission (instead of Cloudflare), I can re-arrange the provider selection logic so Gemini's image model is primary — but for stability and reproducible results the current wiring uses Cloudflare for image bytes and Gemini for text and vision checks.
 
 About the `undici` warning in your editor
 

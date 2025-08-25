@@ -1673,11 +1673,32 @@ app.post("/api/export/job", async (req, res) => {
             : parsed;
       }
 
-      // Generate backgrounds synchronously (stub) and update progress
-      for (let p of poems) {
-        if (!p.background) {
-          const generated = generateBackgroundForPoem(p);
-          if (generated) p.background = generated;
+      // Optionally generate images for each poem via the orchestrator if requested
+      const { generateImages } = payload || {};
+      if (generateImages) {
+        // lazy-load orchestrator to avoid cycles
+        const { generatePoemAndImage } = require("./imageGenerator");
+        let i = 0;
+        for (let p of poems) {
+          exportJobs[jobId].state = "generating_images";
+          exportJobs[jobId].progress = 10 + Math.round((i / poems.length) * 30);
+          try {
+            const result = await generatePoemAndImage({
+              theme: p.title || p.theme,
+            });
+            if (result && result.image) p.background = result.image;
+          } catch (e) {
+            console.warn("Image generation failed for poem", i, e.message || e);
+          }
+          i++;
+        }
+      } else {
+        // Generate backgrounds synchronously (stub) and update progress
+        for (let p of poems) {
+          if (!p.background) {
+            const generated = generateBackgroundForPoem(p);
+            if (generated) p.background = generated;
+          }
         }
       }
 
@@ -1713,6 +1734,25 @@ app.get("/api/export/job/:id", (req, res) => {
   const job = exportJobs[id];
   if (!job) return res.status(404).json({ error: "Job not found" });
   res.json({ jobId: id, ...job });
+});
+
+// --- Synchronous poem->image generation endpoint ---
+app.post("/api/generate/poem-image", async (req, res) => {
+  const { theme, format } = req.body || {};
+  try {
+    // lazy-load to avoid cycles during startup
+    const { generatePoemAndImage } = require("./imageGenerator");
+    const result = await generatePoemAndImage({ theme, format });
+    res.status(200).json({ success: true, result });
+  } catch (e) {
+    console.error(
+      "/api/generate/poem-image error",
+      e && e.message ? e.message : e
+    );
+    res
+      .status(500)
+      .json({ success: false, error: e && e.message ? e.message : String(e) });
+  }
 });
 
 app.put("/api/pdf_exports/:id", (req, res, next) => {
