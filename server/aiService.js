@@ -1,38 +1,28 @@
-// AI Service Abstraction for AetherPressDeux
-// This module defines the interface and mock implementation for AI-powered content generation.
-
-class AIService {
-  /**
-   * Generate text content from a prompt.
-   * @param {string} prompt - The user prompt.
-   * @returns {Promise<{ content: { title: string, body: string, layout: string }, metadata: object }>}
-   */
+// Mock AI service used in tests and local development.
+// Behavior:
+// - If process.env.SIMULATE_AI_FAILURE is set ("1" or "true"), generateContent throws.
+// - Otherwise it returns a deterministic mock response matching tests' expectations.
+exports.MockAIService = class {
   async generateContent(prompt) {
-    throw new Error("Not implemented");
-  }
-}
+    const fail = String(process.env.SIMULATE_AI_FAILURE || "").toLowerCase();
+    if (fail === "1" || fail === "true") {
+      throw new Error("simulated-ai-failure");
+    }
 
-// Mock implementation for development and testing
-class MockAIService extends AIService {
-  async generateContent(prompt) {
-    // Simulate realistic, structured AI output
+    const title =
+      typeof prompt === "string" && prompt.length > 0
+        ? `Mock: ${prompt.split(" ").slice(0, 5).join(" ")}`
+        : "Mock Title";
+    const body = `This is a mock response for prompt: ${String(prompt)}.`;
+    const layout = "poem-single-column";
+    const metadata = {
+      model: "mock-1",
+      tokens: Math.max(10, Math.min(200, String(prompt || "").length)),
+    };
+
     return {
-      content: {
-        title: `Generated from: ${prompt}`,
-        body: `This is a simple response to demonstrate the flow.
-               Later we can integrate real AI here.
-               For now, we're testing the core loop.`,
-        layout: "default",
-      },
-      metadata: {
-        model: "mock-1",
-        tokens: prompt.split(/\s+/).length,
-      },
+      content: { title, body, layout },
+      metadata,
     };
   }
-}
-
-module.exports = {
-  AIService,
-  MockAIService,
 };
