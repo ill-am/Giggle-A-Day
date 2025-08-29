@@ -81,7 +81,9 @@ export async function checkPdfQuality(inputBuffer, opts = {}) {
   }
 
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: buffer });
+    // pdfjs expects binary data as Uint8Array (not Node Buffer)
+    const uint8 = new Uint8Array(buffer);
+    const loadingTask = pdfjsLib.getDocument({ data: uint8 });
     const doc = await loadingTask.promise;
     result.meta.pageCount = doc.numPages || 0;
 
