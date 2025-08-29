@@ -13,8 +13,22 @@ async function ensurePdfJs() {
     try {
       pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
     } catch (e) {
-      // Fallback to ESM build provided by newer pdfjs-dist versions
-      pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      try {
+        pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      } catch (e2) {
+        // As a last resort, attempt to import directly from this package's
+        // server/node_modules path using import.meta.url so resolution works
+        // when this module is run from the workspace root.
+        try {
+          const pkgPath = new URL(
+            "./node_modules/pdfjs-dist/legacy/build/pdf.mjs",
+            import.meta.url
+          ).href;
+          pdfjs = await import(pkgPath);
+        } catch (e3) {
+          throw e3;
+        }
+      }
     }
   } catch (err) {
     pdfjs = null;
