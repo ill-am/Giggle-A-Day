@@ -14,3 +14,14 @@ export CHROME_PATH="${CHROME_PATH:-/usr/bin/google-chrome-stable}"
 
 # Call the local server puppeteer smoke script
 node "$SCRIPT_DIR/puppeteer_smoke_export.js"
+
+# If the puppeteer script wrote any PDFs into /tmp or other known locations,
+# copy them into server/test-artifacts so the workflow artifact step can pick them up.
+ARTIFACT_DIR="$SERVER_ROOT/test-artifacts"
+mkdir -p "$ARTIFACT_DIR"
+shopt -s nullglob || true
+for f in /tmp/*automated_export_*.pdf /tmp/*export*.pdf; do
+	if [ -f "$f" ]; then
+		cp -v "$f" "$ARTIFACT_DIR/"
+	fi
+done

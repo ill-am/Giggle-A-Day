@@ -1,0 +1,39 @@
+name: CI Smoke Export (Chromium)
+
+on:
+  pull_request:
+    paths:
+      - "server/**"
+      - ".github/workflows/**"
+
+jobs:
+  verify-export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+      - name: Install server deps
+        run: npm ci --prefix server
+      - name: Run server smoke export verification (in-process)
+        env:
+          CHROME_PATH: /usr/bin/chromium-browser
+        run: npm --prefix server run verify-export:inproc
+
+      - name: Upload smoke-export artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-export-artifacts
+          path: |
+            server/test-artifacts/**
+            server/logs/**
+            /tmp/*.pdf
+            /tmp/*automated_export_*.pdf
+            /tmp/*export*.pdf
