@@ -12,4 +12,5 @@ export NODE_PATH="$SERVER_ROOT/node_modules"
 # Allow callers to override CHROME_PATH; fallback to a common path
 export CHROME_PATH="${CHROME_PATH:-/usr/bin/google-chrome-stable}"
 
-node "$SERVER_ROOT/../scripts/puppeteer_smoke_export.js"
+# Call the local server puppeteer smoke script
+node "$SCRIPT_DIR/puppeteer_smoke_export.js"
