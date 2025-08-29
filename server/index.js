@@ -508,53 +508,9 @@ app.get("/test-error", (req, res, next) => {
   next(err);
 });
 
-// Centralized error handler
-app.use((err, req, res, next) => {
-  // Log error details
-  const timestamp = new Date().toISOString();
-  const requestId = req && req.id ? req.id : "-";
-  console.error("--- Error Handler ---");
-  console.error("Time:", timestamp);
-  console.error("RequestId:", requestId);
-  console.error("Method:", req.method);
-  console.error("URL:", req.originalUrl);
-  console.error("Body:", req.body);
-  console.error("Error Stack:", err.stack);
-
-  // Append a compact structured error line to server-logs/errors.log for quick lookups
-  try {
-    const logLine = JSON.stringify({
-      t: timestamp,
-      id: requestId,
-      method: req.method,
-      url: req.originalUrl,
-      status: err.status || 500,
-      message: err.message,
-      stack: err.stack ? err.stack.split("\n")[0] : null,
-    });
-    fs.appendFileSync(path.join(logsDir, "errors.log"), logLine + "\n");
-  } catch (e) {
-    console.warn("Failed to write error log:", e.message);
-  }
-
-  // Surface a short error header to aid proxied requests / reverse-proxies
-  try {
-    res.setHeader(
-      "X-Backend-Error",
-      err.message ? String(err.message).slice(0, 200) : "error"
-    );
-    res.setHeader("X-Request-Id", requestId);
-  } catch (e) {}
-
-  // Differentiate error response by environment
-  const isDev = process.env.NODE_ENV !== "production";
-  const payload = {
-    error: isDev ? err.message : "Internal Server Error",
-    requestId,
-    ...(isDev && { stack: err.stack }),
-  };
-  res.status(err.status || 500).json(payload);
-});
+// Centralized error handler (moved to the end of the file so it can catch
+// errors from routes defined below). See the bottom of this file for the
+// actual handler implementation.
 
 const crud = require("./crud");
 
@@ -2180,3 +2136,91 @@ async function gracefulShutdown(signal) {
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
+// Centralized error handler (placed at end to capture errors from all routes)
+app.use((err, req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const requestId = req && req.id ? req.id : "-";
+  console.error("--- Error Handler ---");
+  console.error("Time:", timestamp);
+  console.error("RequestId:", requestId);
+  console.error("Method:", req && req.method);
+  console.error("URL:", req && req.originalUrl);
+  console.error("Body:", req && req.body);
+  console.error("Error Stack:", err && err.stack ? err.stack : err);
+
+  // Append a compact structured error line to server-logs/errors.log for quick lookups
+  try {
+    const logLine = JSON.stringify({
+      t: timestamp,
+      id: requestId,
+      method: req && req.method,
+      url: req && req.originalUrl,
+      status: err && err.status ? err.status : 500,
+      message: err && err.message ? err.message : String(err),
+      stack: err && err.stack ? err.stack.split("\n")[0] : null,
+    });
+    try {
+      fs.appendFileSync(path.join(logsDir, "errors.log"), logLine + "\n");
+    } catch (e) {
+      console.warn(
+        "Failed to append to errors.log:",
+        e && e.message ? e.message : e
+      );
+    }
+  } catch (e) {
+    console.warn(
+      "Failed to build error log line:",
+      e && e.message ? e.message : e
+    );
+  }
+
+  // Surface a short error header to aid proxied requests / reverse-proxies
+  try {
+    res.setHeader(
+      "X-Backend-Error",
+      err && err.message ? String(err.message).slice(0, 200) : "error"
+    );
+    res.setHeader("X-Request-Id", requestId);
+  } catch (e) {}
+
+  // Differentiate error response by environment
+  const isDev = process.env.NODE_ENV !== "production";
+  const payload = {
+    error: isDev && err && err.message ? err.message : "Internal Server Error",
+    requestId,
+    ...(isDev && err && { stack: err.stack }),
+  };
+
+  // Ensure a JSON content-type so test clients and API consumers get a parsable body
+  try {
+    if (res.headersSent) {
+      // Attempt to write JSON fragment if headers already sent
+      try {
+        res.write(JSON.stringify(payload));
+        res.end();
+      } catch (e) {
+        try {
+          res.end();
+        } catch (er) {}
+      }
+      return;
+    }
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    // Use Express's json helper so supertest and other clients receive a
+    // correctly serialized JSON body that is parsed automatically.
+    res.status(err && err.status ? err.status : 500).json(payload);
+  } catch (e) {
+    // Last-resort safe response
+    try {
+      if (!res.headersSent) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.status(500).send(JSON.stringify({ error: "error-handler-failed" }));
+      } else {
+        try {
+          res.end();
+        } catch (er) {}
+      }
+    } catch (ee) {}
+  }
+});

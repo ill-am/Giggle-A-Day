@@ -31,6 +31,48 @@ const app = require("../index");
         fs.writeFileSync(out, res.body);
         console.log("Wrote PDF to", out, "size:", fs.statSync(out).size);
 
+        // Run non-fatal validation using server/pdfQuality when available.
+        try {
+          const pdfQuality = require(path.resolve(
+            __dirname,
+            "..",
+            "pdfQuality.mjs"
+          ));
+          // pdfQuality is ESM; attempt to call default export if present
+          const check =
+            pdfQuality &&
+            (pdfQuality.checkPdfQuality || pdfQuality.default || pdfQuality);
+          if (typeof check === "function") {
+            // convert buffer to Uint8Array when needed
+            const buf = fs.readFileSync(out);
+            const validation = await (async () => {
+              try {
+                return await check(buf, { minBytesPerPage: 10000 });
+              } catch (e) {
+                return {
+                  ok: false,
+                  errors: ["validation-exception:" + e.message],
+                };
+              }
+            })();
+            console.log("PDF validation:", JSON.stringify(validation, null, 2));
+            // If running in CI, fail the process on fatal validation error
+            const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
+            if (isCI && validation && validation.ok === false) {
+              console.error(
+                "Fatal PDF validation errors detected; failing in CI:",
+                validation.errors || []
+              );
+              process.exit(2);
+            }
+          }
+        } catch (e) {
+          console.warn(
+            "PDF validation skipped (could not load pdfQuality):",
+            e.message || e
+          );
+        }
+
         // If running in CI, copy the artifact to a known location inside the repo
         // so workflow steps can easily upload it. We avoid modifying repo files when
         // not in CI by checking env.
