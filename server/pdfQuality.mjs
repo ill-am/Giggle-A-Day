@@ -9,7 +9,13 @@ async function ensurePdfJs() {
   if (pdfjsTried) return pdfjs;
   pdfjsTried = true;
   try {
-    pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
+    // Try the CommonJS legacy path first (older pdfjs-dist), then ESM build.
+    try {
+      pdfjs = await import("pdfjs-dist/legacy/build/pdf.js");
+    } catch (e) {
+      // Fallback to ESM build provided by newer pdfjs-dist versions
+      pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    }
   } catch (err) {
     pdfjs = null;
   }
