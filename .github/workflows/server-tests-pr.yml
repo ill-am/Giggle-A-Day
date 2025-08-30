@@ -30,6 +30,12 @@ jobs:
       - name: Install server deps
         run: npm --prefix server ci
 
+      - name: Run in-process smoke export verification (uses system Chrome)
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+          CHROME_PATH: /usr/bin/google-chrome-stable
+        run: npm --prefix server run verify-export:inproc
+
       - name: Set JOBS_DB temp path for tests
         run: |
           echo "JOBS_DB=${{ github.workspace }}/.tmp_ci_jobs.db" >> $GITHUB_ENV

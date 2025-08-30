@@ -40,6 +40,12 @@ jobs:
           CHROME_PATH: /usr/bin/google-chrome-stable
         run: npm --prefix server test --silent
 
+      - name: Run in-process smoke export verification
+        env:
+          PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
+          CHROME_PATH: /usr/bin/google-chrome-stable
+        run: npm --prefix server run verify-export:inproc
+
       - name: Upload server logs (if present)
         if: always()
         uses: actions/upload-artifact@v4

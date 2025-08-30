@@ -6,6 +6,9 @@ const app = require("../index");
 
 (async () => {
   try {
+    // Accept optional CLI arg for output path to make tests deterministic
+    const argv = process.argv.slice(2);
+    const cliOutputPath = argv[0];
     // Ensure in-process initialization (do not bind to network in tests)
     if (typeof app.startServer === "function")
       await app.startServer({ listen: false });
@@ -26,7 +29,7 @@ const app = require("../index");
     const ct = res.headers["content-type"] || "";
     if (ct.includes("application/pdf")) {
       const filename = "automated_export_test_inproc.pdf";
-      const out = path.join(samplesDir, filename);
+      const out = cliOutputPath || path.join(samplesDir, filename);
       if (res.body) {
         fs.writeFileSync(out, res.body);
         console.log("Wrote PDF to", out, "size:", fs.statSync(out).size);
