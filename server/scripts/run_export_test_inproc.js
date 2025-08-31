@@ -110,4 +110,20 @@ const app = require("../index");
   } catch (e) {
     console.error("Error during in-process export test:", e);
   }
-})();
+  } finally {
+    // Ensure any persistent browser instance is closed before exiting the script.
+    try {
+      if (app && typeof app.closeServices === 'function') {
+        // call the exported closeServices helper which avoids process.exit
+        await app.closeServices('inproc-test-complete');
+        console.log('Called app.closeServices()');
+      } else if (app && app.browser) {
+        try {
+          await app.browser.close();
+          console.log('Closed app.browser directly');
+        } catch (e) {}
+      }
+    } catch (e) {
+      console.warn('Failed to close browser via app.closeServices():', e && e.message ? e.message : e);
+    }
+  }

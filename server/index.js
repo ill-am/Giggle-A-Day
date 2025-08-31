@@ -2104,9 +2104,10 @@ async function checkDatabaseHealth() {
   }
 }
 
-// Graceful shutdown: clear jobs recovery timer and close jobs DB if open
-async function gracefulShutdown(signal) {
-  console.log("Graceful shutdown:", signal || "exit");
+// Close service handles without exiting the process. This is useful for
+// test harnesses and scripted invocations that want a clean shutdown.
+async function closeServices(signal) {
+  console.log("Close services:", signal || "shutdown");
   try {
     if (module.exports._jobsRecoveryTimer) {
       clearInterval(module.exports._jobsRecoveryTimer);
@@ -2124,18 +2125,52 @@ async function gracefulShutdown(signal) {
       }
       module.exports._jobsDb = null;
     }
+
+    // Close Puppeteer browser if present
+    if (browserInstance) {
+      try {
+        // Remove 'disconnected' listener to avoid restart attempts during shutdown
+        try {
+          browserInstance.removeAllListeners &&
+            browserInstance.removeAllListeners("disconnected");
+        } catch (er) {}
+        await browserInstance.close();
+        console.log("[Shutdown] Puppeteer browser closed.");
+      } catch (e) {
+        console.warn(
+          "[Shutdown] Error closing Puppeteer browser:",
+          e && e.message ? e.message : e
+        );
+      }
+      browserInstance = null;
+    }
+  } catch (e) {
+    console.warn("Error during closeServices", e && e.message ? e.message : e);
+  }
+}
+
+// Graceful shutdown that closes services then exits (used for process signals)
+async function gracefulShutdown(signal) {
+  try {
+    await closeServices(signal);
   } catch (e) {
     console.warn(
-      "Error during graceful shutdown",
+      "Error during gracefulShutdown:",
       e && e.message ? e.message : e
     );
+  } finally {
+    // allow other listeners to run then exit
+    process.exit(0);
   }
-  // allow other listeners to run then exit
-  process.exit(0);
 }
 
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGHUP", () => gracefulShutdown("SIGHUP"));
+
+// Export helpers for external scripts/tests to call without forcing process.exit
+module.exports.closeServices = closeServices;
+module.exports.gracefulShutdown = gracefulShutdown;
 
 // Centralized error handler (placed at end to capture errors from all routes)
 app.use((err, req, res, next) => {
