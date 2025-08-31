@@ -7,4 +7,11 @@ node_modules/
 # Ignore sample image artifacts created by harnesses
 samples/images/
 
+# Test and runtime logs
+run-*.log
+run-*.zip
+
+# Test databases
+tmp-e2e.db
+
 .env

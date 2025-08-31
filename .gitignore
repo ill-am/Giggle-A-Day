@@ -27,3 +27,10 @@ shared/dist/vitest.config.*
 .next/
 /package-lock.json
 tmp/
+
+# Test and runtime logs
+run-*.log
+run-*.zip
+
+# End-to-end test databases
+**/tmp-e2e.db
