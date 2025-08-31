@@ -8,9 +8,14 @@
   });
 </script>
 
-{#if uiState.status === 'loading' || uiState.status === 'error'}
-  <div class="status-banner" class:loading={uiState.status === 'loading'} class:error={uiState.status === 'error'} transition:fade>
+{#if uiState.status === 'loading' || uiState.status === 'error' || uiState.status === 'success'}
+  <div class="status-banner" class:loading={uiState.status === 'loading'} class:error={uiState.status === 'error'} class:success={uiState.status === 'success'} transition:fade>
     <p>{uiState.message}</p>
+    {#if uiState.status === 'error'}
+      <div class="actions">
+        <button class="retry" on:click={() => uiStateStore.set({ status: 'idle', message: '' })}>Dismiss</button>
+      </div>
+    {/if}
   </div>
 {/if}
 
