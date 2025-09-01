@@ -25,11 +25,17 @@ const app = require("../index");
     const tmpDir = fs.mkdtempSync(path.join(tmpRoot, "aetherpress-"));
     const samplesDir = tmpDir;
 
+    // Allow overriding output path via ENV or CLI arg to make test runs deterministic
+    const envOutputPath =
+      process.env.OUTPUT_PATH ||
+      (process.env.OUTPUT && process.env.OUTPUT.trim());
+
     // Save response body if it is a PDF (content-type check)
     const ct = res.headers["content-type"] || "";
     if (ct.includes("application/pdf")) {
       const filename = "automated_export_test_inproc.pdf";
-      const out = cliOutputPath || path.join(samplesDir, filename);
+      const out =
+        cliOutputPath || envOutputPath || path.join(samplesDir, filename);
       if (res.body) {
         fs.writeFileSync(out, res.body);
         console.log("Wrote PDF to", out, "size:", fs.statSync(out).size);
@@ -76,17 +82,28 @@ const app = require("../index");
           );
         }
 
-        // If running in CI, copy the artifact to a known location inside the repo
-        // so workflow steps can easily upload it. We avoid modifying repo files when
-        // not in CI by checking env.
+        // If running in CI, or if a local `server/test-artifacts` directory exists,
+        // copy the artifact there so it's easy to inspect and upload from workflows.
         const isCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
-        if (isCI) {
-          const artifactsDir = path.resolve(__dirname, "..", "test-artifacts");
+        const artifactsDir = path.resolve(__dirname, "..", "test-artifacts");
+        const shouldCopy =
+          isCI ||
+          fs.existsSync(artifactsDir) ||
+          process.env.COPY_ARTIFACTS === "1";
+        if (shouldCopy) {
           if (!fs.existsSync(artifactsDir))
             fs.mkdirSync(artifactsDir, { recursive: true });
           const target = path.join(artifactsDir, filename);
-          fs.copyFileSync(out, target);
-          console.log("Copied artifact to", target);
+          try {
+            fs.copyFileSync(out, target);
+            console.log("Copied artifact to", target);
+          } catch (e) {
+            console.warn(
+              "Failed to copy artifact to",
+              target,
+              e && e.message ? e.message : e
+            );
+          }
         }
       } else {
         console.warn("No body in response");

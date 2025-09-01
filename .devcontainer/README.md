@@ -42,6 +42,19 @@ This document describes the purpose and configuration of the `.devcontainer/` fo
 - Add a small HTML generator for multi-poem A4 eBooks.
 - Add a smoke test that exercises export and checks for a valid PDF.
 
+6. Worker & Gemini notes (how to run locally)
+
+- The repository includes a lightweight SQLite-backed worker (`server/worker-sqlite.mjs`) that polls the `JOBS_DB` and claims jobs. To run the worker locally inside the devcontainer:
+
+```bash
+# from repo root (devcontainer shell)
+JOBS_DB=/workspaces/strawberry/data/jobs.db node server/worker-sqlite.mjs
+```
+
+- For deterministic local testing of the AI/image generation flow, set `USE_REAL_AI=false` and ensure any Gemini/Cloudflare credentials are not required. When you want to run real Gemini calls, provide the environment variables described in `server/imageGenerator.js` (e.g., `GEMINI_API_KEY`, `GEMINI_API_URL`) and set `USE_REAL_AI=true`.
+
+- If you run the worker inside the devcontainer, the container has Google Chrome available at `/usr/bin/google-chrome-stable` and `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` is set during devcontainer build to avoid unnecessary downloads.
+
 ---
 
 Created to help new contributors quickly understand the devcontainer and to accelerate the demo workflow.

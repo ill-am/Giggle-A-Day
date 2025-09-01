@@ -147,3 +147,39 @@ node server/scripts/extract-pdf-text.js /tmp/your-ebook.pdf
 
 Note: runtime server logs are now written to `server/logs/` (ignored by `server/.gitignore`).
 ```
+
+## How to verify V0.1 (quick)
+
+Use these commands to run the deterministic smoke checks and produce artifacts you can inspect locally or upload from CI.
+
+1. Run the server tests (fast verification):
+
+```bash
+# from the repo root
+npm --prefix server test
+```
+
+2. Run the in-process export smoke (deterministic, fast):
+
+```bash
+# from the repo root
+# This starts the server in-process and writes artifacts to /tmp and copies them to server/test-artifacts when running in CI
+node server/scripts/run_export_test_inproc.js
+```
+
+3. Run the full export smoke with Chromium (CI-like):
+
+```bash
+# ensure Chrome is available on your PATH or set CHROME_PATH
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 CHROME_PATH=/usr/bin/google-chrome-stable npm --prefix server run verify-export
+```
+
+Artifact locations:
+
+- `server/test-artifacts/` — artifacts copied here by the in-process smoke script when running in CI or when the directory exists locally.
+- `/tmp/aetherpress-*` — temporary artifacts created by the smoke scripts (each run creates a unique temp dir).
+
+Notes:
+
+- For deterministic CI runs set `USE_REAL_AI=false` and `JOBS_DB=/tmp/tmp-jobs.db` to avoid external calls and shared DB state.
+- If a PDF is generated, `server/pdfQuality.mjs` may be executed and its summary printed to stdout; CI workflows will fail on fatal validation errors.
