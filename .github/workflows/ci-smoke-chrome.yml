@@ -14,13 +14,15 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
       - name: Install Chromium
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser
       - name: Install server deps
-        run: npm ci --prefix server
+        run: |
+          export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1
+          npm ci --prefix server
       - name: Run server smoke export verification (in-process)
         env:
           CHROME_PATH: /usr/bin/chromium-browser

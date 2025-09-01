@@ -33,10 +33,17 @@ jobs:
       - name: Check /health endpoint
         run: |
           set -e
-          echo "Checking server health..."
-          if ! curl -fsS http://localhost:3000/health; then
-            echo "Health check failed (non-blocking)" ; exit 0
-          fi
+          echo "Checking server health with retries..."
+          attempts=0
+          max=30
+          until curl -fsS http://localhost:3000/health; do
+            attempts=$((attempts+1))
+            if [ "$attempts" -ge "$max" ]; then
+              echo "Health check failed after $attempts attempts (non-blocking)" ; exit 0
+            fi
+            echo "Server not ready yet; retrying in 1s (attempt $attempts/$max)..."
+            sleep 1
+          done
           echo "Health OK"
 
       - name: Optional quick export (allowed to fail)
