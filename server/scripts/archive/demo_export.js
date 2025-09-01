@@ -64,20 +64,31 @@ async function main() {
       "Puppeteer found and CHROME_PATH present. Attempting PDF generation..."
     );
     (async () => {
-      const browser = await puppeteer.launch({
-        executablePath: process.env.CHROME_PATH,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      const page = await browser.newPage();
-      await page.setContent(fullHtml, { waitUntil: "networkidle0" });
-      await page.pdf({ path: outPdf, format: "A4", printBackground: true });
-      await browser.close();
-      console.log("PDF written to", outPdf);
-    })().catch((err) => {
-      console.error("Puppeteer PDF generation failed:", err.message);
-      fs.writeFileSync(outHtml, fullHtml);
-      console.log("Wrote HTML fallback to", outHtml);
-    });
+      let browser = null;
+      try {
+        browser = await puppeteer.launch({
+          executablePath: process.env.CHROME_PATH,
+          args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+        const page = await browser.newPage();
+        await page.setContent(fullHtml, { waitUntil: "networkidle0" });
+        await page.pdf({ path: outPdf, format: "A4", printBackground: true });
+        console.log("PDF written to", outPdf);
+      } catch (err) {
+        console.error(
+          "Puppeteer PDF generation failed:",
+          err && err.message ? err.message : err
+        );
+        fs.writeFileSync(outHtml, fullHtml);
+        console.log("Wrote HTML fallback to", outHtml);
+      } finally {
+        if (browser) {
+          try {
+            await browser.close();
+          } catch (e) {}
+        }
+      }
+    })();
   } else {
     fs.writeFileSync(outHtml, fullHtml);
     console.log(

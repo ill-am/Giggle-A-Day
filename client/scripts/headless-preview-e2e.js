@@ -39,19 +39,27 @@ async function run() {
     process.exit(0);
   }
 
-  const browser = await puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
-  const page = await browser.newPage();
-  await page.setContent(html, { waitUntil: "domcontentloaded" });
-  const snapshot = await page.evaluate(
-    () => document.documentElement.outerHTML
-  );
-  fs.writeFileSync(path.join(outDir, "snapshot.html"), snapshot, "utf8");
-  console.log("Saved DOM snapshot to test-artifacts/snapshot.html");
-  await browser.close();
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    const snapshot = await page.evaluate(
+      () => document.documentElement.outerHTML
+    );
+    fs.writeFileSync(path.join(outDir, "snapshot.html"), snapshot, "utf8");
+    console.log("Saved DOM snapshot to test-artifacts/snapshot.html");
+  } finally {
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {}
+    }
+  }
 }
 
 run().catch((err) => {

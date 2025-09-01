@@ -156,3 +156,115 @@ Response (201):
 These schemas are intentionally permissive. When you have the real API types, replace the example schemas above with precise property types and add examples for each endpoint.
 
 This file is intentionally small — expand with request/response JSON schemas and examples as needed.
+
+## Expanded examples and concrete request/response samples
+
+Below are practical example payloads and responses you can use when integrating with the demo server. These are safe examples for local development and CI (set `USE_REAL_AI=false` for deterministic runs).
+
+1. POST /api/preview - Example request
+
+Request headers:
+
+- Content-Type: application/json
+
+Request body (example):
+
+```json
+{
+  "content": {
+    "title": "Summer Poem",
+    "lines": [
+      "High heat on the hill,",
+      "Crickets sing as shadows fall.",
+      "We taste the long dusk."
+    ],
+    "meta": { "author": "Test User", "date": "2024-08-24" }
+  },
+  "template": "summer",
+  "overrides": { "primaryColor": "#ffdd66", "font": "serif" }
+}
+```
+
+Response: 200 OK
+
+- Content-Type: text/html
+- Body: the rendered preview HTML (client can embed in an <iframe> or open in a new window).
+
+2. POST /api/export/book - Example request & response (synchronous export)
+
+Request headers:
+
+- Content-Type: application/json
+
+Request body (example):
+
+```json
+{
+  "content": {
+    "title": "Summer Poem",
+    "pages": [
+      { "lines": ["High heat on the hill", "Crickets sing as shadows fall."] },
+      { "lines": ["We taste the long dusk."] }
+    ]
+  },
+  "options": {
+    "pageSize": "A4",
+    "landscape": false,
+    "validate": true
+  }
+}
+```
+
+Response: 200 OK
+
+- Content-Type: application/pdf
+- Binary PDF body (the response is the PDF file). When `validate=true` the server may include diagnostics via headers:
+  - `X-Validation-Warnings: true` (exists when pdfQuality found non-fatal warnings)
+  - `X-Validation-Warnings-Count: <n>`
+
+Example curl (save PDF to file):
+
+```bash
+curl -sS -X POST http://localhost:3000/api/export/book \
+  -H "Content-Type: application/json" \
+  -d '@export-request.json' --output out.pdf
+```
+
+3. POST /api/export/job - Enqueue async job (example)
+
+Request body: same JSON as `/api/export/book`.
+
+Response: 201 Created
+
+```json
+{
+  "jobId": 42,
+  "status": "queued"
+}
+```
+
+4. GET /api/export/job/:id - Example response (job status)
+
+Response: 200 OK
+
+```json
+{
+  "id": 42,
+  "state": "done",
+  "progress": 100,
+  "file_path": "/tmp/exports/42.pdf",
+  "error": null
+}
+```
+
+Notes on integration and CI
+
+- For CI runs use a temporary `JOBS_DB` file and set `USE_REAL_AI=false` to avoid external network calls. Example:
+
+  PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 CHROME_PATH=/usr/bin/google-chrome-stable JOBS_DB=/tmp/tmp-jobs.db USE_REAL_AI=false npm --prefix server test
+
+- When writing clients that call `/api/export/book` expect a binary PDF body. Use streaming clients or save-to-file semantics rather than assuming a JSON response.
+
+- The job API is intentionally simple; clients should poll `/api/export/job/:id` or use the UI's WebSocket/long-polling endpoints for push updates.
+
+If you want, I can also extract these schemas into standalone JSON Schema files under `docs/schemas/` and add a small TypeScript validator used by the server for stricter request validation.

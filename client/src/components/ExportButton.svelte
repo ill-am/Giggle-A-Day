@@ -33,7 +33,7 @@
       progress = Math.min(99, Math.round(progress));
     }, 400);
 
-    try {
+  try {
       // Kick off the real export; this returns when download begins
       await exportToPdf(content);
       // On success, finish progress and clear interval
@@ -50,7 +50,9 @@
         progressInterval = null;
       }
       // reset progress after small delay so UI shows 100 briefly
-      setTimeout(() => (progress = 0), 800);
+      setTimeout(() => {
+        progress = 0;
+      }, 800);
     }
   };
 
@@ -64,7 +66,12 @@
 {#if content}
   <div class="export-container">
     <div class="actions-row">
-      <button on:click={handleExport} disabled={uiState.status === 'loading'}>
+      <button
+        on:click={handleExport}
+        disabled={uiState.status === 'loading'}
+        aria-disabled={uiState.status === 'loading'}
+        data-testid="export-button"
+      >
         {#if uiState.status === 'loading'}
           Exporting... {progress}%
         {:else}
@@ -72,7 +79,7 @@
         {/if}
       </button>
       {#if uiState.status === 'error' && lastError}
-        <button class="retry" on:click={handleRetry}>Retry</button>
+        <button class="retry" on:click={handleRetry} data-testid="retry-button">Retry</button>
       {/if}
     </div>
     {#if uiState.status === 'loading'}

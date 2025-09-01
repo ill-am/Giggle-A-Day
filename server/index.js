@@ -2147,6 +2147,20 @@ async function closeServices(signal) {
   } catch (e) {
     console.warn("Error during closeServices", e && e.message ? e.message : e);
   }
+  // Ensure exported handles are null even if they were not set. Do this
+  // unconditionally so tests which assert the exported sentinel see a
+  // deterministic value (null) after shutdown.
+  try {
+    module.exports._jobsRecoveryTimer = null;
+    module.exports._jobsDb = null;
+  } catch (e) {
+    // If exports are unavailable for some reason, swallow the error
+    // but keep shutdown best-effort.
+  }
+
+  // Explicitly return undefined so callers expecting a resolved value
+  // of undefined can assert on it reliably (tests use resolves.toBeUndefined()).
+  return undefined;
 }
 
 // Graceful shutdown that closes services then exits (used for process signals)

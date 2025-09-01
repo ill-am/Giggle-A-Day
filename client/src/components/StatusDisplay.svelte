@@ -9,13 +9,26 @@
 </script>
 
 {#if uiState.status === 'loading' || uiState.status === 'error' || uiState.status === 'success'}
-  <div class="status-banner" class:loading={uiState.status === 'loading'} class:error={uiState.status === 'error'} class:success={uiState.status === 'success'} transition:fade>
+  <div
+    role="status"
+    aria-live={uiState.status === 'loading' ? 'polite' : 'assertive'}
+    class="status-banner"
+    class:loading={uiState.status === 'loading'}
+    class:error={uiState.status === 'error'}
+    class:success={uiState.status === 'success'}
+    transition:fade
+  >
     <p>{uiState.message}</p>
-    {#if uiState.status === 'error'}
-      <div class="actions">
-        <button class="retry" on:click={() => uiStateStore.set({ status: 'idle', message: '' })}>Dismiss</button>
-      </div>
-    {/if}
+    <div class="actions">
+      <button
+        class="dismiss"
+        aria-label="Dismiss status"
+        on:click={() => uiStateStore.set({ status: 'idle', message: '' })}
+        data-testid="dismiss-status"
+      >
+        Dismiss
+      </button>
+    </div>
   </div>
 {/if}
 

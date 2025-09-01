@@ -16,6 +16,9 @@
   const insertSummerSuggestion = () => {
     const suggestion = `A short, sunlit summer poem about cicadas and long shadows.`;
     promptStore.set(suggestion);
+    // Focus textarea after inserting so keyboard users can immediately edit
+    const el = document.getElementById('prompt-textarea');
+    if (el) el.focus();
   };
 
   const handleSubmit = async () => {
@@ -69,7 +72,16 @@
     disabled={uiState.status === 'loading'}
   ></textarea>
   <div class="controls-row">
-    <button class="suggestion" on:click={insertSummerSuggestion} title="Insert summer prompt suggestion">Summer suggestion</button>
+    <button
+      class="suggestion"
+      on:click={insertSummerSuggestion}
+      title="Insert summer prompt suggestion"
+      aria-label="Insert a summer prompt suggestion"
+      data-testid="summer-suggestion"
+      disabled={uiState.status === 'loading'}
+    >
+      Summer suggestion
+    </button>
     <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading'}>
     {#if uiState.status === 'loading'}
       Generating...
