@@ -23,6 +23,14 @@ export default defineConfig({
         secure: false,
         // Attach proxy event hooks to surface backend errors as clearer 502 responses
         configure(proxy, options) {
+          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
+          proxy.on("proxyReq", (proxyReq, req, res) => {
+            try {
+              if (process.env.DEV_AUTH_TOKEN) {
+                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
+              }
+            } catch (e) {}
+          });
           proxy.on("proxyRes", (proxyRes, req, res) => {
             // Forward short backend error header to the client if present
             const backendError = proxyRes.headers["x-backend-error"];
@@ -54,6 +62,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         configure(proxy) {
+          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
+          proxy.on("proxyReq", (proxyReq, req, res) => {
+            try {
+              if (process.env.DEV_AUTH_TOKEN) {
+                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
+              }
+            } catch (e) {}
+          });
           proxy.on("error", (err, req, res) => {
             try {
               if (!res.headersSent) {
@@ -75,6 +91,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         configure(proxy) {
+          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
+          proxy.on("proxyReq", (proxyReq, req, res) => {
+            try {
+              if (process.env.DEV_AUTH_TOKEN) {
+                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
+              }
+            } catch (e) {}
+          });
           proxy.on("error", (err, req, res) => {
             try {
               if (!res.headersSent) {
@@ -96,6 +120,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         configure(proxy) {
+          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
+          proxy.on("proxyReq", (proxyReq, req, res) => {
+            try {
+              if (process.env.DEV_AUTH_TOKEN) {
+                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
+              }
+            } catch (e) {}
+          });
           proxy.on("error", (err, req, res) => {
             try {
               if (!res.headersSent) {

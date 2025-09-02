@@ -3,6 +3,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Basic Express server setup
+// Load local environment variables from .env when present (dev only)
+try {
+  // eslint-disable-next-line global-require
+  require("dotenv").config();
+} catch (e) {
+  // dotenv is optional; if it's not installed we'll ignore the error.
+}
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
@@ -351,6 +358,29 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Dev-only token auth middleware. Enable by setting DEV_AUTH_TOKEN in the
+// environment. This protects the dev server if you need to make forwarded
+// ports public during testing. It intentionally allows the root and health
+// routes so platform readiness and probes continue to work.
+if (process.env.DEV_AUTH_TOKEN) {
+  app.use((req, res, next) => {
+    try {
+      if (req.path === "/" || req.path === "/health") return next();
+      const token =
+        (req.headers &&
+          (req.headers["x-dev-auth"] || req.headers["x-dev-token"])) ||
+        req.query.dev_token;
+      if (token === process.env.DEV_AUTH_TOKEN) return next();
+      res.setHeader("WWW-Authenticate", 'Bearer realm="dev"');
+      return res
+        .status(401)
+        .json({ error: "Unauthorized - dev token required" });
+    } catch (e) {
+      return res.status(500).json({ error: "Dev auth middleware failure" });
+    }
+  });
+}
 
 // Helper to check if we're still in grace period
 function isInGracePeriod() {
@@ -732,14 +762,12 @@ app.post("/api/export", async (req, res, next) => {
       const { validatePdfBuffer } = require("./pdfGenerator");
       const validation = await validatePdfBuffer(pdfBuffer);
       if (!validation || validation.ok === false) {
-        return res
-          .status(422)
-          .json({
-            ok: false,
-            errors: validation.errors || [],
-            warnings: validation.warnings || [],
-            pageCount: validation.pageCount || 0,
-          });
+        return res.status(422).json({
+          ok: false,
+          errors: validation.errors || [],
+          warnings: validation.warnings || [],
+          pageCount: validation.pageCount || 0,
+        });
       }
     } catch (valErr) {
       // If validation tooling fails unexpectedly, log and continue to return
@@ -804,14 +832,12 @@ app.post("/export", async (req, res, next) => {
       const { validatePdfBuffer } = require("./pdfGenerator");
       const validation = await validatePdfBuffer(pdfBuffer);
       if (!validation || validation.ok === false) {
-        return res
-          .status(422)
-          .json({
-            ok: false,
-            errors: validation.errors || [],
-            warnings: validation.warnings || [],
-            pageCount: validation.pageCount || 0,
-          });
+        return res.status(422).json({
+          ok: false,
+          errors: validation.errors || [],
+          warnings: validation.warnings || [],
+          pageCount: validation.pageCount || 0,
+        });
       }
     } catch (valErr) {
       console.warn("PDF validation failed to run:", valErr && valErr.message);
