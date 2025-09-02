@@ -725,6 +725,28 @@ app.post("/api/export", async (req, res, next) => {
 
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
 
+    // Run light validation on the produced PDF. If validation reports fatal
+    // errors, surface a 422 so callers can handle export validation failures
+    // explicitly (per RFC contract). Warnings do not block the response.
+    try {
+      const { validatePdfBuffer } = require("./pdfGenerator");
+      const validation = await validatePdfBuffer(pdfBuffer);
+      if (!validation || validation.ok === false) {
+        return res
+          .status(422)
+          .json({
+            ok: false,
+            errors: validation.errors || [],
+            warnings: validation.warnings || [],
+            pageCount: validation.pageCount || 0,
+          });
+      }
+    } catch (valErr) {
+      // If validation tooling fails unexpectedly, log and continue to return
+      // the PDF as a best-effort fallback (do not block on validator availability).
+      console.warn("PDF validation failed to run:", valErr && valErr.message);
+    }
+
     // Successful binary response; keep binary behaviour for clients
     res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Type", "application/pdf");
@@ -777,6 +799,23 @@ app.post("/export", async (req, res, next) => {
     await page.setContent(previewTemplate(contentObj));
 
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+
+    try {
+      const { validatePdfBuffer } = require("./pdfGenerator");
+      const validation = await validatePdfBuffer(pdfBuffer);
+      if (!validation || validation.ok === false) {
+        return res
+          .status(422)
+          .json({
+            ok: false,
+            errors: validation.errors || [],
+            warnings: validation.warnings || [],
+            pageCount: validation.pageCount || 0,
+          });
+      }
+    } catch (valErr) {
+      console.warn("PDF validation failed to run:", valErr && valErr.message);
+    }
 
     res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Type", "application/pdf");
