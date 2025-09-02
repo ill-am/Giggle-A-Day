@@ -34,3 +34,6 @@ run-*.zip
 
 # End-to-end test databases
 **/tmp-e2e.db
+
+# Temporary local export PDFs from smoke/inproc runs
+server/tmp-e2e-exports/
