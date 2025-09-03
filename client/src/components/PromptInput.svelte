@@ -82,6 +82,23 @@
     >
       Summer suggestion
     </button>
+    <button
+      class="demo"
+      on:click={() => {
+        // Populate the content store directly with a V0.1 demo payload
+        const demo = {
+          title: 'Summer Poems — Demo',
+          body: '<div style="page-break-after:always;padding:48px;background-image:url(https://upload.wikimedia.org/wikipedia/commons/3/33/Small_lakeside_view.jpg);background-size:cover;background-position:center;"><h1>Summer Poem 1</h1><p>By Unknown</p><pre>Roses are red\nViolets are blue\nSummer breeze carries you</pre></div><div style="page-break-after:always;padding:48px;background-image:url(https://upload.wikimedia.org/wikipedia/commons/4/47/Sunset_2007-1.jpg);background-size:cover;background-position:center;"><h1>Summer Poem 2</h1><p>By Unknown</p><pre>Sun on the sand\nWaves lap the shore\nA page on each</pre></div>'
+        };
+        contentStore.set(demo);
+        uiStateStore.set({ status: 'success', message: 'Loaded V0.1 demo content.' });
+      }}
+      title="Load full V0.1 demo content"
+      data-testid="load-demo"
+      disabled={uiState.status === 'loading'}
+    >
+      Load V0.1 demo
+    </button>
     <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading'}>
     {#if uiState.status === 'loading'}
       Generating...

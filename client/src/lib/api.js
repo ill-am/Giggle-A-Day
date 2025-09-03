@@ -5,7 +5,8 @@ const DEFAULT_CONFIG = {
   maxRetries: 3,
   initialBackoffMs: 1000,
   maxBackoffMs: 10000,
-  retryableStatuses: [401, 408, 429, 500, 502, 503, 504],
+  // Do NOT retry on 401 by default — auth failures should surface immediately.
+  retryableStatuses: [408, 429, 500, 502, 503, 504],
 };
 
 async function fetchWithRetry(url, options = {}) {
@@ -91,10 +92,8 @@ export async function submitPrompt(prompt) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
-      retryConfig: {
-        maxRetries: 3,
-        retryableStatuses: [401], // Focus on auth errors
-      },
+      // Use default retry behaviour; do not retry on 401 so auth errors
+      // are surfaced to the UI immediately.
     });
 
     if (!response.ok) {
