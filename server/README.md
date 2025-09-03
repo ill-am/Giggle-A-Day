@@ -10,6 +10,16 @@ This server powers the backend for AetherPress, handling:
 - HTML preview and PDF export (via Puppeteer)
 - API endpoints for prompt, preview, override, and export
 
+## Image types & rasterization (note)
+
+This server expects decorative assets in common web image formats — PNG, JPEG, and SVG are supported by the preview/export pipeline. Important runtime details:
+
+- SVGs: when `EXPORT_RASTERIZE_SVG=1` the server may rasterize or rewrite SVGs to PNG data-URIs before sending the HTML to Puppeteer to ensure consistent rendering and embedding in the produced PDF.
+- PNG/JPEG: these are used directly; Puppeteer/Chromium will embed them as PDF image XObjects when rendering to PDF.
+- Recommendation: for deterministic exports include essential decorative assets in `server/public/` (or `server/samples/images/`) so headless Chromium can reliably fetch them during export. If using remote CDN assets ensure the server and Chromium have network access and the resources are reachable during export.
+
+When verifying exported PDFs, note that embedded images are typically stored as PDF image XObjects — they won't necessarily contain raw PNG/JPEG file bytes verbatim, so tools like `pdfimages` or `mutool` or a full PDF parser are recommended for robust image extraction.
+
 See the [project root README](../README.md) for full architecture, development philosophy, and project structure.
 
 ## Development
