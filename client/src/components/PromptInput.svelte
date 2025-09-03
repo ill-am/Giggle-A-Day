@@ -1,6 +1,6 @@
 <script>
   import { promptStore, contentStore, uiStateStore } from '../stores';
-  import { submitPrompt } from '../lib/api';
+  import { submitPrompt, exportToPdf } from '../lib/api';
 
   let currentPrompt;
   promptStore.subscribe(value => {
@@ -21,23 +21,31 @@
     if (el) el.focus();
   };
 
+  let isGenerating = false;
+  let isPreviewing = false;
+
   const handleSubmit = async () => {
     if (!currentPrompt || !currentPrompt.trim()) {
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
       return;
     }
-
+    isGenerating = true;
     uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
       const response = await submitPrompt(currentPrompt);
       if (response && response.data) {
         contentStore.set(response.data.content);
         uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
+        // Auto-trigger preview after generation completes
+        await handlePreviewNow();
       } else {
         throw new Error('Invalid response structure from server.');
       }
     } catch (error) {
       uiStateStore.set({ status: 'error', message: error.message || 'An unknown error occurred.' });
+    }
+    finally {
+      isGenerating = false;
     }
   };
 
@@ -49,6 +57,7 @@
       uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
       return;
     }
+    isPreviewing = true;
     try {
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
       const html = await import('../lib/api').then((m) => m.loadPreview(current));
@@ -57,6 +66,47 @@
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
       uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
+    } finally {
+      isPreviewing = false;
+    }
+  };
+
+  // In-UI smoke test: runs preview -> export and saves PDF on success or diagnostic JSON on failure
+  const runSmokeTest = async () => {
+    const current = get(contentStore);
+    if (!current) {
+      uiStateStore.set({ status: 'error', message: 'No content to run smoke test. Load or generate content first.' });
+      return;
+    }
+
+    uiStateStore.set({ status: 'loading', message: 'Running smoke test (preview → export)...' });
+    try {
+      // Ensure preview renders
+      await handlePreviewNow();
+
+      // Trigger export which downloads a PDF if successful
+      await exportToPdf(current);
+
+      uiStateStore.set({ status: 'success', message: 'Smoke test succeeded — PDF downloaded.' });
+    } catch (err) {
+      // Create a diagnostic JSON blob and trigger download
+      const diag = {
+        error: err && err.message ? err.message : String(err),
+        stack: err && err.stack ? err.stack : null,
+        timestamp: new Date().toISOString(),
+        contentSnapshot: current,
+      };
+      const blob = new Blob([JSON.stringify(diag, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `diagnostic-${Date.now()}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+
+      uiStateStore.set({ status: 'error', message: 'Smoke test failed — diagnostic saved.' });
     }
   };
 </script>
@@ -106,16 +156,23 @@
     >
       Load V0.1 demo
     </button>
-    <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading'}>
-    {#if uiState.status === 'loading'}
-      Generating...
-    {:else}
-      Generate
-    {/if}
-  </button>
-  <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading'}>
-    Preview
-  </button>
+    <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+      {#if isGenerating}
+        Generating...
+      {:else}
+        Generate
+      {/if}
+    </button>
+    <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+      {#if isPreviewing}
+        Previewing...
+      {:else}
+        Preview
+      {/if}
+    </button>
+    <button data-testid="smoke-button" title="Run preview→export smoke test" on:click={runSmokeTest} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+      Run smoke test
+    </button>
   </div>
   
   {#if uiState.status === 'error'}
