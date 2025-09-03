@@ -8,6 +8,17 @@ The `scripts/` directory contains utility scripts for development and testing:
 
 - `health-check.sh`: Frontend availability and response monitoring
 
+## Current GUI status (developer-facing)
+
+Short status: the client UI now supports a one-click demo loader, in-browser preview, and an export button that downloads the generated PDF. The preview pane provides visible loading state and a brief highlight when content updates so developers can see activity without opening DevTools.
+
+Notes:
+
+- Demo loader populates the editor and triggers a preview automatically.
+- The preview flow surfaces errors and shows inline loading text.
+- The dev proxy injects a `x-dev-auth` header when `DEV_AUTH_TOKEN` is set to support Codespaces port forwarding; the server enforces the token when present.
+- Work in progress: in-UI smoke test, Playwright e2e script, and CI integration (see `docs/focus/V0.1_objectives_and_plan.md`).
+
 ## Recommended IDE Setup
 
 [VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
