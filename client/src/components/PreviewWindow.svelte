@@ -31,6 +31,7 @@
 
   // Preview controls
   let autoPreview = true;
+  let flash = false;
 
   const updatePreview = async (newContent) => {
     if (!newContent) {
@@ -41,6 +42,9 @@
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
       const html = await loadPreview(newContent);
       previewStore.set(html);
+      // trigger brief flash to draw attention
+      flash = true;
+      setTimeout(() => (flash = false), 600);
       uiStateStore.set({ status: 'success', message: 'Preview loaded' });
     } catch (error) {
       uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
@@ -61,7 +65,13 @@
 <div class="preview-container">
   <div class="preview-controls">
     <label><input type="checkbox" data-testid="auto-preview-checkbox" bind:checked={autoPreview} /> Auto-preview</label>
-    <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>Preview Now</button>
+    <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>
+      {#if uiState.status === 'loading'}
+        Previewing...
+      {:else}
+        Preview Now
+      {/if}
+    </button>
   </div>
 
   {#if uiState.status === 'loading'}
@@ -69,7 +79,7 @@
       <p>Loading Preview...</p>
     </div>
   {:else if $previewStore}
-    <div class="preview-stage">
+    <div class="preview-stage {flash ? 'flash' : ''}">
       {#if bgUrl}
         <div class="bg-preview"><img src={bgUrl} alt="background preview" /></div>
       {/if}
@@ -110,4 +120,10 @@
   .bg-preview { position: absolute; inset: 0; opacity: 0.45; pointer-events: none }
   .bg-preview img { width: 100%; height: 100%; object-fit: cover }
   .preview-stage .preview-content { position: relative; z-index: 2 }
+
+  /* flash highlight when preview updates */
+  .preview-stage.flash {
+    box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15) inset, 0 0 0 2px rgba(66,153,225,0.08);
+    transition: box-shadow 0.45s ease-out;
+  }
 </style>
