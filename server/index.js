@@ -19,8 +19,39 @@ const db = require("./db");
 const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
+const imageRewrite = require("./utils/imageRewrite");
+const EXPORT_USE_LOCAL_IMAGES =
+  process.env.EXPORT_USE_LOCAL_IMAGES === "1" ||
+  process.env.EXPORT_USE_LOCAL_IMAGES === "true";
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+async function rewriteImagesForExportAsync(html) {
+  if (!EXPORT_USE_LOCAL_IMAGES) return html;
+  const rasterize =
+    process.env.EXPORT_RASTERIZE_SVG === "1" ||
+    process.env.EXPORT_RASTERIZE_SVG === "true";
+  // Prefer the async path which can rasterize inlined SVGs to PNG data-URIs
+  if (typeof imageRewrite.rewriteDemoImagesAsync === "function") {
+    return await imageRewrite.rewriteDemoImagesAsync(html, {
+      inlineSvg: true,
+      rasterizeSvg: rasterize,
+    });
+  }
+  // Fallback to synchronous rewrite
+  return imageRewrite.rewriteDemoImages(html, { inlineSvg: true });
+}
+
+// Serve sample images and assets for deterministic exports
+try {
+  const samplesDir = path.resolve(__dirname, "samples");
+  if (fs.existsSync(samplesDir)) {
+    app.use("/samples", express.static(samplesDir));
+    console.log("Serving /samples from", samplesDir);
+  }
+} catch (e) {
+  console.warn("Failed to register /samples static handler", e && e.message);
+}
 
 // --- Main Server Initialization Sequence ---
 async function startServer(options = {}) {
@@ -613,6 +644,8 @@ const previewTemplate = (content) => `
 </html>
 `;
 
+// NOTE: image rewrite is handled by `rewriteImagesForExportAsync` above.
+
 app.get("/preview", (req, res) => {
   const { content } = req.query;
 
@@ -644,6 +677,29 @@ app.get("/preview", (req, res) => {
     sendValidationError(res, "Invalid content format", { error: err.message });
   }
 });
+
+// DEV-ONLY: return the rewritten HTML that will be used for export so
+// we can inspect whether SVGs were inlined or rasterized to data-URIs.
+if (process.env.DEV_AUTH_TOKEN) {
+  app.post("/debug/export-html", async (req, res) => {
+    const token = req.headers["x-dev-auth"] || req.query.dev_token;
+    if (token !== process.env.DEV_AUTH_TOKEN)
+      return res.status(401).json({ error: "Unauthorized" });
+    const { title, body } = req.body || {};
+    if (!title || !body)
+      return res.status(400).json({ error: "title and body required" });
+    try {
+      const contentObj = { title, body };
+      const htmlToRender = await rewriteImagesForExportAsync(
+        previewTemplate(contentObj)
+      );
+      res.setHeader("Content-Type", "text/html");
+      return res.send(htmlToRender);
+    } catch (e) {
+      return res.status(500).json({ error: e && e.message });
+    }
+  });
+}
 
 // Backwards-compatible API route to accept JSON body for preview requests
 app.post("/api/preview", (req, res) => {
@@ -751,9 +807,28 @@ app.post("/api/export", async (req, res, next) => {
     if (!page) throw new Error("Failed to create browser page");
 
     const contentObj = { title, body };
-    await page.setContent(previewTemplate(contentObj));
+    const htmlToRender = await rewriteImagesForExportAsync(
+      previewTemplate(contentObj)
+    );
+    const EXPORT_BASE_URL =
+      process.env.EXPORT_BASE_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
+    await page.setContent(htmlToRender, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+      url: EXPORT_BASE_URL,
+    });
 
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
+    try {
+      const dumpsDir = path.resolve(__dirname, "tmp-exports");
+      if (!fs.existsSync(dumpsDir)) fs.mkdirSync(dumpsDir, { recursive: true });
+      const dumpPath = path.join(dumpsDir, `export-${Date.now()}.pdf`);
+      fs.writeFileSync(dumpPath, pdfBuffer);
+      console.log("Wrote export artifact:", dumpPath);
+    } catch (e) {
+      console.warn("Failed to write export artifact:", e && e.message);
+    }
 
     // Run light validation on the produced PDF. If validation reports fatal
     // errors, surface a 422 so callers can handle export validation failures
@@ -824,7 +899,17 @@ app.post("/export", async (req, res, next) => {
     if (!page) throw new Error("Failed to create browser page");
 
     const contentObj = { title, body };
-    await page.setContent(previewTemplate(contentObj));
+    const htmlToRender = await rewriteImagesForExportAsync(
+      previewTemplate(contentObj)
+    );
+    const EXPORT_BASE_URL =
+      process.env.EXPORT_BASE_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
+    await page.setContent(htmlToRender, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+      url: EXPORT_BASE_URL,
+    });
 
     const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
 
@@ -889,7 +974,17 @@ app.get("/export", async (req, res) => {
     page = await browserInstance.newPage();
     if (!page) throw new Error("Failed to create browser page");
 
-    await page.setContent(previewTemplate(contentObj));
+    const htmlToRender = await rewriteImagesForExportAsync(
+      previewTemplate(contentObj)
+    );
+    const EXPORT_BASE_URL =
+      process.env.EXPORT_BASE_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
+    await page.setContent(htmlToRender, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+      url: EXPORT_BASE_URL,
+    });
     const pdf = await page.pdf({ format: "A4", printBackground: true });
 
     // Set headers to match POST export endpoints
@@ -1750,7 +1845,9 @@ app.post("/api/export/book", async (req, res) => {
             executablePath = p;
             break;
           }
-        } catch (e) {}
+        } catch (e) {
+          // ignore filesystem probe errors when checking executable paths
+        }
       }
 
       localBrowser = await puppeteerLib.launch({
@@ -1797,7 +1894,9 @@ app.post("/api/export/book", async (req, res) => {
     if (launchedTempBrowser && localBrowser) {
       try {
         await localBrowser.close();
-      } catch (e) {}
+      } catch (e) {
+        // ignore close errors for temporary browser
+      }
     }
   }
 });
@@ -1836,7 +1935,9 @@ app.post("/api/export/job", async (req, res) => {
         // ensure DB closed on error
         try {
           await db.close();
-        } catch (ee) {}
+        } catch (ee) {
+          // ignore errors closing DB
+        }
         console.warn(
           "jobs.enqueueJob failed, falling back to in-memory",
           e && e.message ? e.message : e
@@ -1947,7 +2048,9 @@ app.get("/api/jobs/metrics", async (req, res) => {
       } catch (e) {
         try {
           await db.close();
-        } catch (ee) {}
+        } catch (ee) {
+          // ignore errors closing DB
+        }
         throw e;
       }
     }
@@ -2198,7 +2301,9 @@ async function closeServices(signal) {
         try {
           browserInstance.removeAllListeners &&
             browserInstance.removeAllListeners("disconnected");
-        } catch (er) {}
+        } catch (er) {
+          // ignore listener removal errors
+        }
         await browserInstance.close();
         console.log("[Shutdown] Puppeteer browser closed.");
       } catch (e) {
@@ -2252,7 +2357,7 @@ module.exports.closeServices = closeServices;
 module.exports.gracefulShutdown = gracefulShutdown;
 
 // Centralized error handler (placed at end to capture errors from all routes)
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();
   const requestId = req && req.id ? req.id : "-";
   console.error("--- Error Handler ---");
@@ -2296,7 +2401,9 @@ app.use((err, req, res, next) => {
       err && err.message ? String(err.message).slice(0, 200) : "error"
     );
     res.setHeader("X-Request-Id", requestId);
-  } catch (e) {}
+  } catch (e) {
+    // ignore header-setting errors in error handler
+  }
 
   // Differentiate error response by environment
   const isDev = process.env.NODE_ENV !== "production";
@@ -2316,7 +2423,9 @@ app.use((err, req, res, next) => {
       } catch (e) {
         try {
           res.end();
-        } catch (er) {}
+        } catch (er) {
+          // ignore warn logging errors
+        }
       }
       return;
     }
@@ -2335,6 +2444,8 @@ app.use((err, req, res, next) => {
           res.end();
         } catch (er) {}
       }
-    } catch (ee) {}
+    } catch (ee) {
+      // ignore final shutdown errors
+    }
   }
 });

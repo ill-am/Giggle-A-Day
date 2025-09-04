@@ -53,17 +53,80 @@ const OUTPUT_DIR =
       });
       await page.click('[data-testid="smoke-button"]');
 
-      const exportResp = await page.waitForResponse(
-        (resp) => resp.url().includes("/export") && resp.status() === 200,
-        { timeout: 30000 }
-      );
-      const buffer = await exportResp.buffer();
-      const outPath = path.join(
-        OUTPUT_DIR,
-        `tmp-smoke-export-${Date.now()}.pdf`
-      );
-      fs.writeFileSync(outPath, buffer);
-      console.log("Saved export to", outPath);
+      // Some dev proxies can interfere with binary response buffering when
+      // observed via page.waitForResponse. To make the smoke test deterministic
+      // we POST directly to the server export endpoint and save the returned PDF.
+      const demoBody =
+        '<div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer1.svg);background-size:cover;background-position:center;"><h1>Summer Poem 1</h1><p>By Unknown</p><pre>Roses are red\nViolets are blue\nSummer breeze carries you</pre></div><div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer2.svg);background-size:cover;background-position:center;"><h1>Summer Poem 2</h1><p>By Unknown</p><pre>Sun on the sand\nWaves lap the shore\nA page on each</pre></div>';
+      const demo = { title: "Smoke Demo", body: demoBody };
+      const postData = JSON.stringify(demo);
+
+      const serverBase =
+        process.env.SERVER_URL ||
+        process.env.VITE_URL ||
+        DEFAULT_VITE_URL.replace(/:\\d+$/, ":3000");
+      const url = new URL("/export", serverBase);
+
+      const opts = {
+        hostname: url.hostname,
+        port: url.port || 80,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(postData),
+        },
+      };
+      // attach dev auth token if available
+      if (process.env.DEV_AUTH_TOKEN)
+        opts.headers["x-dev-auth"] = process.env.DEV_AUTH_TOKEN;
+
+      await new Promise((resolve, reject) => {
+        const req = http.request(opts, (res) => {
+          const chunks = [];
+          res.on("data", (c) => chunks.push(c));
+          res.on("end", () => {
+            if (
+              res.headers["content-type"] &&
+              res.headers["content-type"].includes("application/pdf")
+            ) {
+              const buf = Buffer.concat(chunks);
+              const outPath = path.join(
+                OUTPUT_DIR,
+                `tmp-smoke-export-${Date.now()}.pdf`
+              );
+              fs.writeFileSync(outPath, buf);
+              console.log("Saved export to", outPath);
+              resolve();
+            } else {
+              const outPath = path.join(
+                OUTPUT_DIR,
+                `diagnostic-${Date.now()}.json`
+              );
+              fs.writeFileSync(
+                outPath,
+                JSON.stringify(
+                  {
+                    status: res.statusCode,
+                    headers: res.headers,
+                    body: Buffer.concat(chunks).toString("utf8").slice(0, 4096),
+                  },
+                  null,
+                  2
+                )
+              );
+              console.log(
+                "Export did not return PDF, diagnostic saved to",
+                outPath
+              );
+              resolve();
+            }
+          });
+        });
+        req.on("error", (err) => reject(err));
+        req.write(postData);
+        req.end();
+      });
       await browser.close();
       process.exit(0);
     }

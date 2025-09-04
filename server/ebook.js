@@ -81,7 +81,17 @@ async function renderBookToPDF(poems, browser) {
   const page = await browser.newPage();
   try {
     const html = generateEbookHTML(poems);
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    // Use an explicit base URL so relative asset paths (eg. /images/...) resolve
+    // when rendering HTML passed via setContent. Allow overriding via
+    // EXPORT_BASE_URL env var for CI/dev environments.
+    const EXPORT_BASE_URL =
+      process.env.EXPORT_BASE_URL ||
+      `http://localhost:${process.env.PORT || 3000}`;
+    await page.setContent(html, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+      url: EXPORT_BASE_URL,
+    });
     const pdf = await page.pdf({ format: "A4", printBackground: true });
 
     // Run lightweight validation and log results (non-fatal)

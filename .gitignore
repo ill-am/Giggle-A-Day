@@ -15,6 +15,15 @@ test-artifacts/
 server/test-artifacts/
 client/test-artifacts/
 
+# Temporary files from Puppeteer and test runs
+client/tmp-puppeteer-*.cjs
+server/tmp-exports/
+
+# Server runtime files
+server/server.pid
+server/server*.log
+server/server-start.log
+
 # Temporary PDF output directories created by tests/smoke scripts
 # Ignore top-level and nested tmp-pdf* directories
 tmp-pdf*/
