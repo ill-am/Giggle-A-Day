@@ -1,5 +1,9 @@
 const puppeteer = require("puppeteer");
-const config = require("./screenshot-config.cjs");
+const path = require("path");
+const config = require(path.resolve(
+  __dirname,
+  "../../client/tools/screenshot-automation/screenshot-config.cjs"
+));
 
 (async () => {
   console.log(`Probing ${config.baseUrl} for selectors...`);
