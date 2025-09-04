@@ -1,0 +1,1 @@
+module.exports = { baseUrl: "http://localhost:3000/", viewport: { width: 1200, height: 800 }, states: { initial: { name: "initial_state", waitFor: ["[data-testid=\\"prompt-textarea\\"]"], delay: 1000 } }, output: { directory: "../assets/screenshots", format: "png", quality: 100 } };
