@@ -8,16 +8,18 @@ module.exports = {
 
   // Selectors used for interacting with the UI
   selectors: {
-  promptInput: "textarea[data-testid='prompt-textarea']",
-  generateButton: "button[data-testid='generate-button']",
-  exportButton: "button[data-testid='export-button']",
-  // Preview content is rendered with this test id
-  previewWindow: "[data-testid='preview-content']",
-  // Status banner class used in StatusDisplay.svelte
-  statusDisplay: ".status-banner",
-  smokeTestButton: "button[data-testid='smoke-button']",
-  // OverrideControls renders container with this class
-  overrideControls: ".override-container",
+    promptInput: "textarea[data-testid='prompt-textarea']",
+    generateButton: "button[data-testid='generate-button']",
+    exportButton: "button[data-testid='export-button']",
+    // Preview content is rendered with this test id
+    previewWindow: "[data-testid='preview-content']",
+    // Status banner class used in StatusDisplay.svelte
+    statusDisplay: ".status-banner",
+    smokeTestButton: "button[data-testid='smoke-button']",
+    // OverrideControls renders container with this class
+    overrideControls: ".override-container",
+    // Load demo button
+    loadDemoButton: "button[data-testid='load-demo']",
   },
 
   // Screenshot states configuration
@@ -25,35 +27,25 @@ module.exports = {
     initial: {
       name: "initial_state",
       // Ensure demo content is loaded so preview appears
-      actions: [
-        { type: 'click', selector: "button[data-testid='load-demo']" }
-      ],
+      actions: [{ type: "click", selector: "button[data-testid='load-demo']" }],
       waitFor: ["[data-testid='preview-content']"],
-      delay: 2000,
-      delay: 1000,
+      delay: 1500,
     },
     promptEntry: {
       name: "prompt_entry",
       // Load demo content first so export button is rendered, then click export
       actions: [
-        { type: 'click', selector: "button[data-testid='load-demo']" },
-        {
-          type: "click",
-          selector: "button[data-testid='export-button']",
-        },
+        { type: "click", selector: "button[data-testid='load-demo']" },
+        { type: "click", selector: "button[data-testid='export-button']" },
       ],
       waitFor: [".progress-bar", ".progress"],
-      ],
       delay: 1000,
     },
     generating: {
       name: "generating",
       description: "Content generation in progress",
       actions: [
-        {
-          type: "click",
-          selector: "button[data-testid='generate-button']",
-        },
+        { type: "click", selector: "button[data-testid='generate-button']" },
       ],
       waitFor: [".loading-indicator"],
       delay: 1000,
@@ -61,7 +53,7 @@ module.exports = {
     preview: {
       name: "preview_display",
       description: "Content preview after generation",
-      waitFor: [".preview-content"],
+      waitFor: ["[data-testid='preview-content']"],
       delay: 2000,
     },
     export: {
