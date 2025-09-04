@@ -81,10 +81,10 @@
 
 ## Storage
 
-All assets will be stored in:
+All assets will be stored in the repository under the automation package:
 
-- Screenshots: `/docs/assets/screenshots/`
-- Diagrams: `/docs/assets/diagrams/`
+- Screenshots: `client/tools/assets/screenshots/`
+- Diagrams: `client/tools/assets/diagrams/`
 
 ## Integration
 
