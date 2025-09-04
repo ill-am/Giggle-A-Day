@@ -1,0 +1,12 @@
+{
+  "name": "aether-screenshot-automation",
+  "version": "1.0.0",
+  "description": "Screenshot automation tools for Aether documentation",
+  "main": "screenshot-capture.cjs",
+  "scripts": {
+    "capture": "node screenshot-capture.cjs"
+  },
+  "dependencies": {
+    "puppeteer": "^24.19.0"
+  }
+}
