@@ -69,11 +69,15 @@ module.exports = {
 
     while (attempt < maxRetries) {
       try {
-        await page.screenshot({
+        const screenshotOptions = {
           path: filePath,
           fullPage: true,
-          ...options,
-        });
+        };
+        // puppeteer supports `quality` only for jpeg
+        if (options.quality && /jpe?g/i.test(path.extname(filePath))) {
+          screenshotOptions.quality = options.quality;
+        }
+        await page.screenshot(screenshotOptions);
         console.log(`Screenshot saved: ${filePath}`);
         return;
       } catch (error) {
