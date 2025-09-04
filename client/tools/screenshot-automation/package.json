@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "probe": "node ../../docs/tools/screenshot-automation/probe-selectors.cjs",
-    "capture": "node ../../docs/tools/screenshot-automation/screenshot-capture.cjs"
+    "probe": "node probe-selectors.cjs",
+    "capture": "node screenshot-capture.cjs"
   },
   "dependencies": {
     "puppeteer-core": "^20.0.0"

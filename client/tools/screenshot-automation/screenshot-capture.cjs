@@ -1,9 +1,6 @@
 const puppeteer = require("puppeteer-core");
 const path = require("path");
-const config = require(path.resolve(
-  __dirname,
-  "../../client/tools/screenshot-automation/screenshot-config.cjs"
-));
+const config = require("./screenshot-config.cjs");
 const utils = require("./screenshot-utils.cjs");
 
 /**

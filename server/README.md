@@ -12,15 +12,54 @@ This server powers the backend for AetherPress, handling:
 
 ## Image types & rasterization (note)
 
-This server expects decorative assets in common web image formats — PNG, JPEG, and SVG are supported by the preview/export pipeline. Important runtime details:
+This server supports common web image formats used by the preview/export pipeline: PNG, JPEG, and SVG. For deterministic, CI-friendly PDF exports and to avoid subtle rendering differences between environments, follow these recommendations and runtime options.
 
-- SVGs: when `EXPORT_RASTERIZE_SVG=1` the server may rasterize or rewrite SVGs to PNG data-URIs before sending the HTML to Puppeteer to ensure consistent rendering and embedding in the produced PDF.
-- PNG/JPEG: these are used directly; Puppeteer/Chromium will embed them as PDF image XObjects when rendering to PDF.
-- Recommendation: for deterministic exports include essential decorative assets in `server/public/` (or `server/samples/images/`) so headless Chromium can reliably fetch them during export. If using remote CDN assets ensure the server and Chromium have network access and the resources are reachable during export.
+Key behavior
 
-When verifying exported PDFs, note that embedded images are typically stored as PDF image XObjects — they won't necessarily contain raw PNG/JPEG file bytes verbatim, so tools like `pdfimages` or `mutool` or a full PDF parser are recommended for robust image extraction.
+- SVGs: By default SVG files are referenced directly in the HTML. When `EXPORT_RASTERIZE_SVG=1` the server will rasterize (or rewrite) SVGs to PNG data-URIs before sending HTML to Puppeteer. Rasterization reduces cross-environment rendering variance at the cost of raster image size.
+- PNG/JPEG: These are used directly. Headless Chromium will embed raster images as PDF image XObjects during PDF generation.
 
-See the [project root README](../README.md) for full architecture, development philosophy, and project structure.
+Best practices for deterministic exports
+
+- Bundle essential decorative assets with the server (preferred): place production assets in `server/public/` or `server/samples/images/` and reference them by absolute or root-relative paths. This avoids network flakiness and makes CI reproducible.
+- Use hashed filenames or an asset manifest (eg. `assets-manifest.json`) so cached copies are invalidated predictably when assets change.
+- Install required fonts locally and reference them via `@font-face` with local URLs (eg. `server/public/fonts/`). Ensure the same fonts are available in CI/devcontainers to avoid layout differences.
+- For CI runs disable network asset fetching where possible. Use `ALLOW_REMOTE_ASSETS=false` (see env vars below) and pre-seed required images into `server/public/` before the job runs.
+
+Runtime options (recommended env vars)
+
+- `EXPORT_RASTERIZE_SVG` (0|1) — default `0`. If `1`, server will rasterize SVGs into PNG data-URIs for embedding.
+- `EXPORT_RASTERIZE_SVG_MAX_DPI` — optional, sets rasterization DPI/scale when converting SVG → PNG.
+- `ASSET_DIR` — default `server/public` — directory served by Express for static assets used during export.
+- `ALLOW_REMOTE_ASSETS` (0|1) — default `1`. Set to `0` in CI to prevent fetching remote CDN assets.
+- `CHROME_PATH` / `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD` — used to control Chromium executable and downloads in CI/devcontainers.
+
+Operational notes and tests
+
+- Error handling: log and surface asset fetch failures during export (HTTP 4xx/5xx) so missing resources are visible in CI logs.
+- Smoke tests: add CI job(s) that run an in-process export (see `server/scripts/run_export_test_inproc.js`) and validate the produced PDF header (`%PDF-`) and a small set of expected strings.
+- PDF inspection: use `pdfimages`, `mutool`, or a full PDF parser to examine embedded images and validate expected pages/contents. Example: `pdfimages -list /tmp/output.pdf` to enumerate images.
+
+Implementation suggestions
+
+- Rasterization: use a robust image library (eg. `sharp`) for SVG → PNG conversions, or let Puppeteer render the SVG in a headless page and capture as PNG when complex CSS or external fonts are involved.
+- Static serving: configure Express `express.static(ASSET_DIR)` with cache headers appropriate for your workflow (long cache for production-hashed assets, short/no-cache in CI/dev).
+- CI: for reproducible CI runs, set `ALLOW_REMOTE_ASSETS=0`, mount or copy `server/public/` assets into the runner workspace before running the export smoke test, and set `CHROME_PATH` to the test Chrome binary.
+
+Verification commands (examples)
+
+- Extract images from PDF:
+  ```bash
+  pdfimages -list /tmp/your-export.pdf
+  pdfimages /tmp/your-export.pdf /tmp/extracted-img
+  ```
+- Verify PDF magic header and simple text extract:
+  ```bash
+  head -c 4 /tmp/your-export.pdf  # should show %PDF
+  node server/scripts/extract-pdf-text.js /tmp/your-export.pdf
+  ```
+
+These changes help ensure the preview/export pipeline behaves consistently across developer machines and CI. See the [project root README](../README.md) for overall architecture and development philosophy.
 
 ## Development
 
