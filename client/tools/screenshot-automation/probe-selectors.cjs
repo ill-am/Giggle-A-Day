@@ -1,4 +1,4 @@
-const puppeteer = require("puppeteer");
+const puppeteer = require("puppeteer-core");
 const path = require("path");
 const config = require(path.resolve(
   __dirname,
@@ -10,6 +10,7 @@ const config = require(path.resolve(
   const browser = await puppeteer.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome-stable",
   });
   const page = await browser.newPage();
   try {

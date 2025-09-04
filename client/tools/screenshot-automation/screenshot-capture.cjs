@@ -1,5 +1,4 @@
-const puppeteer = require("puppeteer");
-const path = require("path");
+const puppeteer = require("puppeteer-core");
 const path = require("path");
 const config = require(path.resolve(
   __dirname,
@@ -26,6 +25,7 @@ async function captureScreenshots() {
       "--disable-dev-shm-usage",
       "--disable-gpu",
     ],
+    executablePath: process.env.CHROME_PATH || "/usr/bin/google-chrome-stable",
   });
 
   try {
