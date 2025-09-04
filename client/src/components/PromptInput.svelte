@@ -26,15 +26,18 @@
 
   const handleSubmit = async () => {
     if (!currentPrompt || !currentPrompt.trim()) {
+      try { console.debug('[DEV] PromptInput: setting uiState error: Prompt cannot be empty.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
       return;
     }
     isGenerating = true;
+    try { console.debug('[DEV] PromptInput: setting uiState loading: Generating content...'); } catch(e){}
     uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
       const response = await submitPrompt(currentPrompt);
       if (response && response.data) {
         contentStore.set(response.data.content);
+        try { console.debug('[DEV] PromptInput: setting uiState success: Content generated successfully.'); } catch(e){}
         uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
         // Auto-trigger preview after generation completes
         await handlePreviewNow();
@@ -42,6 +45,7 @@
         throw new Error('Invalid response structure from server.');
       }
     } catch (error) {
+      try { console.debug('[DEV] PromptInput: setting uiState error:', error && error.message); } catch(e){}
       uiStateStore.set({ status: 'error', message: error.message || 'An unknown error occurred.' });
     }
     finally {
@@ -54,17 +58,21 @@
   const handlePreviewNow = async () => {
     const current = get(contentStore);
     if (!current) {
+      try { console.debug('[DEV] handlePreviewNow: setting uiState error: No content to preview.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
       return;
     }
     isPreviewing = true;
     try {
+      try { console.debug('[DEV] handlePreviewNow: setting uiState loading: Loading preview...'); } catch(e){}
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
       const html = await import('../lib/api').then((m) => m.loadPreview(current));
       const { previewStore } = await import('../stores');
       previewStore.set(html);
+      try { console.debug('[DEV] handlePreviewNow: setting uiState success: Preview updated'); } catch(e){}
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
+      try { console.debug('[DEV] handlePreviewNow: setting uiState error:', err && err.message); } catch(e){}
       uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
     } finally {
       isPreviewing = false;
@@ -75,10 +83,12 @@
   const runSmokeTest = async () => {
     const current = get(contentStore);
     if (!current) {
+      try { console.debug('[DEV] runSmokeTest: setting uiState error: No content to run smoke test.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'No content to run smoke test. Load or generate content first.' });
       return;
     }
 
+    try { console.debug('[DEV] runSmokeTest: setting uiState loading: Running smoke test (preview → export)...'); } catch(e){}
     uiStateStore.set({ status: 'loading', message: 'Running smoke test (preview → export)...' });
     try {
       // Ensure preview renders
@@ -87,6 +97,7 @@
       // Trigger export which downloads a PDF if successful
       await exportToPdf(current);
 
+      try { console.debug('[DEV] runSmokeTest: setting uiState success: Smoke test succeeded — PDF downloaded.'); } catch(e){}
       uiStateStore.set({ status: 'success', message: 'Smoke test succeeded — PDF downloaded.' });
     } catch (err) {
       // Create a diagnostic JSON blob and trigger download
@@ -106,6 +117,7 @@
       window.URL.revokeObjectURL(url);
       a.remove();
 
+      try { console.debug('[DEV] runSmokeTest: setting uiState error: Smoke test failed — diagnostic saved.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'Smoke test failed — diagnostic saved.' });
     }
   };
