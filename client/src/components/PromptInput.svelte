@@ -35,13 +35,26 @@
     uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
       const response = await submitPrompt(currentPrompt);
-      if (response && response.data) {
-        contentStore.set(response.data.content);
+      // Defensive handling: server may return multiple shapes. Accept the common variants:
+      // { data: { content: {...} } } or { content: {...} } or { data: {...} }
+      try { console.debug('[DEV] PromptInput: submitPrompt response', response); } catch (e) {}
+      let newContent = null;
+      if (response) {
+        if (response.data && response.data.content) newContent = response.data.content;
+        else if (response.content) newContent = response.content;
+        else if (response.data && response.data.title && response.data.body) newContent = response.data;
+        else if (response.title && response.body) newContent = response;
+      }
+
+      if (newContent) {
+        contentStore.set(newContent);
         try { console.debug('[DEV] PromptInput: setting uiState success: Content generated successfully.'); } catch(e){}
         uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
         // Auto-trigger preview after generation completes
         await handlePreviewNow();
       } else {
+        // Surface the unexpected response shape for debugging
+        console.error('[DEV] PromptInput: unexpected submitPrompt response shape', response);
         throw new Error('Invalid response structure from server.');
       }
     } catch (error) {
@@ -153,25 +166,11 @@
     >
       Summer suggestion
     </button>
-  <button
+    <button
       class="demo"
-      on:click={() => {
-        // Populate the content store directly with a V0.1 demo payload
-        const demo = {
-          title: 'Summer Poems — Demo',
-          body: '<div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer1.svg);background-size:cover;background-position:center;"><h1>Summer Poem 1</h1><p>By Unknown</p><pre>Roses are red\nViolets are blue\nSummer breeze carries you</pre></div><div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer2.svg);background-size:cover;background-position:center;"><h1>Summer Poem 2</h1><p>By Unknown</p><pre>Sun on the sand\nWaves lap the shore\nA page on each</pre></div>'
-        };
-    // Set both the editor prompt and the generated content so the UI
-    // visibly reflects the demo immediately.
-    promptStore.set('Load demo: two short summer poems, one per page');
-    contentStore.set(demo);
-    // Trigger a preview update and show an immediate status so the user
-    // sees activity on the page (not only in the terminal).
-    uiStateStore.set({ status: 'loading', message: 'Loading demo preview...' });
-    // Use the existing preview flow to populate the preview pane.
-    handlePreviewNow();
-      }}
-      title="Load full V0.1 demo content"
+      style="display:none"
+      aria-hidden="true"
+      title="Load full V0.1 demo content (developer helper - hidden)"
       data-testid="load-demo"
       disabled={uiState.status === 'loading'}
     >
@@ -191,7 +190,7 @@
         Preview
       {/if}
     </button>
-    <button data-testid="smoke-button" title="Run preview→export smoke test" on:click={runSmokeTest} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+    <button data-testid="smoke-button" style="display:none" aria-hidden="true" title="Run preview→export smoke test (developer helper - hidden)" on:click={runSmokeTest} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
       Run smoke test
     </button>
   </div>

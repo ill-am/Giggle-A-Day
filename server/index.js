@@ -394,7 +394,9 @@ app.use((req, res, next) => {
 // environment. This protects the dev server if you need to make forwarded
 // ports public during testing. It intentionally allows the root and health
 // routes so platform readiness and probes continue to work.
-if (process.env.DEV_AUTH_TOKEN) {
+// Only enable dev auth when explicitly running in development mode.
+// This avoids unexpected 401s during automated test runs (NODE_ENV === 'test').
+if (process.env.DEV_AUTH_TOKEN && process.env.NODE_ENV === "development") {
   app.use((req, res, next) => {
     try {
       if (req.path === "/" || req.path === "/health") return next();
@@ -680,7 +682,8 @@ app.get("/preview", (req, res) => {
 
 // DEV-ONLY: return the rewritten HTML that will be used for export so
 // we can inspect whether SVGs were inlined or rasterized to data-URIs.
-if (process.env.DEV_AUTH_TOKEN) {
+// Only enable when running in development mode so tests are not affected.
+if (process.env.DEV_AUTH_TOKEN && process.env.NODE_ENV === "development") {
   app.post("/debug/export-html", async (req, res) => {
     const token = req.headers["x-dev-auth"] || req.query.dev_token;
     if (token !== process.env.DEV_AUTH_TOKEN)

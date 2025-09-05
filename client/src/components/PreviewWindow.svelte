@@ -33,6 +33,14 @@
     } catch (e) {}
   }
 
+  // Dev-only DOM marker to help automated verification detect updates
+  $: if (import.meta.env.DEV && $previewStore) {
+    try {
+      const el = document.querySelector('.preview-container');
+      if (el) el.setAttribute('data-preview-updated', String(Date.now()));
+    } catch (e) {}
+  }
+
   // Background preview URL derived from content.background (filename or absolute URL)
   $: bgUrl = null;
   $: if (content && content.background) {
