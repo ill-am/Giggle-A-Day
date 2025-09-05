@@ -1,8 +1,13 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // Load .env files so DEV_AUTH_TOKEN is available to the dev server proxy
+  const env = loadEnv(mode, process.cwd(), "");
+  const DEV_AUTH_TOKEN = env.DEV_AUTH_TOKEN || process.env.DEV_AUTH_TOKEN;
+
+  return {
   plugins: [svelte()],
   server: {
     host: true, // Listen on all addresses
@@ -17,133 +22,10 @@ export default defineConfig({
         : "localhost",
     },
     proxy: {
-      "/prompt": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        secure: false,
-        // Attach proxy event hooks to surface backend errors as clearer 502 responses
-        configure(proxy, options) {
-          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
-          proxy.on("proxyReq", (proxyReq, req, res) => {
-            try {
-              if (process.env.DEV_AUTH_TOKEN) {
-                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
-              }
-            } catch (e) {}
-          });
-          proxy.on("proxyRes", (proxyRes, req, res) => {
-            // Forward short backend error header to the client if present
-            const backendError = proxyRes.headers["x-backend-error"];
-            const requestId = proxyRes.headers["x-request-id"];
-            if (backendError) res.setHeader("X-Backend-Error", backendError);
-            if (requestId) res.setHeader("X-Request-Id", requestId);
-          });
-          proxy.on("error", (err, req, res) => {
-            // If the backend is down or there is a proxy error, respond with 502 and a short JSON
-            try {
-              if (!res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    error: "Bad Gateway",
-                    reason:
-                      err && err.message ? String(err.message) : "proxy_error",
-                  })
-                );
-              }
-            } catch (e) {
-              // swallow errors
-            }
-          });
-        },
-      },
-      "/preview": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        secure: false,
-        configure(proxy) {
-          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
-          proxy.on("proxyReq", (proxyReq, req, res) => {
-            try {
-              if (process.env.DEV_AUTH_TOKEN) {
-                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
-              }
-            } catch (e) {}
-          });
-          proxy.on("error", (err, req, res) => {
-            try {
-              if (!res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    error: "Bad Gateway",
-                    reason:
-                      err && err.message ? String(err.message) : "proxy_error",
-                  })
-                );
-              }
-            } catch (e) {}
-          });
-        },
-      },
-      "/override": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        secure: false,
-        configure(proxy) {
-          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
-          proxy.on("proxyReq", (proxyReq, req, res) => {
-            try {
-              if (process.env.DEV_AUTH_TOKEN) {
-                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
-              }
-            } catch (e) {}
-          });
-          proxy.on("error", (err, req, res) => {
-            try {
-              if (!res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    error: "Bad Gateway",
-                    reason:
-                      err && err.message ? String(err.message) : "proxy_error",
-                  })
-                );
-              }
-            } catch (e) {}
-          });
-        },
-      },
-      "/export": {
-        target: "http://localhost:3000",
-        changeOrigin: true,
-        secure: false,
-        configure(proxy) {
-          // Inject DEV_AUTH_TOKEN into proxied requests when present (dev-only)
-          proxy.on("proxyReq", (proxyReq, req, res) => {
-            try {
-              if (process.env.DEV_AUTH_TOKEN) {
-                proxyReq.setHeader("x-dev-auth", process.env.DEV_AUTH_TOKEN);
-              }
-            } catch (e) {}
-          });
-          proxy.on("error", (err, req, res) => {
-            try {
-              if (!res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json" });
-                res.end(
-                  JSON.stringify({
-                    error: "Bad Gateway",
-                    reason:
-                      err && err.message ? String(err.message) : "proxy_error",
-                  })
-                );
-              }
-            } catch (e) {}
-          });
-        },
-      },
+      "/prompt": createProxy("/prompt", DEV_AUTH_TOKEN),
+      "/preview": createProxy("/preview", DEV_AUTH_TOKEN),
+      "/override": createProxy("/override", DEV_AUTH_TOKEN),
+      "/export": createProxy("/export", DEV_AUTH_TOKEN),
     },
     fs: {
       strict: true,
@@ -163,3 +45,40 @@ export default defineConfig({
     include: ["svelte"],
   },
 });
+
+// Helper to build proxy configuration objects with consistent hooks
+function createProxy(path, DEV_AUTH_TOKEN) {
+  return {
+    target: "http://localhost:3000",
+    changeOrigin: true,
+    secure: false,
+    configure(proxy) {
+      proxy.on("proxyReq", (proxyReq, req, res) => {
+        try {
+          if (DEV_AUTH_TOKEN) {
+            proxyReq.setHeader("x-dev-auth", DEV_AUTH_TOKEN);
+          }
+        } catch (e) {}
+      });
+      proxy.on("proxyRes", (proxyRes, req, res) => {
+        const backendError = proxyRes.headers["x-backend-error"];
+        const requestId = proxyRes.headers["x-request-id"];
+        if (backendError) res.setHeader("X-Backend-Error", backendError);
+        if (requestId) res.setHeader("X-Request-Id", requestId);
+      });
+      proxy.on("error", (err, req, res) => {
+        try {
+          if (!res.headersSent) {
+            res.writeHead(502, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                error: "Bad Gateway",
+                reason: err && err.message ? String(err.message) : "proxy_error",
+              })
+            );
+          }
+        } catch (e) {}
+      });
+    },
+  };
+}
