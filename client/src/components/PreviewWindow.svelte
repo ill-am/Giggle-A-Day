@@ -1,6 +1,8 @@
 <script>
   import { contentStore, previewStore, uiStateStore } from '../stores';
   import { loadPreview } from '../lib/api';
+  import Spinner from './Spinner.svelte';
+  import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
 
   import { debounce } from '../lib/utils';
@@ -19,6 +21,18 @@
     uiState = value;
   });
 
+  // expose debug hook for automated verification: latest preview HTML
+  let latestPreviewHtml = '';
+  $: if ($previewStore) {
+    latestPreviewHtml = $previewStore;
+    try {
+  // @ts-ignore
+  window.__preview_updated_ts = Date.now();
+  // @ts-ignore
+  window.__preview_html_snippet = String($previewStore).slice(0, 1200);
+    } catch (e) {}
+  }
+
   // Background preview URL derived from content.background (filename or absolute URL)
   $: bgUrl = null;
   $: if (content && content.background) {
@@ -32,28 +46,45 @@
   // Preview controls
   let autoPreview = true;
   let flash = false;
+  // update token to prevent race conditions
+  let latestUpdateId = 0;
+  let isPreviewing = false;
 
   const updatePreview = async (newContent) => {
     if (!newContent) {
       previewStore.set('');
       return;
     }
+    const updateId = ++latestUpdateId;
+    isPreviewing = true;
+    // show loading state
+    uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
+    // enforce minimal skeleton visibility to avoid flash
+    const skeletonShownAt = Date.now();
     try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
       const html = await loadPreview(newContent);
-      previewStore.set(html);
-      // trigger brief flash to draw attention
-      flash = true;
-      setTimeout(() => (flash = false), 600);
-      uiStateStore.set({ status: 'success', message: 'Preview loaded' });
+      // only apply if this update matches latest
+      if (updateId === latestUpdateId) {
+        const elapsed = Date.now() - skeletonShownAt;
+        const minVisible = 300;
+        if (elapsed < minVisible) await new Promise(r => setTimeout(r, minVisible - elapsed));
+        previewStore.set(html);
+        flash = true;
+        setTimeout(() => (flash = false), 600);
+        uiStateStore.set({ status: 'success', message: 'Preview loaded' });
+      }
     } catch (error) {
-      uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
-      previewStore.set('');
+      if (updateId === latestUpdateId) {
+        uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
+        previewStore.set('');
+      }
+    } finally {
+      if (updateId === latestUpdateId) isPreviewing = false;
     }
   };
 
-  // Debounced auto update to avoid rapid requests
-  const debouncedUpdate = debounce(updatePreview, 350);
+  // Debounced auto update to avoid rapid requests (200ms for snappier feel)
+  const debouncedUpdate = debounce(updatePreview, 200);
 
   onMount(() => {
     if (content) {
@@ -62,7 +93,7 @@
   });
 </script>
 
-<div class="preview-container">
+  <div class="preview-container">
   <div class="preview-controls">
     <label><input type="checkbox" data-testid="auto-preview-checkbox" bind:checked={autoPreview} /> Auto-preview</label>
     <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>
@@ -74,11 +105,7 @@
     </button>
   </div>
 
-  {#if uiState.status === 'loading'}
-    <div class="loading-overlay">
-      <p>Loading Preview...</p>
-    </div>
-  {:else if $previewStore}
+  {#if $previewStore}
     <div class="preview-stage {flash ? 'flash' : ''}">
       {#if bgUrl}
         <div class="bg-preview"><img src={bgUrl} alt="background preview" /></div>
@@ -86,6 +113,11 @@
       <div class="preview-content" data-testid="preview-content">
         {@html $previewStore}
       </div>
+    </div>
+  {:else if isPreviewing || uiState.status === 'loading'}
+    <div class="loading-overlay">
+      <PreviewSkeleton />
+      <div class="center-spinner"><Spinner /></div>
     </div>
   {:else}
     <div class="placeholder">

@@ -61,7 +61,9 @@
 {/if}
 
 <!-- Dev-only visible indicator to confirm uiState updates in browsers where the banner might be hidden -->
-<div class="dev-ui-state" aria-hidden="true">DEV UI STATE: {uiState.status} {uiState.message}</div>
+{#if import.meta.env.VITE_DEV_UI === 'true'}
+  <div class="dev-ui-state" aria-hidden="true">DEV UI STATE: {uiState.status} {uiState.message}</div>
+{/if}
 
 <style>
   .status-banner {

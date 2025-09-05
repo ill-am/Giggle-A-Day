@@ -1,6 +1,6 @@
 <script>
-  import { promptStore, contentStore, uiStateStore } from '../stores';
-  import { submitPrompt, exportToPdf } from '../lib/api';
+  import { promptStore, contentStore, uiStateStore, previewStore } from '../stores';
+  import { submitPrompt, exportToPdf, loadPreview } from '../lib/api';
 
   let currentPrompt;
   promptStore.subscribe(value => {
@@ -66,9 +66,18 @@
     try {
       try { console.debug('[DEV] handlePreviewNow: setting uiState loading: Loading preview...'); } catch(e){}
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      const html = await import('../lib/api').then((m) => m.loadPreview(current));
-      const { previewStore } = await import('../stores');
+      const html = await loadPreview(current);
       previewStore.set(html);
+      // Debug hook: expose snippet for automated verification
+      try {
+        // eslint-disable-next-line no-undef
+        window.__preview_html_snippet = String(html).slice(0, 1200);
+      } catch (e) {}
+      // Debug hook for automated verification: mark preview container when updated
+      try {
+        const pc = document.querySelector('.preview-container');
+        if (pc) pc.setAttribute('data-preview-updated', String(Date.now()));
+      } catch (e) {}
       try { console.debug('[DEV] handlePreviewNow: setting uiState success: Preview updated'); } catch(e){}
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
@@ -168,13 +177,13 @@
     >
       Load V0.1 demo
     </button>
-    <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
-      {#if isGenerating}
-        Generating...
-      {:else}
-        Generate
-      {/if}
-    </button>
+      <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+        {#if isGenerating}
+          <span class="btn-spinner" aria-hidden="true"></span> Generating...
+        {:else}
+          Generate
+        {/if}
+      </button>
     <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
       {#if isPreviewing}
         Previewing...
