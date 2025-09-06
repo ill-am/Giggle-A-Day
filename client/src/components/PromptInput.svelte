@@ -1,6 +1,7 @@
 <script>
   import { promptStore, contentStore, uiStateStore, previewStore } from '../stores';
   import { submitPrompt, exportToPdf, loadPreview } from '../lib/api';
+    import { get } from 'svelte/store';
 
   let currentPrompt;
   promptStore.subscribe(value => {
@@ -23,8 +24,16 @@
 
   let isGenerating = false;
   let isPreviewing = false;
+  // Step 1A: typed-prompt dialog state (do NOT call model in this stage)
+  let showTypedPromptDialog = false;
+  let typedPrompt = '';
+  // Short-term visual feedback: flash the Generate button when clicked
+  let generateFlash = false;
+  // Preserve original body background for temporary flash
+  let originalBodyBg = '';
 
   const handleSubmit = async () => {
+    // Full generation flow (kept for later steps). Not used for Step 1A.
     if (!currentPrompt || !currentPrompt.trim()) {
       try { console.debug('[DEV] PromptInput: setting uiState error: Prompt cannot be empty.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
@@ -66,7 +75,92 @@
     }
   };
 
-  import { get } from 'svelte/store';
+  // Step 1A: intercept Generate button to show typed-prompt dialog only (no model call)
+  const handleGenerateClick = () => {
+    const p = get(promptStore);
+    if (!p || !p.trim()) {
+      try { console.debug('[DEV] PromptInput: setting uiState error: Prompt cannot be empty.'); } catch(e){}
+      uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
+      return;
+    }
+    // Short-term UX: flash the Generate button (no modal, no model call)
+    typedPrompt = p;
+    generateFlash = true;
+    // ensure flash is visible briefly
+    setTimeout(() => { generateFlash = false; }, 700);
+    // flash the preview container background to show visible activity local to the preview area
+    try {
+      const pc = document.querySelector('.preview-container');
+      if (pc) {
+        const prevBg = pc.style.backgroundColor || getComputedStyle(pc).backgroundColor || '';
+        pc.style.backgroundColor = '#ffdddd';
+        pc.setAttribute('data-preview-flash', '1');
+        setTimeout(() => {
+          try { pc.style.backgroundColor = prevBg || ''; pc.removeAttribute('data-preview-flash'); } catch (e){}
+        }, 700);
+      }
+    } catch (e) {}
+  // (diagnostic overlay removed) — rely on contentStore/previewStore updates only
+    // Option B: local preview shortcut — create a mock content object and render locally
+    try {
+      const localContent = { title: (typedPrompt || '').split('\n')[0].slice(0, 80) || 'Untitled', body: typedPrompt };
+      // Set contentStore so codebase flow sees content
+      contentStore.set(localContent);
+      // Build local preview HTML and set previewStore directly (avoids network)
+  const html = buildLocalPreviewHtml(localContent);
+      try { console.debug('[DEV] PromptInput: about to previewStore.set (local) length=', String(html).length); } catch (e) {}
+      previewStore.set(html);
+      try { console.debug('[DEV] PromptInput: previewStore.set (local) done'); } catch (e) {}
+      // Mark DOM with source so we can detect overwrites/hiding in the browser
+      try {
+        const pc = document.querySelector('.preview-container');
+        if (pc) {
+          pc.setAttribute('data-preview-source', `local:${Date.now()}`);
+        }
+      } catch (e) {}
+      // mark UI state and DOM marker similar to real flow
+      uiStateStore.set({ status: 'success', message: 'Preview (local) updated' });
+      try { const pc = document.querySelector('.preview-container'); if (pc) pc.setAttribute('data-preview-local', String(Date.now())); } catch (e) {}
+    } catch (e) {
+      uiStateStore.set({ status: 'error', message: 'Local preview failed' });
+    }
+    // intentionally do not call submitPrompt in Step 1A
+    showTypedPromptDialog = false;
+  };
+
+  // Diagnostic overlay removed — preview is updated only via contentStore/previewStore
+
+  // Build a tiny client-side preview HTML (safe-escaped) to emulate server preview
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const buildLocalPreviewHtml = (content) => {
+    const title = escapeHtml(content.title || 'Preview');
+    const body = escapeHtml(content.body || '');
+    // Minimal styling to make it visible and similar to server output
+    return `
+      <article class="local-preview-quick" style="padding:1.25rem">
+        <h2 style=\"margin-top:0;\">${title}</h2>
+        <div>${body.replace(/\n/g, '<br/>')}</div>
+      </article>
+    `;
+  };
+
+  const closeTypedPromptDialog = () => {
+    showTypedPromptDialog = false;
+    // Return focus to the textarea for keyboard users
+    const el = document.getElementById('prompt-textarea');
+    if (el) el.focus();
+  };
+
+  
 
   const handlePreviewNow = async () => {
     const current = get(contentStore);
@@ -79,8 +173,16 @@
     try {
       try { console.debug('[DEV] handlePreviewNow: setting uiState loading: Loading preview...'); } catch(e){}
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      const html = await loadPreview(current);
+  const html = await loadPreview(current);
+      try { console.debug('[DEV] PromptInput: about to previewStore.set (server) length=', String(html).length); } catch (e) {}
       previewStore.set(html);
+      try { console.debug('[DEV] PromptInput: previewStore.set (server) done'); } catch (e) {}
+      try {
+        const pc = document.querySelector('.preview-container');
+        if (pc) {
+          pc.setAttribute('data-preview-source', `server:${Date.now()}`);
+        }
+      } catch (e) {}
       // Debug hook: expose snippet for automated verification
       try {
         // eslint-disable-next-line no-undef
@@ -153,7 +255,7 @@
     bind:value={$promptStore}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
-    disabled={uiState.status === 'loading'}
+  disabled={(uiState && uiState.status === 'loading')}
   ></textarea>
   <div class="controls-row">
     <button
@@ -176,14 +278,14 @@
     >
       Load V0.1 demo
     </button>
-      <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+  <button data-testid="generate-button" class:flash={generateFlash} on:click={handleGenerateClick} disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}>
         {#if isGenerating}
           <span class="btn-spinner" aria-hidden="true"></span> Generating...
         {:else}
           Generate
         {/if}
       </button>
-    <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+  <button data-testid="preview-button" on:click={handlePreviewNow} disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}>
       {#if isPreviewing}
         Previewing...
       {:else}
@@ -199,6 +301,18 @@
     <p class="error-message">{uiState.message}</p>
   {/if}
 </div>
+
+  {#if showTypedPromptDialog}
+    <div class="typed-prompt-backdrop" role="dialog" aria-modal="true">
+      <div class="typed-prompt-modal" role="document">
+    <h3 id="typed-prompt-title">Hi</h3>
+  <p class="typed-prompt-text">Hi</p>
+        <div class="typed-prompt-actions">
+          <button on:click={closeTypedPromptDialog} data-testid="typed-prompt-ok">OK</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
 <style>
   .prompt-container {
@@ -240,5 +354,33 @@
   .error-message {
     color: #e74c3c;
     margin-top: 0.5rem;
+  }
+  /* Typed prompt modal styles (Step 1A) */
+  .typed-prompt-backdrop {
+    position: fixed;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .typed-prompt-modal {
+    background: white;
+    padding: 1rem 1.25rem;
+    border-radius: 8px;
+    max-width: 640px;
+    width: 90%;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+  }
+  .typed-prompt-text { margin-top: 0.5rem; white-space: pre-wrap }
+  .typed-prompt-actions { margin-top: 1rem; text-align: right }
+  button.flash {
+    background-color: #c0392b !important;
+    box-shadow: 0 0 0 4px rgba(192,57,43,0.12);
+    transform: scale(1.03);
   }
 </style>

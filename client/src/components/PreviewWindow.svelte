@@ -25,11 +25,12 @@
   let latestPreviewHtml = '';
   $: if ($previewStore) {
     latestPreviewHtml = $previewStore;
+    try { console.debug('[DEV] PreviewWindow: $previewStore length=', String($previewStore).length); } catch (e) {}
     try {
-  // @ts-ignore
-  window.__preview_updated_ts = Date.now();
-  // @ts-ignore
-  window.__preview_html_snippet = String($previewStore).slice(0, 1200);
+      // @ts-ignore
+      window.__preview_updated_ts = Date.now();
+      // @ts-ignore
+      window.__preview_html_snippet = String($previewStore).slice(0, 1200);
     } catch (e) {}
   }
 
@@ -118,7 +119,7 @@
       {#if bgUrl}
         <div class="bg-preview"><img src={bgUrl} alt="background preview" /></div>
       {/if}
-      <div class="preview-content" data-testid="preview-content">
+      <div id="preview-content" class="preview-content" data-testid="preview-content">
         {@html $previewStore}
       </div>
     </div>
@@ -143,6 +144,7 @@
     border-radius: 8px;
     background-color: #f9f9f9;
     overflow-y: auto;
+    min-height: 240px; /* ensure preview area isn't collapsed to zero height */
   }
   .loading-overlay, .placeholder {
     display: flex;

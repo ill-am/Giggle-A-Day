@@ -61,4 +61,10 @@
     padding: 1rem;
     min-height: 500px;
   }
+
+  @media (max-width: 768px) {
+    .container {
+      flex-direction: column;
+    }
+  }
 </style>
