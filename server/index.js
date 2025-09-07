@@ -776,7 +776,7 @@ app.post("/override", (req, res) => {
 
 // --- PDF EXPORT ENDPOINT ---
 // Backwards-compatible export endpoint: accept GET with query or POST with JSON body
-app.post("/api/export", async (req, res, next) => {
+app.post("/api/export", async (req, res) => {
   const fs = require("fs");
   const path = require("path");
   const {
@@ -871,7 +871,7 @@ app.post("/api/export", async (req, res, next) => {
 });
 
 // Backwards-compatible POST /export for legacy clients that post to /export
-app.post("/export", async (req, res, next) => {
+app.post("/export", async (req, res) => {
   const {
     sendValidationError,
     sendProcessingError,
@@ -2363,6 +2363,8 @@ module.exports.gracefulShutdown = gracefulShutdown;
 app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();
   const requestId = req && req.id ? req.id : "-";
+  // reference unused next param so linters don't complain
+  void _next;
   console.error("--- Error Handler ---");
   console.error("Time:", timestamp);
   console.error("RequestId:", requestId);
@@ -2445,7 +2447,13 @@ app.use((err, req, res, _next) => {
       } else {
         try {
           res.end();
-        } catch (er) {}
+        } catch (er) {
+          // Log but don't rethrow — this was previously swallowed silently
+          console.warn(
+            "Failed to end response cleanly:",
+            er && er.message ? er.message : er
+          );
+        }
       }
     } catch (ee) {
       // ignore final shutdown errors
