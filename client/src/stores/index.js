@@ -27,3 +27,11 @@ export const previewStore = writable("");
  * @type {import('svelte/store').Writable<{status: UIState, message: string}>}
  */
 export const uiStateStore = writable({ status: "idle", message: "" });
+
+/**
+ * Store that holds a cancel function for the currently running preview request
+ * (or null). Components may set this to allow cancellation from a different UI
+ * surface.
+ * @type {import('svelte/store').Writable<(() => void) | null>}
+ */
+export const previewAbortStore = writable(null);

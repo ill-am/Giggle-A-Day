@@ -1,6 +1,6 @@
 <script lang="ts">
   import { contentStore, uiStateStore } from '../stores';
-  import { exportToPdf } from '../lib/api';
+  import { exportToPdf, abortableFetch } from '../lib/api';
 
   let content: object | null;
   contentStore.subscribe(value => {
@@ -15,6 +15,7 @@
   // Local progress for export (0-100)
   let progress = 0;
   let progressInterval = null;
+  let currentExportAbort = null;
   let lastError: string | null = null;
 
   const handleExport = async () => {
@@ -33,17 +34,42 @@
       progress = Math.min(99, Math.round(progress));
     }, 400);
 
-  try {
-      // Kick off the real export; this returns when download begins
-      await exportToPdf(content);
-      // On success, finish progress and clear interval
+    try {
+      // Start abortable export using /api/export
+      if (currentExportAbort) {
+        try { currentExportAbort(); } catch (e) {}
+        currentExportAbort = null;
+      }
+      const { promise, abort } = abortableFetch('/api/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(content),
+        retryConfig: { maxRetries: 1, initialBackoffMs: 200, maxBackoffMs: 2000 },
+      });
+      currentExportAbort = abort;
+      const resp = await promise;
+      currentExportAbort = null;
+      if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
+      const blob = await resp.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `AetherPress-Export-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
       progress = 100;
       lastError = null;
       uiStateStore.set({ status: 'success', message: 'PDF exported successfully.' });
     } catch (error) {
-      const err = error as Error;
-      lastError = err.message || 'Unknown error';
-      uiStateStore.set({ status: 'error', message: `Export failed: ${err.message}` });
+      if (error && error.name === 'AbortError') {
+        uiStateStore.set({ status: 'idle', message: 'Export canceled' });
+      } else {
+        const err = error;
+        lastError = err && err.message ? err.message : 'Unknown error';
+        uiStateStore.set({ status: 'error', message: `Export failed: ${lastError}` });
+      }
     } finally {
       if (progressInterval) {
         clearInterval(progressInterval);
@@ -55,6 +81,16 @@
       }, 800);
     }
   };
+
+  function cancelExport() {
+    if (currentExportAbort) {
+      try { currentExportAbort(); } catch (e) {}
+      currentExportAbort = null;
+      uiStateStore.set({ status: 'idle', message: 'Export canceled' });
+      if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+      progress = 0;
+    }
+  }
 
   const handleRetry = () => {
     // Clear last error and trigger export again
@@ -78,9 +114,12 @@
           Export to PDF
         {/if}
       </button>
-      {#if uiState.status === 'error' && lastError}
+        {#if uiState.status === 'error' && lastError}
         <button class="retry" on:click={handleRetry} data-testid="retry-button">Retry</button>
       {/if}
+        {#if uiState.status === 'loading'}
+          <button class="cancel" on:click={cancelExport} data-testid="cancel-export-button">Cancel</button>
+        {/if}
     </div>
     {#if uiState.status === 'loading'}
       <div class="progress-bar"><div class="progress" style="width: {progress}%"></div></div>

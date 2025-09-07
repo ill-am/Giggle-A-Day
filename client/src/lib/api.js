@@ -9,11 +9,15 @@ const DEFAULT_CONFIG = {
   retryableStatuses: [408, 429, 500, 502, 503, 504],
 };
 
+// Enhanced fetch that supports AbortController and per-call retryConfig.
+// Returns a Promise that resolves with the Response (or rejects on error/abort).
 async function fetchWithRetry(url, options = {}) {
   const config = {
     ...DEFAULT_CONFIG,
-    ...options.retryConfig,
+    ...(options.retryConfig || {}),
   };
+  // allow callers to pass an AbortSignal via options.signal
+  const signal = options.signal;
   delete options.retryConfig;
 
   const endpoint = new URL(url, window.location.origin).pathname;
@@ -26,44 +30,43 @@ async function fetchWithRetry(url, options = {}) {
 
   let lastError;
 
-  for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
+  for (let attempt = 1; attempt <= Math.max(1, config.maxRetries); attempt++) {
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, { ...options, signal });
 
-      // Log the response
       Logger.apiResponse(endpoint, response.status, {
         attempt,
         ok: response.ok,
       });
 
-      // Successful response
       if (response.ok) return response;
 
-      // Check if we should retry based on status
-      if (config.retryableStatuses.includes(response.status)) {
-        if (attempt < config.maxRetries) {
-          // Calculate backoff with jitter
-          const backoff = Math.min(
-            config.maxBackoffMs,
-            config.initialBackoffMs * Math.pow(2, attempt - 1)
-          );
-          const jitter = Math.random() * 100;
-          const nextAttemptIn = Math.round((backoff + jitter) / 1000);
-
-          Logger.apiRetry(endpoint, attempt, config.maxRetries, {
-            status: response.status,
-            nextAttemptIn,
-          });
-
-          await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
-          continue;
-        }
+      if (
+        config.retryableStatuses.includes(response.status) &&
+        attempt < config.maxRetries
+      ) {
+        const backoff = Math.min(
+          config.maxBackoffMs,
+          config.initialBackoffMs * Math.pow(2, attempt - 1)
+        );
+        const jitter = Math.random() * 100;
+        Logger.apiRetry(endpoint, attempt, config.maxRetries, {
+          status: response.status,
+          nextAttemptIn: Math.round((backoff + jitter) / 1000),
+        });
+        await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+        continue;
       }
 
       return response;
     } catch (error) {
-      lastError = error;
+      // Abort errors should propagate immediately
+      if (error && error.name === "AbortError") {
+        Logger.apiError(endpoint, error, { attempt: "abort" });
+        throw error;
+      }
 
+      lastError = error;
       Logger.apiError(endpoint, error, {
         attempt,
         maxRetries: config.maxRetries,
@@ -75,12 +78,19 @@ async function fetchWithRetry(url, options = {}) {
         config.maxBackoffMs,
         config.initialBackoffMs * Math.pow(2, attempt - 1)
       );
-
       await new Promise((resolve) => setTimeout(resolve, backoff));
     }
   }
 
   throw lastError;
+}
+
+// Helper: returns { promise, abort } where abort() cancels the request.
+export function abortableFetch(url, options = {}) {
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const promise = fetchWithRetry(url, { ...options, signal });
+  return { promise, abort: () => controller.abort() };
 }
 
 // API endpoints

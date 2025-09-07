@@ -1,9 +1,11 @@
 <script>
   import { contentStore, previewStore, uiStateStore } from '../stores';
-  import { loadPreview } from '../lib/api';
+  import { previewAbortStore } from '../stores';
+  import { loadPreview, abortableFetch } from '../lib/api';
   import Spinner from './Spinner.svelte';
   import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
 
   import { debounce } from '../lib/utils';
 
@@ -31,8 +33,19 @@
       window.__preview_updated_ts = Date.now();
       // @ts-ignore
       window.__preview_html_snippet = String($previewStore).slice(0, 1200);
+      // Dev helper: expose function to read the full preview HTML easily
+      try { /** @type {any} */ (window).__getPreviewHtml = () => String($previewStore || ''); } catch (e) {}
+      try { /** @type {any} */ (window).__getUiState = () => uiState || null; } catch (e) {}
     } catch (e) {}
   }
+
+  onDestroy(() => {
+    try { /** @type {any} */ (window).__getPreviewHtml = null; } catch (e) {}
+    try { /** @type {any} */ (window).__getUiState = null; } catch (e) {}
+    try { /** @type {any} */ (window).__previewAbort = null; } catch (e) {}
+    try { /** @type {any} */ (window).__preview_html_snippet = null; } catch (e) {}
+    try { /** @type {any} */ (window).__preview_updated_ts = null; } catch (e) {}
+  });
 
   // Dev-only DOM marker to help automated verification detect updates
   $: if (import.meta.env.DEV && $previewStore) {
@@ -59,6 +72,9 @@
   let latestUpdateId = 0;
   let isPreviewing = false;
 
+  // Abort controller for the current preview request so user can cancel
+  let currentPreviewAbort = null;
+
   const updatePreview = async (newContent) => {
     if (!newContent) {
       previewStore.set('');
@@ -71,7 +87,28 @@
     // enforce minimal skeleton visibility to avoid flash
     const skeletonShownAt = Date.now();
     try {
-      const html = await loadPreview(newContent);
+      // Use abortable fetch for the active preview so we can cancel long requests.
+      if (currentPreviewAbort) {
+        try { currentPreviewAbort(); } catch (e) {}
+        currentPreviewAbort = null;
+      }
+      const { promise, abort } = abortableFetch(`/preview?content=${encodeURIComponent(JSON.stringify(newContent))}`, {
+        // Prefer fail-fast for UI-driven previews
+        retryConfig: { maxRetries: 1, initialBackoffMs: 200, maxBackoffMs: 2000 },
+      });
+      currentPreviewAbort = abort;
+      // expose abort to other components
+      previewAbortStore.set(() => {
+        try { currentPreviewAbort(); } catch (e) {}
+      });
+      // Test helper: expose global abort for e2e tests
+  try { /** @type {any} */ (window).__previewAbort = () => { try { currentPreviewAbort(); } catch (e) {} }; } catch (e) {}
+      const resp = await promise;
+      if (!resp.ok) throw new Error(`Preview request failed: ${resp.status}`);
+      const html = await resp.text();
+  currentPreviewAbort = null;
+  previewAbortStore.set(null);
+  try { /** @type {any} */ (window).__previewAbort = null; } catch (e) {}
       // only apply if this update matches latest
       if (updateId === latestUpdateId) {
         const elapsed = Date.now() - skeletonShownAt;
@@ -84,11 +121,15 @@
       }
     } catch (error) {
       if (updateId === latestUpdateId) {
-        uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
+  // Distinguish between abort and other errors
+  const msg = error && error.name === 'AbortError' ? 'Preview canceled' : `Failed to load preview: ${error.message}`;
+  uiStateStore.set({ status: error && error.name === 'AbortError' ? 'idle' : 'error', message: msg });
         previewStore.set('');
       }
     } finally {
-      if (updateId === latestUpdateId) isPreviewing = false;
+  if (updateId === latestUpdateId) isPreviewing = false;
+  previewAbortStore.set(null);
+  try { /** @type {any} */ (window).__previewAbort = null; } catch (e) {}
     }
   };
 
@@ -100,6 +141,15 @@
       updatePreview(content);
     }
   });
+
+  function cancelPreview() {
+    if (currentPreviewAbort) {
+      try { currentPreviewAbort(); } catch (e) {}
+      currentPreviewAbort = null;
+      uiStateStore.set({ status: 'idle', message: 'Preview canceled' });
+      isPreviewing = false;
+    }
+  }
 </script>
 
   <div class="preview-container">
@@ -112,6 +162,9 @@
         Preview Now
       {/if}
     </button>
+    {#if isPreviewing}
+      <button data-testid="cancel-preview-button" on:click={cancelPreview}>Cancel</button>
+    {/if}
   </div>
 
   {#if $previewStore}

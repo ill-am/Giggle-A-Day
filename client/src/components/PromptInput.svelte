@@ -24,6 +24,10 @@
 
   let isGenerating = false;
   let isPreviewing = false;
+  import { previewAbortStore } from '../stores';
+
+  let previewAbortFn = null;
+  previewAbortStore.subscribe((fn) => (previewAbortFn = fn));
   // Step 1A: typed-prompt dialog state (do NOT call model in this stage)
   let showTypedPromptDialog = false;
   let typedPrompt = '';
@@ -90,7 +94,7 @@
     setTimeout(() => { generateFlash = false; }, 700);
     // flash the preview container background to show visible activity local to the preview area
     try {
-      const pc = document.querySelector('.preview-container');
+      const pc = /** @type {HTMLElement|null} */ (document.querySelector('.preview-container'));
       if (pc) {
         const prevBg = pc.style.backgroundColor || getComputedStyle(pc).backgroundColor || '';
         pc.style.backgroundColor = '#ffdddd';
@@ -103,9 +107,12 @@
   // (diagnostic overlay removed) — rely on contentStore/previewStore updates only
     // Option B: local preview shortcut — create a mock content object and render locally
     try {
-      const localContent = { title: (typedPrompt || '').split('\n')[0].slice(0, 80) || 'Untitled', body: typedPrompt };
-      // Set contentStore so codebase flow sees content
-      contentStore.set(localContent);
+  const localContent = { title: (typedPrompt || '').split('\n')[0].slice(0, 80) || 'Untitled', body: typedPrompt };
+  // Mark this as a local-only preview to avoid triggering the network-backed
+  // preview in PreviewWindow which would overwrite the local preview if it
+  // is aborted. PreviewWindow will ignore content objects with
+  // __localPreview === true for auto-preview.
+  contentStore.set({ ...localContent, __localPreview: true });
       // Build local preview HTML and set previewStore directly (avoids network)
   const html = buildLocalPreviewHtml(localContent);
       try { console.debug('[DEV] PromptInput: about to previewStore.set (local) length=', String(html).length); } catch (e) {}
@@ -169,38 +176,15 @@
       uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
       return;
     }
-    isPreviewing = true;
-    try {
-      try { console.debug('[DEV] handlePreviewNow: setting uiState loading: Loading preview...'); } catch(e){}
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-  const html = await loadPreview(current);
-      try { console.debug('[DEV] PromptInput: about to previewStore.set (server) length=', String(html).length); } catch (e) {}
-      previewStore.set(html);
-      try { console.debug('[DEV] PromptInput: previewStore.set (server) done'); } catch (e) {}
-      try {
-        const pc = document.querySelector('.preview-container');
-        if (pc) {
-          pc.setAttribute('data-preview-source', `server:${Date.now()}`);
-        }
-      } catch (e) {}
-      // Debug hook: expose snippet for automated verification
-      try {
-        // eslint-disable-next-line no-undef
-        window.__preview_html_snippet = String(html).slice(0, 1200);
-      } catch (e) {}
-      // Debug hook for automated verification: mark preview container when updated
-      try {
-        const pc = document.querySelector('.preview-container');
-        if (pc) pc.setAttribute('data-preview-updated', String(Date.now()));
-      } catch (e) {}
-      try { console.debug('[DEV] handlePreviewNow: setting uiState success: Preview updated'); } catch(e){}
-      uiStateStore.set({ status: 'success', message: 'Preview updated' });
-    } catch (err) {
-      try { console.debug('[DEV] handlePreviewNow: setting uiState error:', err && err.message); } catch(e){}
-      uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
-    } finally {
-      isPreviewing = false;
-    }
+  // Delegate preview loading to PreviewWindow: update contentStore which will
+  // trigger the PreviewWindow subscription and its abortable fetch logic.
+  try { console.debug('[DEV] handlePreviewNow: delegating preview to PreviewWindow (contentStore.set)'); } catch (e) {}
+  // Re-set the content so subscribers will react (forces update even if same object).
+  // If the content was previously marked as a local quick-preview, remove
+  // that marker so PreviewWindow will perform the server-backed preview.
+  const sanitized = { ...current };
+  if (sanitized.__localPreview) delete sanitized.__localPreview;
+  contentStore.set(sanitized);
   };
 
   // In-UI smoke test: runs preview -> export and saves PDF on success or diagnostic JSON on failure
@@ -292,6 +276,11 @@
         Preview
       {/if}
     </button>
+    {#if previewAbortFn}
+      <button data-testid="prompt-cancel-preview" on:click={() => { try { previewAbortFn(); } catch(e){} }}>
+        Cancel Preview
+      </button>
+    {/if}
     <button data-testid="smoke-button" style="display:none" aria-hidden="true" title="Run preview→export smoke test (developer helper - hidden)" on:click={runSmokeTest} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
       Run smoke test
     </button>
