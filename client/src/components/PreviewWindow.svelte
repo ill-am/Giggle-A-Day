@@ -5,23 +5,12 @@
   import Spinner from './Spinner.svelte';
   import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
-  import { onDestroy } from 'svelte';
 
   import { debounce } from '../lib/utils';
 
   let content;
-  contentStore.subscribe(value => {
-    content = value;
-    if (content && autoPreview) {
-      // Debounced auto update to avoid rapid requests
-      debouncedUpdate(content);
-    }
-  });
-
-  let uiState;
-  uiStateStore.subscribe(value => {
-    uiState = value;
-  });
+  // Default uiState to avoid undefined access during initial render in tests
+  let uiState = { status: 'idle', message: '' };
 
   // expose debug hook for automated verification: latest preview HTML
   let latestPreviewHtml = '';
@@ -39,12 +28,37 @@
     } catch (e) {}
   }
 
-  onDestroy(() => {
-    try { /** @type {any} */ (window).__getPreviewHtml = null; } catch (e) {}
-    try { /** @type {any} */ (window).__getUiState = null; } catch (e) {}
-    try { /** @type {any} */ (window).__previewAbort = null; } catch (e) {}
-    try { /** @type {any} */ (window).__preview_html_snippet = null; } catch (e) {}
-    try { /** @type {any} */ (window).__preview_updated_ts = null; } catch (e) {}
+
+  // Subscribe to stores during component lifecycle to ensure Svelte's
+  // lifecycle helpers (onDestroy) have a valid component context. Subscriptions
+  // are cleaned up when the component is unmounted.
+  onMount(() => {
+    const unsubContent = contentStore.subscribe(value => {
+      content = value;
+      if (content && autoPreview) {
+        // Debounced auto update to avoid rapid requests
+        debouncedUpdate(content);
+      }
+    });
+
+    const unsubUi = uiStateStore.subscribe(value => {
+      uiState = value;
+    });
+
+    // If initial content exists, trigger a preview
+    if (content) updatePreview(content);
+
+    return () => {
+      try { unsubContent(); } catch (e) {}
+      try { unsubUi(); } catch (e) {}
+      // cleanup dev helpers exposed on window
+      try { /** @type {any} */ (window).__getPreviewHtml = null; } catch (e) {}
+      try { /** @type {any} */ (window).__getUiState = null; } catch (e) {}
+      try { /** @type {any} */ (window).__previewAbort = null; } catch (e) {}
+      try { /** @type {any} */ (window).__preview_html_snippet = null; } catch (e) {}
+      try { /** @type {any} */ (window).__preview_updated_ts = null; } catch (e) {}
+      previewAbortStore.set(null);
+    };
   });
 
   // Dev-only DOM marker to help automated verification detect updates
