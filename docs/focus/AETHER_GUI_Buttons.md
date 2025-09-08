@@ -25,6 +25,20 @@ graph TD
 **Output**: Sets textarea value to predefined summer-themed prompt
 **Current Status**: ❌ FAIL - Event handler likely not connecting to store
 
+#### Verification Plan
+
+Implementation verification in `PromptInput.svelte`:
+
+1. Function behavior:
+
+   - Should set suggestion text to the promptStore
+   - Should focus the textarea after insertion
+
+2. UI verification checklist:
+   - [x] Button exists and is yellow
+   - [ ] Clicking inserts text: "A short, sunlit summer poem about cicadas and long shadows."
+   - [ ] Textarea receives focus after text insertion
+
 ### 2. Load V0.1 Demo
 
 **Purpose**: Populate interface with complete demo content
