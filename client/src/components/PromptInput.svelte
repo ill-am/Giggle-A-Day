@@ -73,9 +73,11 @@
     isPreviewing = true;
     try {
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      const html = await import('../lib/api').then((m) => m.loadPreview(current));
-      const { previewStore } = await import('../stores');
-      previewStore.set(html);
+  const html = await import('../lib/api').then((m) => m.loadPreview(current));
+  console.log('handlePreviewNow: received html length=', html ? html.length : 0);
+  const { previewStore } = await import('../stores');
+  previewStore.set(html);
+  console.log('handlePreviewNow: previewStore.set called');
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
       uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });

@@ -14,6 +14,15 @@
     }
   });
 
+  // Instrument previewStore updates for diagnostics
+  let lastPreview = '';
+  previewStore.subscribe(value => {
+    if (value !== lastPreview) {
+      console.log('PreviewWindow: previewStore updated, length=', value ? value.length : 0);
+      lastPreview = value;
+    }
+  });
+
   let uiState;
   uiStateStore.subscribe(value => {
     uiState = value;
