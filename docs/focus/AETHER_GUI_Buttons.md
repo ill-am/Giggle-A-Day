@@ -23,7 +23,7 @@ graph TD
 - promptStore for state management
 
 **Output**: Sets textarea value to predefined summer-themed prompt
-**Current Status**: ❌ FAIL - Event handler likely not connecting to store
+**Current Status**: ❌ FAIL - Automated test: focuses textarea but does not insert text
 
 #### Verification Plan
 
@@ -34,10 +34,10 @@ Implementation verification in `PromptInput.svelte`:
    - Should set suggestion text to the promptStore
    - Should focus the textarea after insertion
 
-2. UI verification checklist: 2. UI verification checklist:
+2. UI verification checklist:
    - [x] Button exists and is yellow
    - [ ] Clicking inserts text: "A short, sunlit summer poem about cicadas and long shadows."
-   - [ ] Textarea receives focus after text insertion
+   - [x] Textarea receives focus after text insertion
 
 ### Reproducibility Template (per-button)
 
@@ -72,28 +72,35 @@ Use this template to capture consistent diagnostics for each button. Copy the se
   3.  Open Developer Tools → Console and Network.
   4.  Click the `Summer suggestion` button.
 - Expected network requests: none (this action should be local-only).
-- Observed console logs / errors: (to be filled by tester)
-- Observed network responses: (none expected)
-- Observed UI state change: (to be filled by tester)
+- Observed console logs / errors: none observed during automated run
+  -- Observed network responses: (none expected)
+- Observed UI state change: Textarea receives focus, but its value is NOT updated with the suggestion text
 - Files referenced: `client/src/components/PromptInput.svelte`, `client/src/stores.js` (or `stores`), `client/src/lib/api.js` (for context)
 - Timestamped log file: `docs/focus/logs/summer-suggestion-<timestamp>.json`
 - Tester: (tester name)
-- Test result: (to be filled) PASS / FAIL
-- Notes & next steps: (to be filled)
+  -- Test result: FAIL
+- Notes & next steps:
+  1.  Confirm how `PromptInput.svelte` updates the prompt: check whether it writes directly to the DOM element vs updating `promptStore`.
+  2.  Verify `promptStore` export/import paths and that `PromptInput.svelte` subscribes or uses `bind:value` correctly.
+  3.  Instrument the component with a console.log in the button handler to confirm the suggestion text value is produced.
+  4.  Run the Playwright script and reproduce interactively: `cd client && node ../scripts/test-summer-suggestion.js --url http://localhost:5173` (or run from repo root as your environment requires).
+  5.  After fixing, re-run the automated test and update this record with the timestamped JSON at `docs/focus/logs/summer-suggestion-<timestamp>.json`.
 
-Automated test helper
+A note on automated testing
 
-I added a small Puppeteer script that will attempt the check and write a JSON report to `docs/focus/logs/`.
+The verification helper was updated to use Playwright (project uses Playwright in `client/`). The test writes a JSON report to `docs/focus/logs/` with a timestamped filename.
 
-- Script: `scripts/test-summer-suggestion.js`
-- Usage:
+- Script: `scripts/test-summer-suggestion.js` (Playwright)
+- Usage examples:
 
 ```bash
 # from repo root
 node scripts/test-summer-suggestion.js --url http://localhost:5173
+# or run from client/ if your Playwright install is scoped there
+cd client && node ../scripts/test-summer-suggestion.js --url http://localhost:5173
 ```
 
-The script will record whether the textarea value matches the expected suggestion and whether the textarea has focus after the click. It will save a timestamped JSON report in `docs/focus/logs/`.
+The script verifies two things: whether the textarea value equals the expected suggestion, and whether the textarea receives focus after clicking the button. It saves a timestamped JSON report in `docs/focus/logs/` for reproducibility.
 
 ### 2. Load V0.1 Demo
 
