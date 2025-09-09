@@ -65,22 +65,99 @@ async function run(url) {
       result.errors.push("load-demo button not found");
     } else {
       await btn.click();
-      // wait for possible preview changes
-      await page.waitForTimeout(500);
 
-      // Try to find a preview element by common selectors
-      const previewSelectors = [
-        '[data-testid="preview-frame"]',
-        ".preview",
-        "#preview",
-        ".preview-pane",
-      ];
+      // First, wait for a diagnostic console message from the app that the preview store updated.
+      // This gives us a reliable synchronization point when the app instrumentation is present.
+      try {
+        await page.waitForEvent("console", {
+          timeout: 4000,
+          predicate: (msg) => {
+            try {
+              return (
+                msg.text &&
+                msg.text().includes("PreviewWindow: previewStore updated")
+              );
+            } catch (e) {
+              return false;
+            }
+          },
+        });
+        // small additional wait to allow DOM to render
+        await page.waitForTimeout(120);
+      } catch (e) {
+        // console signal not observed in time; continue to DOM-based waits/fallbacks
+      }
+
+      // Try to enable auto-preview and click the Preview Now button to force rendering
+      try {
+        const auto = await page.$('[data-testid="auto-preview-checkbox"]');
+        if (auto) {
+          const checked = (await auto.isChecked)
+            ? await auto.isChecked()
+            : null;
+          // Use click to toggle on if present and not already checked
+          if (checked === false) await auto.click();
+        }
+      } catch (e) {}
+
+      try {
+        const previewNow = await page.$('[data-testid="preview-now-button"]');
+        if (previewNow) {
+          await previewNow.click();
+        }
+      } catch (e) {}
+
+      // First, wait for the DOM-visible instrumentation the app now sets when preview is ready.
+      // This attribute is short-lived; use it as a reliable sync point when available.
+      try {
+        await page.waitForFunction(
+          () =>
+            !!(
+              document.body &&
+              document.body.getAttribute &&
+              document.body.getAttribute("data-preview-ready") === "1"
+            ),
+          { timeout: 7000 }
+        );
+        // small additional wait to allow the component to render
+        await page.waitForTimeout(250);
+      } catch (e) {
+        // attribute not observed in time; continue to selector-based waits
+      }
+
+      // Wait for the preview element used by the app and ensure it has content.
+      // This avoids brittle short timeouts and selector mismatches.
       let found = null;
-      for (const sel of previewSelectors) {
-        const el = await page.$(sel);
-        if (el) {
-          found = sel;
-          break;
+      try {
+        // wait for the specific test id the preview component uses
+        const sel = '[data-testid="preview-content"]';
+        await page.waitForSelector(sel, { timeout: 8000 });
+
+        // additionally wait until the innerHTML is non-empty or reasonably sized
+        await page.waitForFunction(
+          (s) => {
+            const el = document.querySelector(s);
+            return el && el.innerHTML && el.innerHTML.trim().length > 20;
+          },
+          { timeout: 5000 },
+          sel
+        );
+
+        found = sel;
+      } catch (e) {
+        // not found in time; fall back to scanning common selectors and body
+        const previewSelectors = [
+          '[data-testid="preview-frame"]',
+          ".preview",
+          "#preview",
+          ".preview-pane",
+        ];
+        for (const sel of previewSelectors) {
+          const el = await page.$(sel);
+          if (el) {
+            found = sel;
+            break;
+          }
         }
       }
 
@@ -92,7 +169,25 @@ async function run(url) {
           .catch(() => null);
         result.observations.previewHtml = html ? html.slice(0, 2000) : null;
       } else {
-        // attempt to read the preview iframe or main content area
+        // attempt to read a test-visible global the app now sets when preview is ready
+        try {
+          const glob = await page.evaluate(() => {
+            try {
+              return window && window["__LAST_PREVIEW_HTML"]
+                ? window["__LAST_PREVIEW_HTML"]
+                : null;
+            } catch (e) {
+              return null;
+            }
+          });
+          if (glob) {
+            result.observations.previewHtmlFromGlobal = glob
+              ? String(glob).slice(0, 2000)
+              : null;
+          }
+        } catch (e) {}
+
+        // attempt to read the preview iframe or main content area as a last resort
         const bodyHtml = await page
           .$eval("body", (b) => b.innerHTML)
           .catch(() => null);

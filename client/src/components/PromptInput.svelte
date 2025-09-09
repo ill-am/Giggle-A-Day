@@ -3,10 +3,15 @@
   import { submitPrompt, exportToPdf } from '../lib/api';
   import { tick } from 'svelte';
 
-  let currentPrompt;
-  promptStore.subscribe(value => {
-    currentPrompt = value;
-  });
+  let currentPrompt = '';
+
+  // Keep the local textarea binding in sync with promptStore for programmatic updates
+  // (e.g. when the demo button calls promptStore.set(...)). The guard avoids
+  // reassigning when the values already match which would otherwise cause
+  // unnecessary reactive churn.
+  $: if (typeof $promptStore !== 'undefined' && currentPrompt !== $promptStore) {
+    currentPrompt = $promptStore;
+  }
 
   let uiState;
   uiStateStore.subscribe(value => {
