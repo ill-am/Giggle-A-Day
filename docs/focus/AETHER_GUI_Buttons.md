@@ -111,6 +111,25 @@ Use this template to capture consistent diagnostics for each button. Copy the se
   3. Create or extend a Playwright reproducibility script to click `Load V0.1 demo`, wait for preview HTML to appear, and save diagnostic JSON to `docs/focus/logs/`.
   4. Prioritize this fix as the next immediate actionable item: short fix — ensure `previewStore` updates and preview component re-renders; deeper fix — audit store/subscribe patterns across preview/content flows.
 
+#### Recent automated run (2025-09-09)
+
+- Run: Playwright script `scripts/test-load-demo.js` executed from repo root against `http://localhost:5173`.
+- Report written: `docs/focus/logs/load-demo-1757451721898.json`
+- Observations from report:
+  - `previewSelectorFound`: null — test did not find a known preview DOM selector to assert against.
+  - `bodySnippet`: includes the app shell and the preview placeholder text "Your generated preview will appear here." suggesting the preview pane did not update visually.
+  - Console logs show the demo handler executed and `handlePreviewNow` produced API requests to `/preview` with `200` responses and "Preview loaded successfully" logs (backend returned preview HTML).
+  - Network array in the Playwright run was empty (requests not captured by the page listener in this run), but console logs indicate `/preview` calls and responses occurred.
+
+Conclusion and next steps:
+
+- The backend preview generation appears to work (API returned 200 and preview HTML), but the frontend preview pane did not render the returned HTML during the short observation window.
+- Actionable next steps:
+  1. Verify `handlePreviewNow` writes into `previewStore` and that the preview component subscribes to `previewStore` and renders on update.
+  2. Add a short wait/expect in the Playwright script for the preview element to appear (or an explicit signal that previewStore updated) to avoid timing races.
+  3. If previewStore updates but preview component doesn't render, inspect the preview component's subscription and rendering logic.
+- Keep this item prioritized (next immediate fix) as it enables manual verification of the Generate→Preview→Export chain.
+
 ### Recent automated run (2025-09-09)
 
 - Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173`.
