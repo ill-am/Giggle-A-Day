@@ -81,9 +81,35 @@ Use this template to capture consistent diagnostics for each button. Copy the se
 - Tester: (tester name)
   -- Test result: PASS
 - Notes & next steps:
+
   1.  This action has been fixed by syncing `currentPrompt` binding and adding a defensive DOM write in `insertSummerSuggestion` so automated tests reliably observe the change.
   2.  Playwright run artifacts are recorded in `docs/focus/logs/` (see `summer-suggestion-1757450309665.json` for the successful run).
+
   3.  For long-term maintenance, consider the store-binding refactor noted in `CORR_V0.1_Findings.md` to remove the defensive DOM write.
+
+### 2. Load V0.1 Demo — Reproducibility Record
+
+- Button: Load V0.1 Demo
+- Component / file: `client/src/components/PromptInput.svelte` (inline demo handler)
+- Expected behavior: Populate editor prompt with demo text, populate `contentStore` with the demo payload (title/body), trigger preview flow and update UI state to `success` after preview loads.
+- Reproduction steps:
+  1. Start backend and frontend (`cd client && npm run dev`, `cd server && npm run dev`) or use the devcontainer tooling.
+  2. Open the app at `http://localhost:5173`.
+  3. Open Developer Tools → Console and Network.
+  4. Click the `Load V0.1 demo` button.
+- Expected network requests: none (this action should be local-only; preview flow may call `/preview` depending on implementation).
+- Observed console logs / errors: (capture when running) — initial investigations show the demo sets `promptStore` and `contentStore` but the preview pane may not update (store updates not propagating).
+- Observed network responses: (capture when running)
+- Observed UI state change: demo prompt should appear in the textarea and preview pane should show demo pages; currently preview may remain unchanged or show loading state.
+- Files referenced: `client/src/components/PromptInput.svelte`, `client/src/stores.js` (or `stores`), `client/src/lib/api.js`, preview components (e.g., `client/src/components/Preview.svelte`).
+- Timestamped log file: `docs/focus/logs/load-demo-<timestamp>.json`
+- Tester: (name)
+- Test result: FAIL
+- Notes & next steps:
+  1. Instrument the demo handler and `handlePreviewNow` with console logs to trace store writes and preview flow entry/exit.
+  2. Confirm preview component subscribes to `previewStore` and that `handlePreviewNow` writes to `previewStore` (the demo currently calls `handlePreviewNow()` inline).
+  3. Create or extend a Playwright reproducibility script to click `Load V0.1 demo`, wait for preview HTML to appear, and save diagnostic JSON to `docs/focus/logs/`.
+  4. Prioritize this fix as the next immediate actionable item: short fix — ensure `previewStore` updates and preview component re-renders; deeper fix — audit store/subscribe patterns across preview/content flows.
 
 ### Recent automated run (2025-09-09)
 

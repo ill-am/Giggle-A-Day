@@ -79,3 +79,8 @@ These criteria are intentionally minimal; we can expand them with performance ta
   2.  I can add a targeted CI job (Vitest or Playwright) to run the `summer-suggestion` reproducibility test on PRs to prevent regressions.
 
 Please perform a manual validation in the running app to confirm behavior in your environment and then advise whether you want the PR description drafted or the CI step added next.
+
+## Prioritization: next focus
+
+- Next high-priority fix: `Load V0.1 Demo` (see `docs/focus/AETHER_GUI_Buttons.md` section "Load V0.1 Demo — Reproducibility Record"). This is the next actionable item because it populates the UI with demo content and should enable the preview/export chain for manual verification.
+- All non-essential recommendations, UX improvements, and longer-term refactors should be recorded in this `CORR_V0.1_Findings.md` doc for later implementation and scheduling; only minimal, high-impact fixes will be applied immediately to restore interactive functionality.
