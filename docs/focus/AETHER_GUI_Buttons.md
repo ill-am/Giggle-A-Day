@@ -114,6 +114,18 @@ Conclusion: the binding change was applied and the handler executed (console log
 2. Alternatively, extend the Playwright test to wait slightly longer before reading the textarea value to rule out timing races.
 3. If (1) is chosen, implement the DOM write, re-run the Playwright script, and update this record with the new JSON.
 
+### Recent automated run (2025-09-09) — after defensive DOM write
+
+- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173` after applying defensive DOM write (`el.value = suggestion`).
+- Report written: `docs/focus/logs/summer-suggestion-1757450309665.json`
+- Observations from report:
+  - `textareaValue`: "A short, sunlit summer poem about cicadas and long shadows." — textarea now reflects the suggestion
+  - `textareaFocused`: true — textarea received focus
+  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= ...` and `insertSummerSuggestion: focused textarea`
+  - No network entries captured
+
+Conclusion: Defensive DOM write resolved the observed mismatch in the Playwright test. Consider leaving this as a short-term robustness fix; a longer-term approach could re-evaluate store binding patterns to avoid direct DOM writes.
+
 A note on automated testing
 
 The verification helper was updated to use Playwright (project uses Playwright in `client/`). The test writes a JSON report to `docs/focus/logs/` with a timestamped filename.
