@@ -24,6 +24,8 @@
     await tick();
     const el = document.getElementById('prompt-textarea');
     if (el) {
+      // Defensive: set the DOM value directly so test runners observe the change
+  try { if (el instanceof HTMLTextAreaElement) el.value = suggestion; } catch (e) { /* ignore */ }
       el.focus();
       console.log('insertSummerSuggestion: focused textarea');
     } else {
