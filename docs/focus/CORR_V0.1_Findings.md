@@ -65,3 +65,15 @@ These are minimal, testable criteria that define when a correction qualifies as 
 - Tests: Automated end-to-end test covering Generate→Preview→Export must pass in CI or local dev before merging.
 
 These criteria are intentionally minimal; we can expand them with performance targets and additional automated checks after initial fixes.
+
+## Recent corrective actions and recommendations
+
+- A focused fix was applied to the `Summer suggestion` handler in `client/src/components/PromptInput.svelte` to make the quick-insert reliable for automated tests. See the companion focus doc `docs/focus/AETHER_GUI_Buttons.md` for the run records and details.
+
+- Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
+
+- Offered next steps:
+  1.  I can open a small PR describing the fix, the rationale, and the short-term defensive change (already pushed to `corr/V0.1-findings`).
+  2.  I can add a targeted CI job (Vitest or Playwright) to run the `summer-suggestion` reproducibility test on PRs to prevent regressions.
+
+Please perform a manual validation in the running app to confirm behavior in your environment and then advise whether you want the PR description drafted or the CI step added next.
