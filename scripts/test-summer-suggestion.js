@@ -1,21 +1,67 @@
 #!/usr/bin/env node
-const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
 
 async function run(url) {
-  const browser = await puppeteer.launch({
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  // Load Playwright at runtime so the script can be run from client/ where
+  // Playwright is installed as a devDependency.
+  let playwright;
+  try {
+    playwright = require("playwright");
+  } catch (e) {
+    // Fall back to client/node_modules if Playwright is installed there
+    try {
+      const altPath = path.join(
+        __dirname,
+        "..",
+        "client",
+        "node_modules",
+        "playwright"
+      );
+      if (fs.existsSync(path.join(__dirname, "..", "client", "node_modules"))) {
+        playwright = require(altPath);
+      } else {
+        throw e;
+      }
+    } catch (err2) {
+      console.error(
+        "Playwright not found. Run this script from the client/ dir or install Playwright."
+      );
+      throw e;
+    }
+  }
+
+  const browser = await playwright.chromium.launch({ args: ["--no-sandbox"] });
   const page = await browser.newPage();
+
   const result = {
     url,
     timestamp: new Date().toISOString(),
     errors: [],
     observations: {},
+    console: [],
+    network: [],
   };
+
+  page.on("console", (msg) => {
+    try {
+      result.console.push({ type: msg.type(), text: msg.text() });
+    } catch (e) {}
+  });
+
+  page.on("requestfinished", async (req) => {
+    try {
+      const res = req.response();
+      result.network.push({
+        url: req.url(),
+        method: req.method(),
+        status: res ? res.status() : null,
+      });
+    } catch (e) {}
+  });
+
   try {
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
 
     // Click the Summer suggestion button
     const btn = await page.$('[data-testid="summer-suggestion"]');
@@ -50,8 +96,17 @@ async function run(url) {
   }
 }
 
-const argv = require("minimist")(process.argv.slice(2));
-const url = argv.url || "http://localhost:5173";
+// Simple arg parsing to avoid adding dependencies
+const raw = process.argv.slice(2);
+let url = "http://localhost:5173";
+for (let i = 0; i < raw.length; i++) {
+  if (raw[i] === "--url" && raw[i + 1]) {
+    url = raw[i + 1];
+    break;
+  }
+}
+
+// Run from client/ so Playwright resolves from client/node_modules
 run(url).then((r) => {
   if (r.errors.length) process.exitCode = 2;
 });
