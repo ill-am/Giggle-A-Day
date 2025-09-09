@@ -1,6 +1,7 @@
 <script>
   import { promptStore, contentStore, uiStateStore } from '../stores';
   import { submitPrompt, exportToPdf } from '../lib/api';
+  import { tick } from 'svelte';
 
   let currentPrompt;
   promptStore.subscribe(value => {
@@ -13,18 +14,28 @@
   });
 
   // Quick-insert suggestions for the 'summer' theme
-  const insertSummerSuggestion = () => {
+  const insertSummerSuggestion = async () => {
     const suggestion = `A short, sunlit summer poem about cicadas and long shadows.`;
+    console.log('insertSummerSuggestion: setting suggestion=', suggestion);
     promptStore.set(suggestion);
-    // Focus textarea after inserting so keyboard users can immediately edit
+    // Keep the local binding in sync so the textarea reflects the change immediately
+    currentPrompt = suggestion;
+    // Wait a tick for the DOM to update, then focus the textarea
+    await tick();
     const el = document.getElementById('prompt-textarea');
-    if (el) el.focus();
+    if (el) {
+      el.focus();
+      console.log('insertSummerSuggestion: focused textarea');
+    } else {
+      console.log('insertSummerSuggestion: textarea element not found');
+    }
   };
 
   let isGenerating = false;
   let isPreviewing = false;
 
   const handleSubmit = async () => {
+    console.log('handleSubmit: called, currentPrompt=', currentPrompt);
     if (!currentPrompt || !currentPrompt.trim()) {
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
       return;

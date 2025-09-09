@@ -86,6 +86,18 @@ Use this template to capture consistent diagnostics for each button. Copy the se
   4.  Run the Playwright script and reproduce interactively: `cd client && node ../scripts/test-summer-suggestion.js --url http://localhost:5173` (or run from repo root as your environment requires).
   5.  After fixing, re-run the automated test and update this record with the timestamped JSON at `docs/focus/logs/summer-suggestion-<timestamp>.json`.
 
+### Recent automated run (2025-09-09)
+
+- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173`.
+- Report written: `docs/focus/logs/summer-suggestion-1757449538026.json`
+- Observations from report:
+  - `textareaValue`: "" (empty) — textarea did not reflect the inserted suggestion
+  - `textareaFocused`: true — textarea received focus
+  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= A short, sunlit summer poem about cicadas and long shadows.` and `insertSummerSuggestion: focused textarea`
+  - Vite dev websocket errors observed in console (remote preview / Codespaces related) but not blocking the handler execution
+
+Next action: update the textarea binding to use the local `currentPrompt` and propagate `on:input` changes back to `promptStore`; then re-run the Playwright script and attach the new JSON file to this record.
+
 A note on automated testing
 
 The verification helper was updated to use Playwright (project uses Playwright in `client/`). The test writes a JSON report to `docs/focus/logs/` with a timestamped filename.
