@@ -23,7 +23,7 @@ graph TD
 - promptStore for state management
 
 **Output**: Sets textarea value to predefined summer-themed prompt
-**Current Status**: ❌ FAIL - Automated test: focuses textarea but does not insert text
+**Current Status**: ✅ PASS - Automated test: inserts suggestion text and focuses the textarea
 
 #### Verification Plan
 
@@ -35,9 +35,10 @@ Implementation verification in `PromptInput.svelte`:
    - Should focus the textarea after insertion
 
 2. UI verification checklist:
-   - [x] Button exists and is yellow
-   - [ ] Clicking inserts text: "A short, sunlit summer poem about cicadas and long shadows."
-   - [x] Textarea receives focus after text insertion
+
+- [x] Button exists and is yellow
+- [x] Clicking inserts text: "A short, sunlit summer poem about cicadas and long shadows."
+- [x] Textarea receives focus after text insertion
 
 ### Reproducibility Template (per-button)
 
@@ -78,13 +79,11 @@ Use this template to capture consistent diagnostics for each button. Copy the se
 - Files referenced: `client/src/components/PromptInput.svelte`, `client/src/stores.js` (or `stores`), `client/src/lib/api.js` (for context)
 - Timestamped log file: `docs/focus/logs/summer-suggestion-<timestamp>.json`
 - Tester: (tester name)
-  -- Test result: FAIL
+  -- Test result: PASS
 - Notes & next steps:
-  1.  Confirm how `PromptInput.svelte` updates the prompt: check whether it writes directly to the DOM element vs updating `promptStore`.
-  2.  Verify `promptStore` export/import paths and that `PromptInput.svelte` subscribes or uses `bind:value` correctly.
-  3.  Instrument the component with a console.log in the button handler to confirm the suggestion text value is produced.
-  4.  Run the Playwright script and reproduce interactively: `cd client && node ../scripts/test-summer-suggestion.js --url http://localhost:5173` (or run from repo root as your environment requires).
-  5.  After fixing, re-run the automated test and update this record with the timestamped JSON at `docs/focus/logs/summer-suggestion-<timestamp>.json`.
+  1.  This action has been fixed by syncing `currentPrompt` binding and adding a defensive DOM write in `insertSummerSuggestion` so automated tests reliably observe the change.
+  2.  Playwright run artifacts are recorded in `docs/focus/logs/` (see `summer-suggestion-1757450309665.json` for the successful run).
+  3.  For long-term maintenance, consider the store-binding refactor noted in `CORR_V0.1_Findings.md` to remove the defensive DOM write.
 
 ### Recent automated run (2025-09-09)
 

@@ -70,6 +70,8 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
 - A focused fix was applied to the `Summer suggestion` handler in `client/src/components/PromptInput.svelte` to make the quick-insert reliable for automated tests. See the companion focus doc `docs/focus/AETHER_GUI_Buttons.md` for the run records and details.
 
+- Status update: The `Summer suggestion` GUI button has been validated locally and via Playwright and now meets the acceptance criteria for local actions (updates stores and focuses textarea). See `docs/focus/AETHER_GUI_Buttons.md` and `docs/focus/logs/summer-suggestion-1757450309665.json` for the successful run artifact.
+
 - Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
 
 - Offered next steps:
