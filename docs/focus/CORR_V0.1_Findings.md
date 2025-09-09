@@ -53,3 +53,15 @@ To be established during consensus phase. Will include:
 - GUI responsiveness criteria
 - Data flow verification
 - Integration test requirements
+
+## Acceptance Criteria (proposed)
+
+These are minimal, testable criteria that define when a correction qualifies as "resolved".
+
+- Core flow: Generate → Preview must complete without uncaught errors and must display preview HTML within 5 seconds on a local dev environment.
+- UI feedback: Any action that initiates network work must set `uiState` to `loading` and then either `success` or `error` with a human-readable message.
+- Local actions (e.g., "Summer suggestion") must not call the network and must update stores and focus appropriately.
+- Export: `exportToPdf` must return a valid PDF blob (Content-Type: application/pdf) and trigger a download when run in the browser.
+- Tests: Automated end-to-end test covering Generate→Preview→Export must pass in CI or local dev before merging.
+
+These criteria are intentionally minimal; we can expand them with performance targets and additional automated checks after initial fixes.

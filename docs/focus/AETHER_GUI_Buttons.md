@@ -34,10 +34,66 @@ Implementation verification in `PromptInput.svelte`:
    - Should set suggestion text to the promptStore
    - Should focus the textarea after insertion
 
-2. UI verification checklist:
+2. UI verification checklist: 2. UI verification checklist:
    - [x] Button exists and is yellow
    - [ ] Clicking inserts text: "A short, sunlit summer poem about cicadas and long shadows."
    - [ ] Textarea receives focus after text insertion
+
+### Reproducibility Template (per-button)
+
+Use this template to capture consistent diagnostics for each button. Copy the section and fill fields when testing.
+
+- Button: (name)
+- Component / file: (e.g. `client/src/components/PromptInput.svelte`)
+- Expected behavior: (brief)
+- Reproduction steps:
+  1.  Start backend and frontend (`npm run dev` in `server` and `client` as required)
+  2.  Open the app at `http://localhost:5173` (adjust if different)
+  3.  Ensure developer console and network tab open
+  4.  Perform the action (click button, provide input as noted)
+- Expected network requests: (URLs and methods)
+- Observed console logs / errors: (paste here)
+- Observed network responses: (status, body snippets)
+- Observed UI state change: (what changed in UI, if anything)
+- Files referenced: (components, stores, api helpers)
+- Timestamped log file: `docs/focus/logs/<button>-YYYYMMDDTHHMM.json`
+- Tester: (name)
+- Test result: PASS / FAIL
+- Notes & next steps: (diagnostic hints)
+
+### Summer suggestion — Reproducibility Record
+
+- Button: Summer suggestion
+- Component / file: `client/src/components/PromptInput.svelte`
+- Expected behavior: Inserts the summer suggestion text into the prompt textarea and focuses it.
+- Reproduction steps:
+  1.  Start frontend (if not already running): `cd client && npm run dev`
+  2.  Open the app in a browser at the dev host (commonly `http://localhost:5173`).
+  3.  Open Developer Tools → Console and Network.
+  4.  Click the `Summer suggestion` button.
+- Expected network requests: none (this action should be local-only).
+- Observed console logs / errors: (to be filled by tester)
+- Observed network responses: (none expected)
+- Observed UI state change: (to be filled by tester)
+- Files referenced: `client/src/components/PromptInput.svelte`, `client/src/stores.js` (or `stores`), `client/src/lib/api.js` (for context)
+- Timestamped log file: `docs/focus/logs/summer-suggestion-<timestamp>.json`
+- Tester: (tester name)
+- Test result: (to be filled) PASS / FAIL
+- Notes & next steps: (to be filled)
+
+Automated test helper
+
+I added a small Puppeteer script that will attempt the check and write a JSON report to `docs/focus/logs/`.
+
+- Script: `scripts/test-summer-suggestion.js`
+- Usage:
+
+```bash
+# from repo root
+node scripts/test-summer-suggestion.js --url http://localhost:5173
+```
+
+The script will record whether the textarea value matches the expected suggestion and whether the textarea has focus after the click. It will save a timestamped JSON report in `docs/focus/logs/`.
 
 ### 2. Load V0.1 Demo
 
