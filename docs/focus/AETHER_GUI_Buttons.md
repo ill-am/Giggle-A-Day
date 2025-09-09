@@ -244,6 +244,8 @@ graph TD
 - Automatic preview trigger
   **Current Status**: ❌ FAIL - API connection issues
 
+**Canonical flow note:** The `Generate` action should be treated as a canonical flow. Extract its core logic into a shared function (for example, `generateAndPreview(prompt)`) and have other UI controls reuse it rather than re-implementing the flow.
+
 ### 4. Preview Button
 
 **Purpose**: Display current content in preview format
@@ -270,6 +272,8 @@ graph TD
 - HTML preview of content
 - Updated preview pane
   **Current Status**: ❌ FAIL - Store access issues
+
+**Canonical flow note:** The `Preview` action is the second canonical flow. Implement a shared function (for example, `previewFromContent(content)`) that performs the preview API call and updates `previewStore` and `uiStateStore`. Helper buttons should call this function instead of duplicating preview logic.
 
 ### 5. Run Smoke Test
 
