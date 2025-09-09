@@ -98,6 +98,22 @@ Use this template to capture consistent diagnostics for each button. Copy the se
 
 Next action: update the textarea binding to use the local `currentPrompt` and propagate `on:input` changes back to `promptStore`; then re-run the Playwright script and attach the new JSON file to this record.
 
+### Recent automated run (2025-09-09) — re-run after binding change
+
+- Run: Playwright script `scripts/test-summer-suggestion.js` executed from repo root against `http://localhost:5173` after applying `currentPrompt` binding.
+- Report written: `docs/focus/logs/summer-suggestion-1757450018728.json`
+- Observations from report:
+  - `textareaValue`: "" (still empty) — textarea did not reflect the inserted suggestion
+  - `textareaFocused`: true — textarea received focus
+  - Console includes instrumented logs: `insertSummerSuggestion: setting suggestion= A short, sunlit summer poem about cicadas and long shadows.` and `insertSummerSuggestion: focused textarea`
+  - No network entries captured
+
+Conclusion: the binding change was applied and the handler executed (console logs), but Playwright still observed an empty textarea value. Next steps:
+
+1. For immediate robustness, set the textarea's DOM value directly in the suggestion handler (e.g., `el.value = suggestion`) in addition to updating `currentPrompt` and `promptStore`.
+2. Alternatively, extend the Playwright test to wait slightly longer before reading the textarea value to rule out timing races.
+3. If (1) is chosen, implement the DOM write, re-run the Playwright script, and update this record with the new JSON.
+
 A note on automated testing
 
 The verification helper was updated to use Playwright (project uses Playwright in `client/`). The test writes a JSON report to `docs/focus/logs/` with a timestamped filename.
