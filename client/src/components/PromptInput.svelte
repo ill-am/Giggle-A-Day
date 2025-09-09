@@ -127,7 +127,8 @@
   <textarea
     id="prompt-textarea"
     data-testid="prompt-textarea"
-    bind:value={$promptStore}
+    bind:value={currentPrompt}
+    on:input={() => promptStore.set(currentPrompt)}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
     disabled={uiState.status === 'loading'}
