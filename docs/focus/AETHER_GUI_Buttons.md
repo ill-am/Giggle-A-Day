@@ -111,6 +111,17 @@ Use this template to capture consistent diagnostics for each button. Copy the se
   3. Create or extend a Playwright reproducibility script to click `Load V0.1 demo`, wait for preview HTML to appear, and save diagnostic JSON to `docs/focus/logs/`.
   4. Prioritize this fix as the next immediate actionable item: short fix — ensure `previewStore` updates and preview component re-renders; deeper fix — audit store/subscribe patterns across preview/content flows.
 
+Recent automated run (2025-09-10)
+
+- Run: `scripts/test-load-demo.js` executed from repo root against `http://localhost:5173` after adding DEV-only instrumentation.
+- Report written: `docs/focus/logs/load-demo-1757515964797.json`
+- Observations from report:
+  - `previewHtmlFromGlobal` contains the full preview HTML returned from the backend (length ≈ 857).
+  - Console logs show `STORE:previewStore.set` and `PreviewWindow: previewStore updated, length= 857`.
+  - The original DOM selector used by the script was not found within the script's default observation window; the preview HTML is present in the artifact which indicates the problem is rendering/timing, not the backend preview generation.
+
+Next action: prioritize updating the preview component's reactive subscription and add a short wait/expect in the Playwright script for `preview-ready` or `.preview-content` to avoid timing races.
+
 #### Recent automated run (2025-09-09)
 
 - Run: Playwright script `scripts/test-load-demo.js` executed from repo root against `http://localhost:5173`.

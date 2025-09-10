@@ -72,6 +72,15 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
 - Status update: The `Summer suggestion` GUI button has been validated locally and via Playwright and now meets the acceptance criteria for local actions (updates stores and focuses textarea). See `docs/focus/AETHER_GUI_Buttons.md` and `docs/focus/logs/summer-suggestion-1757450309665.json` for the successful run artifact.
 
+- Instrumentation update (2025-09-10): DEV-only store logging and Preview component instrumentation were added to aid diagnosis. The reproducibility script `scripts/test-load-demo.js` was run and produced `docs/focus/logs/load-demo-1757515964797.json` which shows:
+
+  - Backend `/preview` returned 200 and provided preview HTML (length ≈ 857).
+  - `handlePreviewNow` received the HTML and called `previewStore.set(...)` (STORE log present).
+  - `PreviewWindow` observed `previewStore` update (console log present). The preview HTML is available in the run artifact under `observations.previewHtmlFromGlobal`.
+  - The prior DOM-level query used by the reproducibility script did not detect the preview selector inside the test's short observation window; this suggests a timing/subscription rendering gap rather than a backend failure.
+
+  Recommendation: Priority fix — ensure the preview component renders from `$previewStore` (or subscribes to `previewStore` and assigns to a reactive `let`) so the preview DOM becomes visible within the test observation window. See `docs/focus/AETHER_Generate+Preview.md` for the focused plan and next steps.
+
 - Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
 
 - Offered next steps:

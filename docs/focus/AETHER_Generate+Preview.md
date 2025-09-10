@@ -7,6 +7,30 @@ Purpose
 - Record the agreed modus operandi and a tightly-scoped correction plan that focuses only on the GUI `Generate` and `Preview` flows until further notice.
 - Produce a succinct, testable set of actionables and a prioritized TODO list that maps directly to repository files and verification steps.
 
+## Status Dashboard & Implementation Progress
+
+Current Status: 2/5 Core Objectives Complete ✅
+
+- [x] 1. Instrumentation & Logging Chain ✅ [Verified 2025-09-10]
+  - ✓ Store instrumentation
+  - ✓ Handler logs
+  - ✓ Preview subscription
+  - ✓ Reproducibility logs
+- [x] 2. Preview Subscription Fix ✅ [Verified 2025-09-10]
+  - ✓ Reactive local copy
+  - ✓ DOM instrumentation
+  - ✓ Event emission
+- [ ] 3. Canonical Flows Implementation 🔄 [In Progress]
+  - [ ] `generateAndPreview(prompt)`
+  - [ ] `previewFromContent(content)`
+  - [ ] Button handler wiring
+  - [ ] Unit tests
+- [ ] 4. UI State & Timeouts ⏳
+- [ ] 5. Playwright Verification 📋
+
+Latest Verification: `load-demo-1757518799306.json` (2025-09-10)
+Next Action: Add `data-preview-ready` DOM instrumentation
+
 Modus operandi (non‑negotiable)
 
 1. Achieve consensus on scope and acceptance criteria before implementing code.
@@ -39,15 +63,7 @@ Acceptance criteria (minimal)
 - Buttons set `uiState` to `loading` during requests and to `success`/`error` after completion with human-readable messages.
 - Playwright reproducibility script (a short script) can assert the preview DOM is present and non-empty.
 
-## Status Dashboard
-
-- [x] 1. Instrumentation & Logging Chain ✅ [REF: Verified 2025-09-10]
-- [x] 2. Preview Subscription Fix ✅ [REF: Verified 2025-09-10]
-- [ ] 3. Canonical Flows Implementation
-- [ ] 4. UI State & Timeouts
-- [ ] 5. Playwright Verification
-
-## Details & References
+## Technical Implementation Details
 
 1. Instrumentation & reproduction (COMPLETED ✅)
 
@@ -138,12 +154,24 @@ Notes on minimal test artifacts and reproducibility
 - Playwright reproducibility scripts must write JSON output to `docs/focus/logs/` with a timestamped filename.
 - Unit tests (Vitest) should live under `client/__tests__/` and be quick to run locally.
 
-Next steps (pick one)
+## Next Actions (Prioritized)
 
-- A: I will apply Actionable 1 now (instrumentation + tiny defensive subscription) and run a quick local verification in the devcontainer; I will then record results and recommend the exact follow-up fix.
-- B: I will implement Actionable 3 (canonical flows) and add a unit test and a Playwright smoke script.
+1. DOM Instrumentation Enhancement
 
-Choose A or B (or "both, starting with A").
+   - Add `data-preview-ready` attribute to preview DOM node
+   - Ensure attribute updates on store changes
+   - Verify with reproducibility script
+
+2. Canonical Flows Implementation
+
+   - Create `client/src/lib/flows.js`
+   - Implement both core flows with tests
+   - Wire up button handlers
+
+3. UI State Management
+   - Add loading/success/error states
+   - Implement timeout handling
+   - Add user feedback messages
 
 ---
 
