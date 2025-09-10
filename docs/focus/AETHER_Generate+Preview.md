@@ -146,6 +146,10 @@ Verified Implementations (update this section after every completed change)
 
   - Notes: This reduces duplicated logic in handlers and centralizes error/timeouts. Next verification: add Playwright smoke test that clicks `Generate` and waits for `data-preview-ready`.
 
+- 2025-09-10 | Playwright smoke: Generate→Preview | `scripts/test-generate-preview.js` | Script added and run; report: `docs/focus/logs/generate-preview-1757532581226.json` (captures mock preview HTML via global fallback and console/network logs).
+
+  - Notes: Script fills the prompt, clicks Generate, waits for `data-preview-ready` or `__LAST_PREVIEW_HTML` fallback, and saves a timestamped JSON report to `docs/focus/logs/`.
+
 - 2025-09-10 | Repro test harness tuned (timeouts / waits) | `scripts/test-load-demo.js` | `docs/focus/logs/load-demo-1757515964797.json`, `docs/focus/logs/load-demo-1757516582232.json`
 
   - Notes: Increased timeouts, added waits for console signal and `data-preview-ready`, and fallback to `__LAST_PREVIEW_HTML` to capture preview content reliably. Two run artifacts exist in `docs/focus/logs/` showing API 200 and store/preview updates.
