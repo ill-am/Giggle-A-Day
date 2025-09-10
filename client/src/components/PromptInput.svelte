@@ -41,28 +41,20 @@
   let isGenerating = false;
   let isPreviewing = false;
 
+  import { generateAndPreview, previewFromContent } from '../lib/flows';
+
   const handleSubmit = async () => {
-    console.log('handleSubmit: called, currentPrompt=', currentPrompt);
+    console.log('handleSubmit -> generateAndPreview: called, currentPrompt=', currentPrompt);
     if (!currentPrompt || !currentPrompt.trim()) {
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
       return;
     }
     isGenerating = true;
-    uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
-      const response = await submitPrompt(currentPrompt);
-      if (response && response.data) {
-        contentStore.set(response.data.content);
-        uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
-        // Auto-trigger preview after generation completes
-        await handlePreviewNow();
-      } else {
-        throw new Error('Invalid response structure from server.');
-      }
-    } catch (error) {
-      uiStateStore.set({ status: 'error', message: error.message || 'An unknown error occurred.' });
-    }
-    finally {
+      await generateAndPreview(currentPrompt);
+    } catch (err) {
+      console.log('generateAndPreview error', err);
+    } finally {
       isGenerating = false;
     }
   };
@@ -77,15 +69,9 @@
     }
     isPreviewing = true;
     try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-  const html = await import('../lib/api').then((m) => m.loadPreview(current));
-  console.log('handlePreviewNow: received html length=', html ? html.length : 0);
-  const { previewStore } = await import('../stores');
-  previewStore.set(html);
-  console.log('handlePreviewNow: previewStore.set called');
-      uiStateStore.set({ status: 'success', message: 'Preview updated' });
+      await previewFromContent(current);
     } catch (err) {
-      uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
+      console.log('previewFromContent error', err);
     } finally {
       isPreviewing = false;
     }
