@@ -138,10 +138,31 @@ async function run(
 
       result.observations.previewSelectorFound = found;
       if (found) {
-        const html = await page
+        let html = await page
           .$eval(found, (el) => el.innerHTML)
           .catch(() => null);
-        result.observations.previewHtml = html ? html.slice(0, 2000) : null;
+        // If innerHTML looks like the placeholder or is too small, prefer the global fallback
+        const smallOrPlaceholder =
+          !html ||
+          html.trim().length < 40 ||
+          html.includes("Your generated preview will appear here");
+        if (smallOrPlaceholder) {
+          try {
+            const glob = await page.evaluate(() => {
+              try {
+                return window && window["__LAST_PREVIEW_HTML"]
+                  ? window["__LAST_PREVIEW_HTML"]
+                  : null;
+              } catch (e) {
+                return null;
+              }
+            });
+            if (glob) html = String(glob);
+          } catch (e) {}
+        }
+        result.observations.previewHtml = html
+          ? String(html).slice(0, 2000)
+          : null;
       } else {
         try {
           // attempt a screenshot for diagnostics

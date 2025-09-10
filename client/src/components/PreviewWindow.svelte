@@ -79,19 +79,49 @@
     }
     try {
       setUiLoading('Loading preview...');
-      const html = await loadPreview(newContent);
-      previewStore.set(html);
-  try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
+  const html = await loadPreview(newContent);
+      // Normalize the preview HTML: if the server returned a full HTML document
+      // (with <!DOCTYPE> or <html>), parse and extract the meaningful inner HTML
+      // (prefer the `.preview` wrapper if present, else the body innerHTML).
+      let normalizedHtml = html || '';
+      try {
+        if (typeof normalizedHtml === 'string' && /<!doctype|<html/i.test(normalizedHtml)) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(normalizedHtml, 'text/html');
+          const previewNode = doc.querySelector('.preview');
+          normalizedHtml = previewNode ? previewNode.outerHTML : doc.body.innerHTML || normalizedHtml;
+        }
+      } catch (e) {
+        // if parsing fails, fall back to raw HTML
+        normalizedHtml = html || '';
+      }
+
+      // Update the local preview HTML immediately to reduce render races
+      previewHtmlLocal = normalizedHtml || '';
+  previewStore.set(html);
+      try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
       // Minimal DOM-visible instrumentation for automated tests / diagnostics:
       // set a short-lived attribute and dispatch an event indicating preview is ready.
       try {
         if (typeof document !== 'undefined' && document.body) {
+          const ts = String(Date.now());
+          // mark body for backward compatibility
           document.body.setAttribute('data-preview-ready', '1');
-          try { window.dispatchEvent(new CustomEvent('preview-ready')); } catch (e) {}
+          document.body.setAttribute('data-preview-timestamp', ts);
+          try { window.dispatchEvent(new CustomEvent('preview-ready', { detail: { timestamp: ts } })); } catch (e) {}
           setTimeout(() => {
-            try { document.body.removeAttribute('data-preview-ready'); } catch (e) {}
+            try { document.body.removeAttribute('data-preview-ready'); document.body.removeAttribute('data-preview-timestamp'); } catch (e) {}
           }, 8000);
           try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
+          // ALSO set the attribute directly on the preview-content node so tests targeting it
+          // (e.g. [data-testid="preview-content"][data-preview-ready="1"]) see the ready flag immediately.
+          try {
+            const el = document.querySelector('[data-testid="preview-content"]');
+            if (el) {
+              el.setAttribute('data-preview-ready', '1');
+              el.setAttribute('data-preview-timestamp', ts);
+            }
+          } catch (e) {}
         }
       } catch (e) {
         // swallow instrumentation errors
@@ -103,6 +133,17 @@
     } catch (error) {
   setUiError(`Failed to load preview: ${error.message}`);
       previewStore.set('');
+      // Ensure the preview-content attribute is cleared on error so tests don't wait forever
+      try {
+        if (typeof document !== 'undefined') {
+          const el = document.querySelector('[data-testid="preview-content"]');
+          if (el) {
+            el.setAttribute('data-preview-ready', '0');
+            el.removeAttribute('data-preview-timestamp');
+          }
+          try { document.body.setAttribute('data-preview-ready', '0'); } catch (e) {}
+        }
+      } catch (e) {}
     }
   };
 

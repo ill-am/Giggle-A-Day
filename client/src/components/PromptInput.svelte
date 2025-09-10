@@ -64,7 +64,7 @@
   const handlePreviewNow = async () => {
     const current = get(contentStore);
     if (!current) {
-      uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
+  setUiError('No content to preview. Generate content first.');
       return;
     }
     isPreviewing = true;
@@ -81,7 +81,7 @@
   const runSmokeTest = async () => {
     const current = get(contentStore);
     if (!current) {
-      uiStateStore.set({ status: 'error', message: 'No content to run smoke test. Load or generate content first.' });
+  setUiError('No content to run smoke test. Load or generate content first.');
       return;
     }
 
@@ -155,6 +155,7 @@
   // Trigger a preview update and show an immediate status so the user
   // sees activity on the page (not only in the terminal).
   uiStateStore.set({ status: 'loading', message: 'Loading demo preview...' });
+  setUiLoading('Loading demo preview...');
   // Use the existing preview flow to populate the preview pane.
   handlePreviewNow().then(() => console.log('loadDemo: handlePreviewNow resolved')).catch(err => console.log('loadDemo: handlePreviewNow error', err));
       }}

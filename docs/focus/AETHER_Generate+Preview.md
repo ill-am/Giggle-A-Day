@@ -109,11 +109,11 @@ Current Sprint:
 
 Next Up:
 
-- [ ] 🔄 Flows: Add & wire `client/src/lib/flows.js`
-  - [ ] Implement `generateAndPreview(prompt)`
-  - [ ] Implement `previewFromContent(content)`
-  - [ ] Wire button handlers
-  - [ ] Add Vitest unit tests
+- [x] 🔄 Flows: Add & wire `client/src/lib/flows.js`
+  - [x] Implement `generateAndPreview(prompt)`
+  - [x] Implement `previewFromContent(content)`
+  - [x] Wire button handlers
+  - [x] Add Vitest unit tests
 
 Final Gate:
 

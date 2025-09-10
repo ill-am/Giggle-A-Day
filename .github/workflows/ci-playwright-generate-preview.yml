@@ -1,4 +1,4 @@
-name: CI — Playwright smoke: Generate→Preview
+name: ci-playwright-smoke-generate-preview
 
 on:
   pull_request:
@@ -6,43 +6,43 @@ on:
 
 jobs:
   generate-preview-smoke:
+    name: Playwright smoke - Generate Preview (non-blocking)
     runs-on: ubuntu-latest
-    name: Playwright smoke: Generate→Preview (non-blocking)
-    permissions: read-all
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "20"
 
-      - name: Install deps (root + client)
+      - name: Install root and client dependencies
         run: |
           npm ci --no-audit --no-fund
           cd client && npm ci --no-audit --no-fund
-          cd ..
 
-      - name: Start dev servers
+      - name: Start server and client in background
         run: |
-          # Start server and client in background
-          cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &
-          cd ../client && npm run dev > /tmp/client.log 2>&1 &
-          sleep 3
+          (cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &) || true
+          (cd client && npm run dev > /tmp/client.log 2>&1 &) || true
+          sleep 4
+
+      - name: Install Playwright
+        run: |
+          npm install --no-audit --no-fund playwright@1.40.0
+          npx playwright install --with-deps
 
       - name: Run Playwright generate->preview smoke
         continue-on-error: true
         run: |
+          mkdir -p docs/focus/logs
           node ./scripts/test-generate-preview.js --url http://localhost:5173
 
-      - name: Upload smoke artifacts
+      - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: generate-preview-logs
           path: docs/focus/logs/**
-
-    # Non-blocking job; leave PR status informational
-    outputs:
-      smoke: done
