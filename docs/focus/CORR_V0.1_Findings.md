@@ -91,6 +91,10 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
   - Notes: Tests mock the API layer and assert stores updated and UI state transitions. Proceed to wire the UI buttons to reuse these flows and add Playwright verification as the next step.
 
+- 2025-09-10 | UI wiring: buttons use canonical flows | `client/src/components/PromptInput.svelte` | `Generate` and `Preview` button handlers now call `generateAndPreview` / `previewFromContent` respectively. `Load V0.1 demo` triggers `handlePreviewNow` which uses the canonical preview flow.
+
+  - Notes: This reduces event-chain duplication; next step is Playwright verification to assert that clicking `Generate` produces `[data-preview-ready]` within acceptance time.
+
 - Offered next steps:
   1.  I can open a small PR describing the fix, the rationale, and the short-term defensive change (already pushed to `corr/V0.1-findings`).
   2.  I can add a targeted CI job (Vitest or Playwright) to run the `summer-suggestion` reproducibility test on PRs to prevent regressions.
