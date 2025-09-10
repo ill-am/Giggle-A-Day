@@ -1,5 +1,5 @@
 <script>
-  import { contentStore, previewStore, uiStateStore } from '../stores';
+  import { contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
   import { loadPreview } from '../lib/api';
   import { onMount } from 'svelte';
 
@@ -78,9 +78,9 @@
       return;
     }
     try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
+      setUiLoading('Loading preview...');
       const html = await loadPreview(newContent);
-  previewStore.set(html);
+      previewStore.set(html);
   try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
       // Minimal DOM-visible instrumentation for automated tests / diagnostics:
       // set a short-lived attribute and dispatch an event indicating preview is ready.
@@ -99,9 +99,9 @@
       // trigger brief flash to draw attention
       flash = true;
       setTimeout(() => (flash = false), 600);
-      uiStateStore.set({ status: 'success', message: 'Preview loaded' });
+  setUiSuccess('Preview loaded');
     } catch (error) {
-      uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
+  setUiError(`Failed to load preview: ${error.message}`);
       previewStore.set('');
     }
   };

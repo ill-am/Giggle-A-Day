@@ -1,6 +1,13 @@
 import { get } from "svelte/store";
 import { submitPrompt, loadPreview } from "./api";
-import { contentStore, previewStore, uiStateStore } from "../stores";
+import {
+  contentStore,
+  previewStore,
+  uiStateStore,
+  setUiLoading,
+  setUiSuccess,
+  setUiError,
+} from "../stores";
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 
@@ -27,7 +34,7 @@ export async function previewFromContent(
     throw err;
   }
 
-  uiStateStore.set({ status: "loading", message: "Loading preview..." });
+  setUiLoading("Loading preview...");
 
   try {
     const html = await withTimeout(loadPreview(content), timeoutMs);
@@ -36,10 +43,7 @@ export async function previewFromContent(
     uiStateStore.set({ status: "success", message: "Preview loaded" });
     return html;
   } catch (err) {
-    uiStateStore.set({
-      status: "error",
-      message: err.message || "Preview failed",
-    });
+    setUiError(err.message || "Preview failed");
     // clear preview on failure to avoid stale views
     try {
       previewStore.set("");
@@ -62,7 +66,7 @@ export async function generateAndPreview(
     throw err;
   }
 
-  uiStateStore.set({ status: "loading", message: "Generating content..." });
+  setUiLoading("Generating content...");
 
   try {
     const response = await withTimeout(submitPrompt(prompt), timeoutMs);
@@ -81,10 +85,7 @@ export async function generateAndPreview(
     const html = await previewFromContent(content, timeoutMs);
     return html;
   } catch (err) {
-    uiStateStore.set({
-      status: "error",
-      message: err.message || "Generation failed",
-    });
+    setUiError(err.message || "Generation failed");
     throw err;
   }
 }

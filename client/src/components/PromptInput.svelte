@@ -1,5 +1,5 @@
 <script>
-  import { promptStore, contentStore, uiStateStore } from '../stores';
+  import { promptStore, contentStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
   import { submitPrompt, exportToPdf } from '../lib/api';
   import { tick } from 'svelte';
 
@@ -46,7 +46,7 @@
   const handleSubmit = async () => {
     console.log('handleSubmit -> generateAndPreview: called, currentPrompt=', currentPrompt);
     if (!currentPrompt || !currentPrompt.trim()) {
-      uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
+      setUiError('Prompt cannot be empty.');
       return;
     }
     isGenerating = true;
@@ -85,7 +85,7 @@
       return;
     }
 
-    uiStateStore.set({ status: 'loading', message: 'Running smoke test (preview → export)...' });
+  setUiLoading('Running smoke test (preview → export)...');
     try {
       // Ensure preview renders
       await handlePreviewNow();
@@ -93,7 +93,7 @@
       // Trigger export which downloads a PDF if successful
       await exportToPdf(current);
 
-      uiStateStore.set({ status: 'success', message: 'Smoke test succeeded — PDF downloaded.' });
+  setUiSuccess('Smoke test succeeded — PDF downloaded.');
     } catch (err) {
       // Create a diagnostic JSON blob and trigger download
       const diag = {
@@ -112,7 +112,7 @@
       window.URL.revokeObjectURL(url);
       a.remove();
 
-      uiStateStore.set({ status: 'error', message: 'Smoke test failed — diagnostic saved.' });
+  setUiError('Smoke test failed — diagnostic saved.');
     }
   };
 </script>
