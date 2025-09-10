@@ -87,6 +87,10 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
 - Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
 
+- 2025-09-10 | Canonical flows unit-tested | `client/src/lib/flows.js`, `client/__tests__/flows.test.js` | Vitest unit tests added and run: `generateAndPreview` and `previewFromContent` validated (success + error modes). UI wiring is next.
+
+  - Notes: Tests mock the API layer and assert stores updated and UI state transitions. Proceed to wire the UI buttons to reuse these flows and add Playwright verification as the next step.
+
 - Offered next steps:
   1.  I can open a small PR describing the fix, the rationale, and the short-term defensive change (already pushed to `corr/V0.1-findings`).
   2.  I can add a targeted CI job (Vitest or Playwright) to run the `summer-suggestion` reproducibility test on PRs to prevent regressions.
