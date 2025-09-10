@@ -1,0 +1,48 @@
+name: CI — Playwright smoke: Generate→Preview
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  generate-preview-smoke:
+    runs-on: ubuntu-latest
+    name: Playwright smoke: Generate→Preview (non-blocking)
+    permissions: read-all
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (root + client)
+        run: |
+          npm ci --no-audit --no-fund
+          cd client && npm ci --no-audit --no-fund
+          cd ..
+
+      - name: Start dev servers
+        run: |
+          # Start server and client in background
+          cd server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm run dev > /tmp/server.log 2>&1 &
+          cd ../client && npm run dev > /tmp/client.log 2>&1 &
+          sleep 3
+
+      - name: Run Playwright generate->preview smoke
+        continue-on-error: true
+        run: |
+          node ./scripts/test-generate-preview.js --url http://localhost:5173
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: generate-preview-logs
+          path: docs/focus/logs/**
+
+    # Non-blocking job; leave PR status informational
+    outputs:
+      smoke: done
