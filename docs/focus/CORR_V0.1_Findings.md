@@ -87,6 +87,8 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
 - Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
 
+- 2025-09-10 | UI state helpers & timeout test added | `client/src/stores/index.js`, `client/__tests__/flows.test.js` | Vitest: flows and timeout test passed locally (`Test Files 5 passed, Tests 21 passed`).
+
 - 2025-09-10 | Canonical flows unit-tested | `client/src/lib/flows.js`, `client/__tests__/flows.test.js` | Vitest unit tests added and run: `generateAndPreview` and `previewFromContent` validated (success + error modes). UI wiring is next.
 
   - Notes: Tests mock the API layer and assert stores updated and UI state transitions. Proceed to wire the UI buttons to reuse these flows and add Playwright verification as the next step.

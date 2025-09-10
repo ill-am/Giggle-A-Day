@@ -20,11 +20,11 @@ Current Status: 2/5 Core Objectives Complete ✅
   - ✓ Reactive local copy
   - ✓ DOM instrumentation
   - ✓ Event emission
-- [ ] 3. Canonical Flows Implementation 🔄 [In Progress]
-  - [ ] `generateAndPreview(prompt)`
-  - [ ] `previewFromContent(content)`
-  - [ ] Button handler wiring
-  - [ ] Unit tests
+- [x] 3. Canonical Flows Implementation ✅ [Verified 2025-09-10]
+  - [x] `generateAndPreview(prompt)`
+  - [x] `previewFromContent(content)`
+  - [x] Button handler wiring
+  - [x] Unit tests
 - [ ] 4. UI State & Timeouts ⏳
 - [ ] 5. Playwright Verification 📋
 
@@ -155,7 +155,10 @@ Verified Implementations (update this section after every completed change)
   - Notes: Increased timeouts, added waits for console signal and `data-preview-ready`, and fallback to `__LAST_PREVIEW_HTML` to capture preview content reliably. Two run artifacts exist in `docs/focus/logs/` showing API 200 and store/preview updates.
 
 - 2025-09-10 | Repro test run captured (global fallback) | `scripts/test-load-demo.js` | `docs/focus/logs/load-demo-1757518799306.json`
+
   - Notes: Script captured a complete preview HTML via global fallback (`__LAST_PREVIEW_HTML`) although `previewSelectorFound` was null. Dev logs show `STORE:previewStore.set` and `PreviewWindow: previewStore updated` with content length 857 and API 200 responses. This indicates the preview data is being produced and stored, but the in-DOM selector used by the test did not match the rendered preview; next action: ensure the preview DOM node sets `data-preview-ready` when store updates so the reproducibility script can detect it reliably.
+
+- 2025-09-10 | UI state helpers & timeout test added | `client/src/stores/index.js`, `client/__tests__/flows.test.js` | Vitest: all flow tests and timeout test passed locally (`Test Files 5 passed, Tests 21 passed`).
 
 Next verification: implement canonical flows (`client/src/lib/flows.js`) and wire `Generate`/`Preview` handlers to those flows, then add a small Vitest unit and mark the flows verified in this section.
 

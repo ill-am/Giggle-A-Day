@@ -57,3 +57,16 @@ export const uiStateStore = devWritable("uiStateStore", {
   status: "idle",
   message: "",
 });
+
+// Helper setters for consistent UI state transitions
+export function setUiLoading(message = "") {
+  uiStateStore.set({ status: "loading", message });
+}
+
+export function setUiSuccess(message = "") {
+  uiStateStore.set({ status: "success", message });
+}
+
+export function setUiError(message = "") {
+  uiStateStore.set({ status: "error", message });
+}

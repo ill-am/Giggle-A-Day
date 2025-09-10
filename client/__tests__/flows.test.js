@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import * as Api from "../src/lib/api";
 import { contentStore, previewStore, uiStateStore } from "../src/stores";
 import { generateAndPreview, previewFromContent } from "../src/lib/flows";
+import { vi as globalVi } from "vitest";
 
 beforeEach(() => {
   // reset stores
@@ -54,5 +55,32 @@ describe("flows.generateAndPreview / previewFromContent", () => {
       /No valid content provided/
     );
     expect(get(uiStateStore).status).toBe("error");
+  });
+
+  it("generateAndPreview: request timeout sets uiState error", async () => {
+    // mock submitPrompt to never resolve so withTimeout will trigger
+    vi.spyOn(Api, "submitPrompt").mockImplementation(
+      () => new Promise(() => {})
+    );
+
+    // Use fake timers to advance past the default timeout and ensure cleanup
+    globalVi.useFakeTimers();
+    try {
+      const p = generateAndPreview("a valid prompt", 50);
+      // attach a benign catch to prevent an unhandled rejection warning
+      // the test still asserts the original promise rejects below
+      p.catch(() => {});
+
+      // advance timers so the withTimeout rejects
+      await globalVi.advanceTimersByTimeAsync(100);
+
+      // allow microtasks to run so the rejection is observed and handled
+      await Promise.resolve();
+
+      await expect(p).rejects.toThrow(/Request timed out/);
+      expect(get(uiStateStore).status).toBe("error");
+    } finally {
+      globalVi.useRealTimers();
+    }
   });
 });
