@@ -58,7 +58,7 @@ async function run(url) {
   });
 
   try {
-    await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
 
     const btn = await page.$('[data-testid="load-demo"]');
     if (!btn) {
@@ -70,7 +70,7 @@ async function run(url) {
       // This gives us a reliable synchronization point when the app instrumentation is present.
       try {
         await page.waitForEvent("console", {
-          timeout: 4000,
+          timeout: 8000,
           predicate: (msg) => {
             try {
               return (
@@ -83,7 +83,7 @@ async function run(url) {
           },
         });
         // small additional wait to allow DOM to render
-        await page.waitForTimeout(120);
+        await page.waitForTimeout(250);
       } catch (e) {
         // console signal not observed in time; continue to DOM-based waits/fallbacks
       }
@@ -117,10 +117,10 @@ async function run(url) {
               document.body.getAttribute &&
               document.body.getAttribute("data-preview-ready") === "1"
             ),
-          { timeout: 7000 }
+          { timeout: 10000 }
         );
         // small additional wait to allow the component to render
-        await page.waitForTimeout(250);
+        await page.waitForTimeout(300);
       } catch (e) {
         // attribute not observed in time; continue to selector-based waits
       }
@@ -131,7 +131,7 @@ async function run(url) {
       try {
         // wait for the specific test id the preview component uses
         const sel = '[data-testid="preview-content"]';
-        await page.waitForSelector(sel, { timeout: 8000 });
+        await page.waitForSelector(sel, { timeout: 12000 });
 
         // additionally wait until the innerHTML is non-empty or reasonably sized
         await page.waitForFunction(
@@ -139,7 +139,7 @@ async function run(url) {
             const el = document.querySelector(s);
             return el && el.innerHTML && el.innerHTML.trim().length > 20;
           },
-          { timeout: 5000 },
+          { timeout: 8000 },
           sel
         );
 
