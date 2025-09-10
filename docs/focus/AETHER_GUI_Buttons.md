@@ -122,6 +122,8 @@ Recent automated run (2025-09-10)
 
 Next action: prioritize updating the preview component's reactive subscription and add a short wait/expect in the Playwright script for `preview-ready` or `.preview-content` to avoid timing races.
 
+Note: On 2025-09-10 a timestamped DOM instrumentation was added to `client/src/components/PreviewWindow.svelte` (`data-preview-timestamp` and `preview-ready` event detail). Repro scripts should wait for `[data-testid="preview-content"][data-preview-ready="1"]` or read the `data-preview-timestamp` attribute for deterministic detection.
+
 #### Recent automated run (2025-09-09)
 
 - Run: Playwright script `scripts/test-load-demo.js` executed from repo root against `http://localhost:5173`.

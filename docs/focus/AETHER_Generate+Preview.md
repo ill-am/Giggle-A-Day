@@ -134,6 +134,10 @@ Verified Implementations (update this section after every completed change)
 
   - Notes: Added `previewHtmlLocal` assigned from `previewStore` to reduce render races; kept DOM-visible instrumentation (`data-preview-ready`, `preview-ready` event, `__LAST_PREVIEW_HTML`).
 
+- 2025-09-10 | DOM instrumentation: timestamped preview-ready attribute | `client/src/components/PreviewWindow.svelte` | Added `data-preview-timestamp` on `body` and `[data-testid="preview-content"]`, and `preview-ready` event with detail.timestamp for Playwright/diagnostics.
+
+  - Notes: Automated reproducibility scripts should now wait for `[data-testid="preview-content"][data-preview-ready="1"]` or read `data-preview-timestamp` to avoid timing races.
+
 - 2025-09-10 | Repro test harness tuned (timeouts / waits) | `scripts/test-load-demo.js` | `docs/focus/logs/load-demo-1757515964797.json`, `docs/focus/logs/load-demo-1757516582232.json`
 
   - Notes: Increased timeouts, added waits for console signal and `data-preview-ready`, and fallback to `__LAST_PREVIEW_HTML` to capture preview content reliably. Two run artifacts exist in `docs/focus/logs/` showing API 200 and store/preview updates.

@@ -81,6 +81,10 @@ These criteria are intentionally minimal; we can expand them with performance ta
 
   Recommendation: Priority fix — ensure the preview component renders from `$previewStore` (or subscribes to `previewStore` and assigns to a reactive `let`) so the preview DOM becomes visible within the test observation window. See `docs/focus/AETHER_Generate+Preview.md` for the focused plan and next steps.
 
+- 2025-09-10 | DOM instrumentation (timestamped) implemented | `client/src/components/PreviewWindow.svelte` | Added `data-preview-timestamp` and `preview-ready` event detail to make Playwright checks deterministic.
+
+  - Notes: Playwright scripts and reproducibility harnesses should rely on `data-preview-ready` + `data-preview-timestamp` or the `preview-ready` event detail rather than fragile layout selectors.
+
 - Recommendation (long-term): revisit the store-binding pattern so the DOM is a single source of truth — either fully store-driven (textarea bound to the store directly and updates flow from store → DOM) or fully local-bound with explicit sync to the store. This avoids ad-hoc direct DOM writes (the repository currently uses a defensive `el.value = suggestion` to make tests reliable).
 
 - Offered next steps:

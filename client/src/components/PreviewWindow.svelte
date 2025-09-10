@@ -23,17 +23,23 @@
     const value = $previewStore;
     previewHtmlLocal = value || '';
     console.log('PreviewWindow: previewStore updated, length=', value ? value.length : 0);
-    // set DOM-visible attribute for tests when preview is present
+    // set DOM-visible attribute for tests when preview is present and include a timestamp
     try {
       if (typeof document !== 'undefined' && document.body) {
+        const ts = String(Date.now());
         // mark body for backward compatibility
         try { document.body.setAttribute('data-preview-ready', value ? '1' : '0'); } catch (e) {}
-        try { window.dispatchEvent(new CustomEvent('preview-ready')); } catch (e) {}
-        setTimeout(() => { try { document.body.removeAttribute('data-preview-ready'); } catch (e) {} }, 8000);
+        try { document.body.setAttribute('data-preview-timestamp', value ? ts : ''); } catch (e) {}
+        try { window.dispatchEvent(new CustomEvent('preview-ready', { detail: { timestamp: ts } })); } catch (e) {}
+        setTimeout(() => { try { document.body.removeAttribute('data-preview-ready'); document.body.removeAttribute('data-preview-timestamp'); } catch (e) {} }, 8000);
         // also mark the preview-content element directly so automated checks targeting it succeed
         try {
           const el = document.querySelector('[data-testid="preview-content"]');
-          if (el) el.setAttribute('data-preview-ready', value ? '1' : '0');
+          if (el) {
+            el.setAttribute('data-preview-ready', value ? '1' : '0');
+            if (value) el.setAttribute('data-preview-timestamp', ts);
+            else el.removeAttribute('data-preview-timestamp');
+          }
         } catch (e) {}
         // expose last preview HTML to tests
         try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = value; } catch (e) {}
