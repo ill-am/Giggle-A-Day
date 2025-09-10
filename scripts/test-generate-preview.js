@@ -78,54 +78,62 @@ async function run(
     } else {
       await genBtn.click();
 
-      // Wait for console instrumentation or DOM signal
-      try {
-        await page.waitForEvent("console", {
-          timeout: 8000,
-          predicate: (msg) => {
-            try {
-              return (
-                msg.text &&
-                msg.text().includes("PreviewWindow: previewStore updated")
-              );
-            } catch (e) {
-              return false;
-            }
-          },
-        });
-        await page.waitForTimeout(250);
-      } catch (e) {}
-
-      // Wait for body attribute set by PreviewWindow
-      try {
-        await page.waitForFunction(
-          () =>
-            !!(
-              document.body &&
-              document.body.getAttribute &&
-              document.body.getAttribute("data-preview-ready") === "1"
-            ),
-          { timeout: 12000 }
-        );
-        await page.waitForTimeout(250);
-      } catch (e) {}
-
-      // Wait for preview content to be non-empty
+      // Prefer the combined selector that signals the preview node is ready
       let found = null;
+      const combinedSel =
+        '[data-testid="preview-content"][data-preview-ready="1"]';
       try {
-        const sel = '[data-testid="preview-content"]';
-        await page.waitForSelector(sel, { timeout: 12000 });
-        await page.waitForFunction(
-          (s) => {
-            const el = document.querySelector(s);
-            return el && el.innerHTML && el.innerHTML.trim().length > 20;
-          },
-          { timeout: 8000 },
-          sel
-        );
-        found = sel;
+        await page.waitForSelector(combinedSel, { timeout: 12000 });
+        // small buffer for rendering
+        await page.waitForTimeout(200);
+        found = combinedSel;
       } catch (e) {
-        // fallback to global or body
+        // fallback: try console instrumentation, body flag, then preview-content innerHTML
+        try {
+          await page.waitForEvent("console", {
+            timeout: 8000,
+            predicate: (msg) => {
+              try {
+                return (
+                  msg.text &&
+                  msg.text().includes("PreviewWindow: previewStore updated")
+                );
+              } catch (ee) {
+                return false;
+              }
+            },
+          });
+          await page.waitForTimeout(250);
+        } catch (ee) {}
+
+        try {
+          await page.waitForFunction(
+            () =>
+              !!(
+                document.body &&
+                document.body.getAttribute &&
+                document.body.getAttribute("data-preview-ready") === "1"
+              ),
+            { timeout: 12000 }
+          );
+          await page.waitForTimeout(250);
+        } catch (ee) {}
+
+        try {
+          const sel = '[data-testid="preview-content"]';
+          await page.waitForSelector(sel, { timeout: 12000 });
+          await page.waitForFunction(
+            (s) => {
+              const el = document.querySelector(s);
+              return el && el.innerHTML && el.innerHTML.trim().length > 20;
+            },
+            { timeout: 8000 },
+            sel
+          );
+          found = sel;
+        } catch (ee) {
+          // fallback to global or body later
+        }
       }
 
       result.observations.previewSelectorFound = found;
@@ -135,6 +143,18 @@ async function run(
           .catch(() => null);
         result.observations.previewHtml = html ? html.slice(0, 2000) : null;
       } else {
+        try {
+          // attempt a screenshot for diagnostics
+          const ssPath = path.join(
+            logsDir,
+            `generate-preview-${Date.now()}.png`
+          );
+          await page
+            .screenshot({ path: ssPath, fullPage: true })
+            .catch(() => {});
+          result.observations.screenshot = ssPath;
+        } catch (e) {}
+
         try {
           const glob = await page.evaluate(() => {
             try {

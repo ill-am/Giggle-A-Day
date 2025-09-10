@@ -138,7 +138,11 @@
       class="preview-content"
       data-testid="preview-content"
       data-preview-ready={computedHasPreview ? '1' : '0'}
+      aria-busy={uiState.status === 'loading'}
     >
+      {#if uiState.status === 'loading'}
+        <div class="small-spinner" aria-hidden="true"></div>
+      {/if}
       {@html previewHtmlLocal}
 
       {#if !computedHasPreview && uiState.status !== 'loading'}
@@ -166,7 +170,7 @@
     background-color: #f9f9f9;
     overflow-y: auto;
   }
-  .loading-overlay, .placeholder {
+  .loading-overlay {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -182,6 +186,21 @@
   .bg-preview { position: absolute; inset: 0; opacity: 0.45; pointer-events: none }
   .bg-preview img { width: 100%; height: 100%; object-fit: cover }
   .preview-stage .preview-content { position: relative; z-index: 2 }
+
+  .small-spinner {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 4px solid rgba(0,0,0,0.08);
+    border-top-color: #2c3e50;
+    animation: spin 0.9s linear infinite;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 10;
+  }
+
+  @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
 
   /* flash highlight when preview updates */
   .preview-stage.flash {
