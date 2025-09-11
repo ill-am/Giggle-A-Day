@@ -9,7 +9,7 @@ Purpose
 
 ## Status Dashboard & Implementation Progress
 
-Current Status: 2/5 Core Objectives Complete ✅
+Current Status: 2/5 Core Objectives Complete ✅ (UI 'Generate' still non-functional)
 
 - [x] 1. Instrumentation & Logging Chain ✅ [Verified 2025-09-10]
   - ✓ Store instrumentation
@@ -23,13 +23,59 @@ Current Status: 2/5 Core Objectives Complete ✅
 - [x] 3. Canonical Flows Implementation ✅ [Verified 2025-09-10]
   - [x] `generateAndPreview(prompt)`
   - [x] `previewFromContent(content)`
-  - [x] Button handler wiring
+  - [ ] Button handler wiring (runtime verification failing — see Known Issue)
   - [x] Unit tests
 - [ ] 4. UI State & Timeouts ⏳
 - [ ] 5. Playwright Verification 📋
 
 Latest Verification: `load-demo-1757518799306.json` (2025-09-10)
 Next Action: Add `data-preview-ready` DOM instrumentation
+
+Known Issue (observed)
+
+- The GUI `Generate` button currently appears to do nothing when used in the running app (no visible preview, no network `/prompt` POST observed). This was observed on 2025-09-10 after the recent instrumentation and wiring changes. The library flows and unit tests pass, so the problem surface is likely in runtime wiring or a runtime condition that prevents the handler from firing.
+
+Evidence / quick checks to reproduce the symptom
+
+- Open the running app (http://localhost:5173) in a browser with DevTools open.
+- Click `Generate` with a valid prompt.
+- Expected: console logs starting with `STORE:promptStore.set` and a network POST to `/prompt`.
+- Observed: no `STORE:promptStore.set` console line and no network `/prompt` request.
+
+Immediate hypothesis
+
+- Button event listener is not bound at runtime (template/props mismatch), or the handler early-returns due to a validation guard. Alternatively, a CSS/overlay element may be capturing clicks.
+
+Minimal reproduction steps (for tomorrow)
+
+1. Try clicking `Generate` while watching Console + Network in DevTools and capture a short screen recording or console log output.
+2. Add a temporary debug line to `client/src/components/PromptInput.svelte` inside the click handler (e.g., console.log('Generate clicked', prompt)) and reload the app to see if the click reaches the handler.
+3. If the debug log doesn't appear, inspect DOM for overlay elements or z-index issues that may block the button.
+4. If the debug log appears but no network call follows, trace the handler to confirm it calls `generateAndPreview(prompt)` and that the prompt is non-empty.
+
+Short, prioritized next-to-dos (pick one to start tomorrow)
+
+1. Quick debug (15–30m)
+
+- Add a temporary console.log at the top of the Generate handler in `client/src/components/PromptInput.svelte` and reload app.
+- Purpose: confirm whether click handler is reached or not.
+
+2. If handler reached but no API call: guard bypass
+
+- Temporarily remove or relax client-side validation that may early-return (empty prompt guard), and re-test.
+
+3. If handler not reached: DOM/interference
+
+- Inspect page for overlays, pointer-events CSS, or disabled attribute on the button at runtime.
+- Run `document.querySelector('[data-testid="generate-button"]').onclick` in console to inspect binding.
+
+4. If still unclear: add a small synthetic test harness
+
+- Add a tiny debug button in the UI that directly calls `generateAndPreview('debug prompt')` to isolate wiring from prompt validation.
+
+5. After repro and fix: update this doc's "Verified Implementations" and commit a brief log to `docs/focus/logs/` showing the console output and network trace.
+
+6. Follow-up: once Generate is verified, re-run the Playwright smoke test and commit the generated JSON under `docs/focus/logs/`.
 
 Modus operandi (non‑negotiable)
 
@@ -175,22 +221,34 @@ Notes on minimal test artifacts and reproducibility
 
 ## Next Actions (Prioritized)
 
-1. DOM Instrumentation Enhancement
+1. Quick reproducer + debug (highest priority — do first, 15–45m)
 
-   - Add `data-preview-ready` attribute to preview DOM node
-   - Ensure attribute updates on store changes
-   - Verify with reproducibility script
+- Add `console.log('Generate clicked', prompt)` at the top of the Generate click handler in `client/src/components/PromptInput.svelte`.
+- Reload the app and perform the click while recording Console + Network.
+- Capture the console output and attach it to a new log in `docs/focus/logs/` (timestamped JSON or text).
 
-2. Canonical Flows Implementation
+2. Fix wiring or validation (follow-up to step 1)
 
-   - Create `client/src/lib/flows.js`
-   - Implement both core flows with tests
-   - Wire up button handlers
+- If the handler is not reached: inspect for DOM overlays/z-index or disabled attributes and fix CSS/template so the button is clickable.
+- If the handler is reached but early-returns: temporarily bypass validation to confirm the flow and then restore guarded validation with clearer messaging.
 
-3. UI State Management
-   - Add loading/success/error states
-   - Implement timeout handling
-   - Add user feedback messages
+3. Add an isolated debug trigger (short-term patch)
+
+- Add a dev-only small button that calls `generateAndPreview('debug')` to prove the canonical flow runs end-to-end without user-typed prompt blocking it.
+
+4. Strengthen testability
+
+- Add a quick Playwright test that clicks `Generate` and asserts a `data-preview-ready` attribute or `__LAST_PREVIEW_HTML` appears.
+- Add a Vitest integration that mounts `PromptInput.svelte` and simulates a click to ensure the handler is wired.
+
+5. Devcontainer and CI hygiene (parallel follow-up)
+
+- Make `postCreateCommand` for `.devcontainer/devcontainer.json` verify Playwright browser install instead of silencing failures (`|| true`) or add a verification step that fails the create if browsers are missing.
+- Extend the GitHub Action `playwright-smoke.yml` to upload both the JSON diagnostic and any exported PDF artifacts for inspection.
+
+6. Update docs & logs
+
+- After the fix, update this focus doc `Verified Implementations` and add the diagnostic log to `docs/focus/logs/`.
 
 ---
 
