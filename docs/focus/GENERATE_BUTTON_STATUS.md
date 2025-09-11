@@ -1,5 +1,7 @@
 # Generate Button Implementation Status
 
+> See `GENERATE_BUTTON_STATUS.ADDENDA.md` (same folder) for an actionable implementation plan, API contracts, tests, and a time-tracker.
+
 ## Current Status Overview
 
 **Last Updated**: September 11, 2025
