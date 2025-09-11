@@ -144,11 +144,11 @@ Use the table below to record the original estimate, assigned owner, start/end t
 
 | Task ID | Task | Estimate | Owner | Status | Started | Finished | Actual (hrs) | Notes |
 |--------:|------|:--------:|:-----:|:------:|:-------:|:--------:|:------------:|-------|
-| A1 | Add `client/src/lib/api.js` (postPrompt helper) | 0.5d | TBD | Todo |  |  |  |  |
-| A2 | Implement `GenerateButton.svelte` (state machine + spinner) | 1d | TBD | Todo |  |  |  |  |
-| A3 | Unit tests (Vitest) for Generate button | 0.5d | TBD | Todo |  |  |  |  |
-| A4 | Dev-only server stub `/prompt?dev=true` | 0.25d | TBD | Todo |  |  |  |  |
-| A5 | Integration smoke (manual verification) | 0.25d | TBD | Todo |  |  |  |  |
+| A1 | Add `client/src/lib/api.js` (postPrompt helper) | 0.5d | ke-lav | In Progress | 2025-09-11T13:00:00Z |  |  | started work |
+| A2 | Implement `GenerateButton.svelte` (state machine + spinner) | 1d | ke-lav | In Progress | 2025-09-11T13:10:00Z |  |  | started work |
+| A3 | Unit tests (Vitest) for Generate button | 0.5d | ke-lav | In Progress | 2025-09-11T13:30:00Z |  |  | started work |
+| A4 | Dev-only server stub `/prompt?dev=true` | 0.25d | ke-lav | Done | 2025-09-11T13:05:00Z | 2025-09-11T13:15:00Z | 0.17 | implemented dev stub in server/index.js |
+| A5 | Integration smoke (manual verification) | 0.25d | ke-lav | In Progress | 2025-09-11T14:00:00Z |  |  | manual smoke pending |
 | B1 | Progress updates / polling or websocket | 1d | TBD | Todo |  |  |  |  |
 | B2 | Cancellation and retry UX | 1d | TBD | Todo |  |  |  |  |
 | B3 | Input validation & error taxonomy mapping | 0.5d | TBD | Todo |  |  |  |  |
