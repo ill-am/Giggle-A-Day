@@ -71,15 +71,23 @@
   // Preview controls
   let autoPreview = true;
   let flash = false;
+  let isPreviewing = false;
+
+  // Track the latest update so out-of-order responses are ignored
+  let latestUpdateId = 0;
 
   const updatePreview = async (newContent) => {
     if (!newContent) {
       previewStore.set('');
       return;
     }
+    const updateId = ++latestUpdateId;
+    const skeletonShownAt = Date.now();
     try {
+      // mark UI and local flag
+      isPreviewing = true;
       setUiLoading('Loading preview...');
-  const html = await loadPreview(newContent);
+      const html = await loadPreview(newContent);
       // Normalize the preview HTML: if the server returned a full HTML document
       // (with <!DOCTYPE> or <html>), parse and extract the meaningful inner HTML
       // (prefer the `.preview` wrapper if present, else the body innerHTML).
@@ -96,54 +104,76 @@
         normalizedHtml = html || '';
       }
 
-      // Update the local preview HTML immediately to reduce render races
-      previewHtmlLocal = normalizedHtml || '';
-  previewStore.set(html);
-      try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
-      // Minimal DOM-visible instrumentation for automated tests / diagnostics:
-      // set a short-lived attribute and dispatch an event indicating preview is ready.
-      try {
-        if (typeof document !== 'undefined' && document.body) {
-          const ts = String(Date.now());
-          // mark body for backward compatibility
-          document.body.setAttribute('data-preview-ready', '1');
-          document.body.setAttribute('data-preview-timestamp', ts);
-          try { window.dispatchEvent(new CustomEvent('preview-ready', { detail: { timestamp: ts } })); } catch (e) {}
-          setTimeout(() => {
-            try { document.body.removeAttribute('data-preview-ready'); document.body.removeAttribute('data-preview-timestamp'); } catch (e) {}
-          }, 8000);
-          try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html; } catch (e) {}
-          // ALSO set the attribute directly on the preview-content node so tests targeting it
-          // (e.g. [data-testid="preview-content"][data-preview-ready="1"]) see the ready flag immediately.
-          try {
+      // only apply if this update matches latest
+      if (updateId === latestUpdateId) {
+        // enforce a minimum visible skeleton time to avoid flicker
+        const elapsed = Date.now() - skeletonShownAt;
+        const minVisible = 300;
+        if (elapsed < minVisible) await new Promise((r) => setTimeout(r, minVisible - elapsed));
+
+        // Update the local preview HTML immediately to reduce render races
+        previewHtmlLocal = normalizedHtml || '';
+        previewStore.set(html);
+        try {
+          if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html;
+        } catch (e) {}
+        // Minimal DOM-visible instrumentation for automated tests / diagnostics:
+        // set a short-lived attribute and dispatch an event indicating preview is ready.
+        try {
+          if (typeof document !== 'undefined' && document.body) {
+            const ts = String(Date.now());
+            // mark body for backward compatibility
+            document.body.setAttribute('data-preview-ready', '1');
+            document.body.setAttribute('data-preview-timestamp', ts);
+            try {
+              window.dispatchEvent(new CustomEvent('preview-ready', { detail: { timestamp: ts } }));
+            } catch (e) {}
+            setTimeout(() => {
+              try {
+                document.body.removeAttribute('data-preview-ready');
+                document.body.removeAttribute('data-preview-timestamp');
+              } catch (e) {}
+            }, 8000);
+            try {
+              if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = html;
+            } catch (e) {}
+            // ALSO set the attribute directly on the preview-content node so tests targeting it
+            // (e.g. [data-testid="preview-content"][data-preview-ready="1"]) see the ready flag immediately.
+            try {
+              const el = document.querySelector('[data-testid="preview-content"]');
+              if (el) {
+                el.setAttribute('data-preview-ready', '1');
+                el.setAttribute('data-preview-timestamp', ts);
+              }
+            } catch (e) {}
+          }
+        } catch (e) {
+          // swallow instrumentation errors
+        }
+        // trigger brief flash to draw attention
+        flash = true;
+        setTimeout(() => (flash = false), 600);
+        setUiSuccess('Preview loaded');
+      }
+    } catch (error) {
+      if (updateId === latestUpdateId) {
+        setUiError(`Failed to load preview: ${error.message}`);
+        previewStore.set('');
+        // Ensure the preview-content attribute is cleared on error so tests don't wait forever
+        try {
+          if (typeof document !== 'undefined') {
             const el = document.querySelector('[data-testid="preview-content"]');
             if (el) {
-              el.setAttribute('data-preview-ready', '1');
-              el.setAttribute('data-preview-timestamp', ts);
+              el.setAttribute('data-preview-ready', '0');
+              el.removeAttribute('data-preview-timestamp');
             }
-          } catch (e) {}
-        }
-      } catch (e) {
-        // swallow instrumentation errors
-      }
-      // trigger brief flash to draw attention
-      flash = true;
-      setTimeout(() => (flash = false), 600);
-  setUiSuccess('Preview loaded');
-    } catch (error) {
-  setUiError(`Failed to load preview: ${error.message}`);
-      previewStore.set('');
-      // Ensure the preview-content attribute is cleared on error so tests don't wait forever
-      try {
-        if (typeof document !== 'undefined') {
-          const el = document.querySelector('[data-testid="preview-content"]');
-          if (el) {
-            el.setAttribute('data-preview-ready', '0');
-            el.removeAttribute('data-preview-timestamp');
+            try { document.body.setAttribute('data-preview-ready', '0'); } catch (e) {}
           }
-          try { document.body.setAttribute('data-preview-ready', '0'); } catch (e) {}
-        }
-      } catch (e) {}
+        } catch (e) {}
+      }
+    }
+    finally {
+      if (updateId === latestUpdateId) isPreviewing = false;
     }
   };
 
