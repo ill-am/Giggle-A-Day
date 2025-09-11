@@ -165,9 +165,18 @@
     >
       Load V0.1 demo
     </button>
-    <button data-testid="generate-button" on:click={handleSubmit} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
+    <button
+      data-testid="generate-button"
+      on:click={handleSubmit}
+      disabled={uiState.status === 'loading' || isGenerating || isPreviewing}
+      aria-busy={isGenerating}
+      aria-disabled={uiState.status === 'loading' || isPreviewing}
+      aria-live="polite"
+      title={uiState.status === 'loading' || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
+    >
       {#if isGenerating}
-        Generating...
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="visually-hidden">Generating…</span>
       {:else}
         Generate
       {/if}
@@ -225,6 +234,22 @@
   button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+  }
+  .spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+  .visually-hidden { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
   .error-message {
     color: #e74c3c;

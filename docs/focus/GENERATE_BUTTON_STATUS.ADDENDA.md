@@ -144,9 +144,9 @@ Use the table below to record the original estimate, assigned owner, start/end t
 
 | Task ID | Task | Estimate | Owner | Status | Started | Finished | Actual (hrs) | Notes |
 |--------:|------|:--------:|:-----:|:------:|:-------:|:--------:|:------------:|-------|
-| A1 | Add `client/src/lib/api.js` (postPrompt helper) | 0.5d | ke-lav | In Progress | 2025-09-11T13:00:00Z |  |  | started work |
-| A2 | Implement `GenerateButton.svelte` (state machine + spinner) | 1d | ke-lav | In Progress | 2025-09-11T13:10:00Z |  |  | started work |
-| A3 | Unit tests (Vitest) for Generate button | 0.5d | ke-lav | In Progress | 2025-09-11T13:30:00Z |  |  | started work |
+| A1 | Add `client/src/lib/api.js` (postPrompt helper) | 0.5d | ke-lav | Done | 2025-09-11T13:00:00Z | 2025-09-11T13:30:00Z | 0.5 | Verified existing `client/src/lib/api.js` provided `submitPrompt`; no new file needed. |
+| A2 | Implement `GenerateButton.svelte` (state machine + spinner) | 1d | ke-lav | Done | 2025-09-11T13:10:00Z | 2025-09-11T15:10:00Z | 2.0 | Polished `PromptInput.svelte` generate button with spinner, aria attributes, and improved titles. |
+| A3 | Unit tests (Vitest) for Generate button | 0.5d | ke-lav | Done | 2025-09-11T13:30:00Z | 2025-09-11T15:00:00Z | 1.5 | Added `client/__tests__/generate-button.test.ts` and iterated on Svelte 5 test adapter. |
 | A4 | Dev-only server stub `/prompt?dev=true` | 0.25d | ke-lav | Done | 2025-09-11T13:05:00Z | 2025-09-11T13:15:00Z | 0.17 | implemented dev stub in server/index.js |
 | A5 | Integration smoke (manual verification) | 0.25d | ke-lav | In Progress | 2025-09-11T14:00:00Z |  |  | manual smoke pending |
 | B1 | Progress updates / polling or websocket | 1d | TBD | Todo |  |  |  |  |
