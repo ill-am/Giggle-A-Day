@@ -1,7 +1,8 @@
 <script>
-  import { promptStore, contentStore, uiStateStore, previewStore } from '../stores';
-  import { submitPrompt, exportToPdf, loadPreview } from '../lib/api';
-    import { get } from 'svelte/store';
+  import { promptStore, contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
+  import { submitPrompt, exportToPdf } from '../lib/api';
+  import { tick } from 'svelte';
+  import { get } from 'svelte/store';
 
   let currentPrompt;
   promptStore.subscribe(value => {
@@ -14,12 +15,23 @@
   });
 
   // Quick-insert suggestions for the 'summer' theme
-  const insertSummerSuggestion = () => {
+  const insertSummerSuggestion = async () => {
     const suggestion = `A short, sunlit summer poem about cicadas and long shadows.`;
+    console.log('insertSummerSuggestion: setting suggestion=', suggestion);
     promptStore.set(suggestion);
-    // Focus textarea after inserting so keyboard users can immediately edit
+    // Keep the local binding in sync so the textarea reflects the change immediately
+    currentPrompt = suggestion;
+    // Wait a tick for the DOM to update, then focus the textarea
+    await tick();
     const el = document.getElementById('prompt-textarea');
-    if (el) el.focus();
+    if (el) {
+      // Defensive: set the DOM value directly so test runners observe the change
+  try { if (el instanceof HTMLTextAreaElement) el.value = suggestion; } catch (e) { /* ignore */ }
+      el.focus();
+      console.log('insertSummerSuggestion: focused textarea');
+    } else {
+      console.log('insertSummerSuggestion: textarea element not found');
+    }
   };
 
   let isGenerating = false;
@@ -33,41 +45,23 @@
   let originalBodyBg = '';
 
   const handleSubmit = async () => {
-    // Full generation flow (kept for later steps). Not used for Step 1A.
     if (!currentPrompt || !currentPrompt.trim()) {
-      try { console.debug('[DEV] PromptInput: setting uiState error: Prompt cannot be empty.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
       return;
     }
     isGenerating = true;
-    try { console.debug('[DEV] PromptInput: setting uiState loading: Generating content...'); } catch(e){}
     uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
       const response = await submitPrompt(currentPrompt);
-      // Defensive handling: server may return multiple shapes. Accept the common variants:
-      // { data: { content: {...} } } or { content: {...} } or { data: {...} }
-      try { console.debug('[DEV] PromptInput: submitPrompt response', response); } catch (e) {}
-      let newContent = null;
-      if (response) {
-        if (response.data && response.data.content) newContent = response.data.content;
-        else if (response.content) newContent = response.content;
-        else if (response.data && response.data.title && response.data.body) newContent = response.data;
-        else if (response.title && response.body) newContent = response;
-      }
-
-      if (newContent) {
-        contentStore.set(newContent);
-        try { console.debug('[DEV] PromptInput: setting uiState success: Content generated successfully.'); } catch(e){}
+      if (response && response.data) {
+        contentStore.set(response.data.content);
         uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
         // Auto-trigger preview after generation completes
         await handlePreviewNow();
       } else {
-        // Surface the unexpected response shape for debugging
-        console.error('[DEV] PromptInput: unexpected submitPrompt response shape', response);
         throw new Error('Invalid response structure from server.');
       }
     } catch (error) {
-      try { console.debug('[DEV] PromptInput: setting uiState error:', error && error.message); } catch(e){}
       uiStateStore.set({ status: 'error', message: error.message || 'An unknown error occurred.' });
     }
     finally {
@@ -165,38 +159,17 @@
   const handlePreviewNow = async () => {
     const current = get(contentStore);
     if (!current) {
-      try { console.debug('[DEV] handlePreviewNow: setting uiState error: No content to preview.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
       return;
     }
     isPreviewing = true;
     try {
-      try { console.debug('[DEV] handlePreviewNow: setting uiState loading: Loading preview...'); } catch(e){}
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-  const html = await loadPreview(current);
-      try { console.debug('[DEV] PromptInput: about to previewStore.set (server) length=', String(html).length); } catch (e) {}
+      const html = await import('../lib/api').then((m) => m.loadPreview(current));
+      const { previewStore } = await import('../stores');
       previewStore.set(html);
-      try { console.debug('[DEV] PromptInput: previewStore.set (server) done'); } catch (e) {}
-      try {
-        const pc = document.querySelector('.preview-container');
-        if (pc) {
-          pc.setAttribute('data-preview-source', `server:${Date.now()}`);
-        }
-      } catch (e) {}
-      // Debug hook: expose snippet for automated verification
-      try {
-        // eslint-disable-next-line no-undef
-        window.__preview_html_snippet = String(html).slice(0, 1200);
-      } catch (e) {}
-      // Debug hook for automated verification: mark preview container when updated
-      try {
-        const pc = document.querySelector('.preview-container');
-        if (pc) pc.setAttribute('data-preview-updated', String(Date.now()));
-      } catch (e) {}
-      try { console.debug('[DEV] handlePreviewNow: setting uiState success: Preview updated'); } catch(e){}
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
-      try { console.debug('[DEV] handlePreviewNow: setting uiState error:', err && err.message); } catch(e){}
       uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
     } finally {
       isPreviewing = false;
@@ -207,12 +180,10 @@
   const runSmokeTest = async () => {
     const current = get(contentStore);
     if (!current) {
-      try { console.debug('[DEV] runSmokeTest: setting uiState error: No content to run smoke test.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'No content to run smoke test. Load or generate content first.' });
       return;
     }
 
-    try { console.debug('[DEV] runSmokeTest: setting uiState loading: Running smoke test (preview → export)...'); } catch(e){}
     uiStateStore.set({ status: 'loading', message: 'Running smoke test (preview → export)...' });
     try {
       // Ensure preview renders
@@ -221,7 +192,6 @@
       // Trigger export which downloads a PDF if successful
       await exportToPdf(current);
 
-      try { console.debug('[DEV] runSmokeTest: setting uiState success: Smoke test succeeded — PDF downloaded.'); } catch(e){}
       uiStateStore.set({ status: 'success', message: 'Smoke test succeeded — PDF downloaded.' });
     } catch (err) {
       // Create a diagnostic JSON blob and trigger download
@@ -241,7 +211,6 @@
       window.URL.revokeObjectURL(url);
       a.remove();
 
-      try { console.debug('[DEV] runSmokeTest: setting uiState error: Smoke test failed — diagnostic saved.'); } catch(e){}
       uiStateStore.set({ status: 'error', message: 'Smoke test failed — diagnostic saved.' });
     }
   };
@@ -252,7 +221,8 @@
   <textarea
     id="prompt-textarea"
     data-testid="prompt-textarea"
-    bind:value={$promptStore}
+    bind:value={currentPrompt}
+    on:input={() => promptStore.set(currentPrompt)}
     rows="6"
     placeholder="e.g., A noir detective story set in a city of robots."
   disabled={(uiState && uiState.status === 'loading')}
@@ -270,22 +240,46 @@
     </button>
     <button
       class="demo"
-      style="display:none"
-      aria-hidden="true"
-      title="Load full V0.1 demo content (developer helper - hidden)"
+      on:click={() => {
+        // Populate the content store directly with a V0.1 demo payload
+        const demo = {
+          title: 'Summer Poems — Demo',
+          body: '<div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer1.svg);background-size:cover;background-position:center;"><h1>Summer Poem 1</h1><p>By Unknown</p><pre>Roses are red\nViolets are blue\nSummer breeze carries you</pre></div><div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer2.svg);background-size:cover;background-position:center;"><h1>Summer Poem 2</h1><p>By Unknown</p><pre>Sun on the sand\nWaves lap the shore\nA page on each</pre></div>'
+        };
+    // Set both the editor prompt and the generated content so the UI
+    // visibly reflects the demo immediately.
+    promptStore.set('Load demo: two short summer poems, one per page');
+    contentStore.set(demo);
+    // Trigger a preview update and show an immediate status so the user
+    // sees activity on the page (not only in the terminal).
+    uiStateStore.set({ status: 'loading', message: 'Loading demo preview...' });
+    // Use the existing preview flow to populate the preview pane.
+    handlePreviewNow();
+      }}
+      title="Load full V0.1 demo content"
       data-testid="load-demo"
       disabled={uiState.status === 'loading'}
     >
       Load V0.1 demo
     </button>
-  <button data-testid="generate-button" class:flash={generateFlash} on:click={handleGenerateClick} disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}>
-        {#if isGenerating}
-          <span class="btn-spinner" aria-hidden="true"></span> Generating...
-        {:else}
-          Generate
-        {/if}
-      </button>
-  <button data-testid="preview-button" on:click={handlePreviewNow} disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}>
+    <button
+      data-testid="generate-button"
+      on:click={handleGenerateClick}
+      disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}
+      aria-busy={isGenerating}
+      aria-disabled={(uiState && uiState.status === 'loading') || isPreviewing}
+      aria-live="polite"
+      title={(uiState && uiState.status === 'loading') || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
+      class:flash={generateFlash}
+    >
+      {#if isGenerating}
+        <span class="spinner" aria-hidden="true"></span>
+        <span class="visually-hidden">Generating…</span>
+      {:else}
+        Generate
+      {/if}
+    </button>
+    <button data-testid="preview-button" on:click={handlePreviewNow} disabled={uiState.status === 'loading' || isGenerating || isPreviewing}>
       {#if isPreviewing}
         Previewing...
       {:else}
@@ -350,6 +344,22 @@
   button:disabled {
     background-color: #ccc;
     cursor: not-allowed;
+  }
+  .spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255,255,255,0.2);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+  }
+  .visually-hidden { position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
   .error-message {
     color: #e74c3c;
