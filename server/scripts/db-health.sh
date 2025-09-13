@@ -150,7 +150,7 @@ main() {
         VERBOSE=${VERBOSE:-false}
         tables_missing=false
         
-        for table in "Calendar" "Event"; do
+        for table in "Prompt" "AIResult" "Override" "PDFExport"; do
             if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
                 "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '$table');" | grep -q t; then
                 tables_missing=true
@@ -164,7 +164,7 @@ main() {
             if npx --yes prisma migrate deploy --schema="$PRISMA_SCHEMA_PATH"; then
                 # Verify fix worked
                 tables_valid=true
-                for table in "Calendar" "Event"; do
+                for table in "Prompt" "AIResult" "Override" "PDFExport"; do
                     if ! PGPASSWORD="$POSTGRES_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
                         "SELECT EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = '$table');" | grep -q t; then
                         tables_valid=false
