@@ -95,6 +95,23 @@
   let autoPreview = true;
   let flash = false;
 
+  // Build a tiny client-side preview HTML (safe-escaped) to use as a fallback
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const buildLocalPreviewHtml = (content) => {
+    const title = escapeHtml(content.title || 'Preview');
+    const body = escapeHtml(content.body || '');
+    return `\n      <article class="local-preview-fallback" style="padding:1.25rem">\n        <h2 style=\"margin-top:0;\">${title}</h2>\n        <div>${body.replace(/\n/g, '<br/>')}</div>\n      </article>\n    `;
+  };
+
   const updatePreview = async (newContent) => {
     if (!newContent) {
       previewStore.set('');
@@ -150,9 +167,18 @@
       </div>
     </div>
   {:else}
-    <div class="placeholder">
-      <p>Your generated preview will appear here.</p>
-    </div>
+    {#if content}
+      <!-- Fallback: render a minimal, safe client-side preview from content
+           This ensures the preview pane reflects generated content even when
+           server-side preview fails or the proxy blocks the request. -->
+      <div class="preview-stage fallback-stage">
+        <div class="preview-content" data-testid="preview-content">{@html buildLocalPreviewHtml(content)}</div>
+      </div>
+    {:else}
+      <div class="placeholder">
+        <p>Your generated preview will appear here.</p>
+      </div>
+    {/if}
   {/if}
 </div>
 

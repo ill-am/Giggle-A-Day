@@ -85,7 +85,7 @@
     // flash the preview container background to show visible activity local to the preview area
     try {
       const pc = document.querySelector('.preview-container');
-      if (pc) {
+      if (pc && pc instanceof HTMLElement) {
         const prevBg = pc.style.backgroundColor || getComputedStyle(pc).backgroundColor || '';
         pc.style.backgroundColor = '#ffdddd';
         pc.setAttribute('data-preview-flash', '1');
@@ -120,6 +120,43 @@
     }
     // intentionally do not call submitPrompt in Step 1A
     showTypedPromptDialog = false;
+  };
+
+  // Primary handler: call the server to generate content and update stores.
+  // This is now the default behaviour for Generate to make the GUI functional.
+  const handleGenerateNow = async () => {
+
+    const p = get(promptStore);
+    if (!p || !p.trim()) {
+      uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
+      return;
+    }
+
+    isGenerating = true;
+    uiStateStore.set({ status: 'loading', message: 'Generating content (server)...' });
+
+    try {
+      // Use the standard client API helper so retry logic and logging are preserved.
+      // submitPrompt posts to `/prompt` (server will use dev mode if configured).
+      const response = await submitPrompt(p);
+
+      // Normalize response shape: support both { data: { content } } and { content }
+      const json = response && (response.data || response);
+      if (!json) throw new Error('Empty response from server');
+      if (json && json.content) {
+        contentStore.set(json.content);
+      } else if (json && json.data && json.data.content) {
+        contentStore.set(json.data.content);
+      } else {
+        throw new Error('Unexpected server payload');
+      }
+      uiStateStore.set({ status: 'success', message: 'Content generated (server).' });
+      await handlePreviewNow();
+    } catch (err) {
+      uiStateStore.set({ status: 'error', message: err.message || 'Server generation failed' });
+    } finally {
+      isGenerating = false;
+    }
   };
 
   // Diagnostic overlay removed — preview is updated only via contentStore/previewStore
@@ -264,7 +301,7 @@
     </button>
     <button
       data-testid="generate-button"
-      on:click={handleGenerateClick}
+      on:click={handleGenerateNow}
       disabled={(uiState && uiState.status === 'loading') || isGenerating || isPreviewing}
       aria-busy={isGenerating}
       aria-disabled={(uiState && uiState.status === 'loading') || isPreviewing}
