@@ -601,12 +601,10 @@ app.post("/prompt", (req, res, next) => {
 
     const title = `Dev: ${prompt.split(" ").slice(0, 6).join(" ")}`;
     const body = `Deterministic dev preview for prompt: ${prompt}`;
-    return res
-      .status(201)
-      .json({
-        success: true,
-        data: { content: { title, body, layout: "dev" } },
-      });
+    return res.status(201).json({
+      success: true,
+      data: { content: { title, body, layout: "dev" } },
+    });
   } catch (e) {
     return next(e);
   }
@@ -678,16 +676,74 @@ const previewTemplate = (content) => `
 
 // NOTE: image rewrite is handled by `rewriteImagesForExportAsync` above.
 
-app.get("/preview", (req, res) => {
-  const { content } = req.query;
+app.get("/preview", async (req, res) => {
+  const { content, resultId, promptId } = req.query;
 
-  // Validate required parameter
-  if (!content) {
-    return sendValidationError(res, "Content parameter is required");
-  }
-
+  // If content not provided, try to load it from DB using resultId or promptId
+  let contentPayload = content || null;
   try {
-    let contentObj = JSON.parse(content);
+    if (!contentPayload && resultId) {
+      const id = parseInt(resultId, 10);
+      if (!isNaN(id)) {
+        try {
+          const row = await crud.getAIResultById(id);
+          if (row) {
+            // row.result may be a JSON string or an object
+            const resultObj =
+              typeof row.result === "string"
+                ? JSON.parse(row.result)
+                : row.result;
+            // Prefer resultObj.content if present
+            const usable =
+              resultObj && resultObj.content ? resultObj.content : resultObj;
+            contentPayload = JSON.stringify(usable);
+          }
+        } catch (e) {
+          // ignore DB lookup errors here; validation will handle missing content
+          console.warn(
+            "/preview: failed to load result by id",
+            id,
+            e && e.message
+          );
+        }
+      }
+    }
+
+    if (!contentPayload && promptId) {
+      const pid = parseInt(promptId, 10);
+      if (!isNaN(pid)) {
+        try {
+          // Try to find latest AI result for this prompt
+          const results = await crud.getAIResults();
+          const filtered = results
+            .filter((r) => r.prompt_id === pid)
+            .sort((a, b) => (a.id || 0) - (b.id || 0));
+          const latest = filtered.length ? filtered[filtered.length - 1] : null;
+          if (latest) {
+            const resultObj =
+              typeof latest.result === "string"
+                ? JSON.parse(latest.result)
+                : latest.result;
+            const usable =
+              resultObj && resultObj.content ? resultObj.content : resultObj;
+            contentPayload = JSON.stringify(usable);
+          }
+        } catch (e) {
+          console.warn(
+            "/preview: failed to load latest result for prompt",
+            pid,
+            e && e.message
+          );
+        }
+      }
+    }
+
+    // Validate required parameter
+    if (!contentPayload) {
+      return sendValidationError(res, "Content parameter is required");
+    }
+
+    let contentObj = JSON.parse(contentPayload);
 
     // Support legacy envelope: { content: { title, body } }
     if (contentObj && typeof contentObj === "object" && contentObj.content) {
