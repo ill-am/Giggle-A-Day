@@ -1,6 +1,7 @@
 <script>
   import { promptStore, contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
   import { submitPrompt, exportToPdf } from '../lib/api';
+  import { generateAndPreview } from '../lib/flows';
   import { tick } from 'svelte';
   import { get } from 'svelte/store';
 
@@ -78,7 +79,6 @@
   // Primary handler: call the server to generate content and update stores.
   // This is now the default behaviour for Generate to make the GUI functional.
   const handleGenerateNow = async () => {
-
     const p = get(promptStore);
     if (!p || !p.trim()) {
       uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
@@ -86,29 +86,10 @@
     }
 
     isGenerating = true;
-    uiStateStore.set({ status: 'loading', message: 'Generating content (server)...' });
-
     try {
-      // Use the standard client API helper so retry logic and logging are preserved.
-      // submitPrompt posts to `/prompt` (server will use dev mode if configured).
-      const response = await submitPrompt(p);
-
-      // Normalize response shape: support both { data: { content } } and { content }
-      const json = response && (response.data || response) || {};
-      if (!json) throw new Error('Empty response from server');
-      if (json && (json.content || (json.data && json.data.content))) {
-        const payload = json.content || (json.data && json.data.content) || json;
-        const stored = {
-          ...(payload || {}),
-          ...(json.resultId ? { resultId: json.resultId } : {}),
-          ...(json.promptId ? { promptId: json.promptId } : {}),
-        };
-        contentStore.set(stored);
-      } else {
-        throw new Error('Unexpected server payload');
-      }
+      // Centralized flow handles submission, contentStore update, and preview
+      await generateAndPreview(p);
       uiStateStore.set({ status: 'success', message: 'Content generated (server).' });
-      await handlePreviewNow();
     } catch (err) {
       uiStateStore.set({ status: 'error', message: err.message || 'Server generation failed' });
     } finally {

@@ -15,12 +15,13 @@ Owner: @dev-team (or whoever picks the task)
 
 ## 2. Store & Handler Cleanup (Phase 2) — 45m
 
-- [ ] Update `client/src/stores/contentStore` to fetch/save via the API which persists to PostgreSQL.
-  - Acceptance: Setting `contentStore` triggers a POST to server endpoints which persist data.
-- [ ] Remove local preview shortcut from `PromptInput.svelte` (the code path that directly writes `previewStore`).
-  - Acceptance: `previewStore` is updated only by `PreviewWindow` via `loadPreview`.
-- [ ] Remove `handleGenerateClick` and typed-prompt dialog state from `PromptInput.svelte`.
-  - Acceptance: Only `handleGenerateNow` is used; UI retains expected behavior.
+[ ] Update `client/src/stores/contentStore` to fetch/save via the API which persists to PostgreSQL.
+
+- Acceptance: Setting `contentStore` triggers a POST to server endpoints which persist data.
+- [x] Remove local preview shortcut from `PromptInput.svelte` (the code path that directly writes `previewStore`).
+- Acceptance: `previewStore` is updated only by `PreviewWindow` via `loadPreview`.
+- [x] Remove `handleGenerateClick` and typed-prompt dialog state from `PromptInput.svelte`.
+- Acceptance: Only `handleGenerateNow` is used; UI retains expected behavior.
 
 ## 3. Preview Consolidation (Phase 3) — 30m
 
