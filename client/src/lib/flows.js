@@ -1,5 +1,10 @@
 import { get } from "svelte/store";
-import { submitPrompt, loadPreview } from "./api";
+import {
+  submitPrompt,
+  loadPreview,
+  savePromptContent,
+  updatePromptContent,
+} from "./api";
 import {
   contentStore,
   previewStore,
@@ -96,10 +101,34 @@ export async function generateAndPreview(
       throw new Error("Invalid response structure from server.");
     }
 
-    contentStore.set(content);
+    // Persist content to server prompts API when possible
+    let persisted = content;
+    try {
+      if (content.promptId) {
+        persisted = await updatePromptContent(content.promptId, content);
+      } else {
+        // server-side create may return prompt/result identifiers
+        const created = await savePromptContent(content);
+        persisted = { ...(content || {}), ...(created || {}) };
+      }
+      // Update contentStore with any server-provided ids/overrides
+      contentStore.set(persisted);
+    } catch (saveErr) {
+      // If persistence fails, still use generated content locally but surface an error
+      contentStore.set(content);
+      console.warn(
+        "Failed to persist generated content to server",
+        saveErr && saveErr.message
+      );
+      // Surface a non-blocking UI warning
+      uiStateStore.set({
+        status: "error",
+        message: "Saved locally; failed to persist to server.",
+      });
+    }
 
     // Trigger preview for the newly generated content
-    const html = await previewFromContent(content, timeoutMs);
+    const html = await previewFromContent(persisted, timeoutMs);
     return html;
   } catch (err) {
     setUiError(err.message || "Generation failed");

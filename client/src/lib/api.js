@@ -381,6 +381,44 @@ export async function exportToPdf(content) {
   }
 }
 
+// Persist generated prompt/content to server-backed prompts API
+export async function savePromptContent(content) {
+  // content is expected to be an object with title/body and optionally prompt
+  try {
+    const response = await fetchWithRetry("/api/prompts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: content.prompt || content.title || "" }),
+    });
+    if (!response.ok) throw new Error(`Save failed: ${response.status}`);
+    const data = await response.json();
+    // server returns { success: true, data: result }
+    return data && data.data ? data.data : data;
+  } catch (err) {
+    Logger.error("savePromptContent error", { err });
+    throw err;
+  }
+}
+
+export async function updatePromptContent(id, content) {
+  try {
+    const response = await fetchWithRetry(
+      `/api/prompts/${encodeURIComponent(id)}`,
+      {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: content.prompt || content.title || "" }),
+      }
+    );
+    if (!response.ok) throw new Error(`Update failed: ${response.status}`);
+    const data = await response.json();
+    return data && data.data ? data.data : data;
+  } catch (err) {
+    Logger.error("updatePromptContent error", { err });
+    throw err;
+  }
+}
+
 // Background export job API helpers
 export async function startExportJob(content) {
   if (!content || !content.title || !content.body) {
