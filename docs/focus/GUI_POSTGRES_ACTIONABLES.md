@@ -73,6 +73,24 @@ Format
 
 ---
 
+Dev Minimal Mode (developer helper)
+
+- Purpose: A temporary, developer-only mode to make local debugging and
+  the prompt→preview→export loop deterministic when Puppeteer, rate-limiting
+  or other infra causes intermittent failures.
+- How to enable: set environment variable `DEV_MINIMAL=true` before starting
+  the server (or add it to `.env` during local debugging).
+- What it disables/relaxes (code locations):
+  - Skips applying the global rate-limiting middleware (see `server/index.js` near rateLimit registration).
+  - Relaxes Puppeteer readiness gating in request startup middleware so requests are not blocked when the headless browser is absent or restarting (see `server/index.js` startup readiness middleware).
+  - Does NOT automatically start an alternate browser; it only prevents the server from returning 503 for readiness while debugging.
+- Safety / re-enable: Remove `DEV_MINIMAL` or set it to false before running in CI or production. Re-enabling simply requires unsetting the env var and restarting the server.
+- Trace: `server/index.js` (top-of-file flag `DEV_MINIMAL` and conditional branches), this file in `docs/focus/` (dev_notes).
+
+Recommendation: Use `DEV_MINIMAL` for local debugging sessions only. After a successful fix and tests, remove the reliance on it and re-enable normal checks and rate limiting.
+
+---
+
 How I will proceed if you say "proceed":
 
 1. Implement item (1) (`GET /content/*` endpoints) and test locally. (I'll mark it complete.)

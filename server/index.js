@@ -10,6 +10,15 @@ try {
 } catch (e) {
   // dotenv is optional; if it's not installed we'll ignore the error.
 }
+// Dev minimal mode: set DEV_MINIMAL=true to disable heavy infra and
+// non-essential middleware to make local debugging deterministic.
+const DEV_MINIMAL =
+  process.env.DEV_MINIMAL === "1" || process.env.DEV_MINIMAL === "true";
+if (DEV_MINIMAL) {
+  console.log(
+    "DEV_MINIMAL=true - running in minimal developer mode: rate-limiting, puppeteer readiness and related checks will be relaxed"
+  );
+}
 const express = require("express");
 const morgan = require("morgan");
 const cors = require("cors");
@@ -360,7 +369,11 @@ app.use(cors());
 if (process.env.DISABLE_RATE_LIMIT === "1") {
   console.log("Rate limit disabled via DISABLE_RATE_LIMIT=1");
 } else {
-  app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+  if (!DEV_MINIMAL) {
+    app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+  } else {
+    console.log("DEV_MINIMAL=true - skipping rate limiting middleware");
+  }
 }
 
 // Ensure logs directory exists
@@ -438,7 +451,9 @@ app.use((req, res, next) => {
     runningInTest;
 
   // If puppeteer is transitioning and we're not in skip/test mode, fail readiness
-  if (serviceState.puppeteer.transitioning && !skipPuppeteer) {
+  // In DEV_MINIMAL mode we relax Puppeteer readiness checks so local debug flows
+  // don't get blocked by transient browser restarts.
+  if (!DEV_MINIMAL && serviceState.puppeteer.transitioning && !skipPuppeteer) {
     return res.status(503).json({
       status: "error",
       reason: "Service transitioning: Puppeteer is restarting",
@@ -452,7 +467,11 @@ app.use((req, res, next) => {
   // If puppeteer isn't ready and we're not explicitly skipping it for tests/CI,
   // return 503. Tests or CI runs that don't require Puppeteer should set
   // SKIP_PUPPETEER=true or run under NODE_ENV=test so requests are allowed.
-  if (!skipPuppeteer && (!serviceState.puppeteer.ready || !browserInstance)) {
+  if (
+    !DEV_MINIMAL &&
+    !skipPuppeteer &&
+    (!serviceState.puppeteer.ready || !browserInstance)
+  ) {
     return res.status(503).json({
       status: "error",
       timestamp: new Date().toISOString(),
@@ -461,6 +480,11 @@ app.use((req, res, next) => {
         ? "initializing"
         : "failed",
     });
+  } else if (DEV_MINIMAL) {
+    // In minimal dev mode, mark puppeteer as not-required so the server
+    // remains responsive even when the headless browser is unavailable.
+    // This is safe for local debugging and can be removed before production.
+    serviceState.puppeteer.ready = false;
   }
 
   // If we reach here, services are ready
@@ -1914,12 +1938,10 @@ app.get("/content/prompt/:id", async (req, res) => {
       .sort((a, b) => (a.id || 0) - (b.id || 0));
     const latest = filtered.length ? filtered[filtered.length - 1] : null;
     if (!latest) {
-      return res
-        .status(404)
-        .json({
-          success: false,
-          error: { message: "No AI results found for this prompt" },
-        });
+      return res.status(404).json({
+        success: false,
+        error: { message: "No AI results found for this prompt" },
+      });
     }
     const resultObj =
       typeof latest.result === "string"
@@ -1930,12 +1952,10 @@ app.get("/content/prompt/:id", async (req, res) => {
     return res.status(200).json({ success: true, content: usable });
   } catch (err) {
     console.error("/content/prompt/:id error", err);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        error: { message: "Failed to load prompt results" },
-      });
+    return res.status(500).json({
+      success: false,
+      error: { message: "Failed to load prompt results" },
+    });
   }
 });
 
