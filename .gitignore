@@ -46,3 +46,7 @@ run-*.zip
 
 # Temporary local export PDFs from smoke/inproc runs
 server/tmp-e2e-exports/
+# Ignore Vite build artifacts
+client/.vite/
+# Ignore generated Prisma client in dev environment
+server/prisma/prisma-client.js
