@@ -36,9 +36,6 @@
 
   let isGenerating = false;
   let isPreviewing = false;
-  // Step 1A: typed-prompt dialog state (do NOT call model in this stage)
-  let showTypedPromptDialog = false;
-  let typedPrompt = '';
   // Short-term visual feedback: flash the Generate button when clicked
   let generateFlash = false;
   // Preserve original body background for temporary flash
@@ -76,58 +73,7 @@
     }
   };
 
-  // Step 1A: intercept Generate button to show typed-prompt dialog only (no model call)
-  const handleGenerateClick = () => {
-    const p = get(promptStore);
-    if (!p || !p.trim()) {
-      try { console.debug('[DEV] PromptInput: setting uiState error: Prompt cannot be empty.'); } catch(e){}
-      uiStateStore.set({ status: 'error', message: 'Prompt cannot be empty.' });
-      return;
-    }
-    // Short-term UX: flash the Generate button (no modal, no model call)
-    typedPrompt = p;
-    generateFlash = true;
-    // ensure flash is visible briefly
-    setTimeout(() => { generateFlash = false; }, 700);
-    // flash the preview container background to show visible activity local to the preview area
-    try {
-      const pc = document.querySelector('.preview-container');
-      if (pc && pc instanceof HTMLElement) {
-        const prevBg = pc.style.backgroundColor || getComputedStyle(pc).backgroundColor || '';
-        pc.style.backgroundColor = '#ffdddd';
-        pc.setAttribute('data-preview-flash', '1');
-        setTimeout(() => {
-          try { pc.style.backgroundColor = prevBg || ''; pc.removeAttribute('data-preview-flash'); } catch (e){}
-        }, 700);
-      }
-    } catch (e) {}
-  // (diagnostic overlay removed) — rely on contentStore/previewStore updates only
-    // Option B: local preview shortcut — create a mock content object and render locally
-    try {
-      const localContent = { title: (typedPrompt || '').split('\n')[0].slice(0, 80) || 'Untitled', body: typedPrompt };
-      // Set contentStore so codebase flow sees content
-      contentStore.set(localContent);
-      // Build local preview HTML and set previewStore directly (avoids network)
-  const html = buildLocalPreviewHtml(localContent);
-      try { console.debug('[DEV] PromptInput: about to previewStore.set (local) length=', String(html).length); } catch (e) {}
-      previewStore.set(html);
-      try { console.debug('[DEV] PromptInput: previewStore.set (local) done'); } catch (e) {}
-      // Mark DOM with source so we can detect overwrites/hiding in the browser
-      try {
-        const pc = document.querySelector('.preview-container');
-        if (pc) {
-          pc.setAttribute('data-preview-source', `local:${Date.now()}`);
-        }
-      } catch (e) {}
-      // mark UI state and DOM marker similar to real flow
-      uiStateStore.set({ status: 'success', message: 'Preview (local) updated' });
-      try { const pc = document.querySelector('.preview-container'); if (pc) pc.setAttribute('data-preview-local', String(Date.now())); } catch (e) {}
-    } catch (e) {
-      uiStateStore.set({ status: 'error', message: 'Local preview failed' });
-    }
-    // intentionally do not call submitPrompt in Step 1A
-    showTypedPromptDialog = false;
-  };
+  // Removed local preview shortcut and typed-prompt dialog to centralize preview updates in PreviewWindow
 
   // Primary handler: call the server to generate content and update stores.
   // This is now the default behaviour for Generate to make the GUI functional.
@@ -183,27 +129,7 @@
       .replace(/'/g, '&#39;');
   };
 
-  const buildLocalPreviewHtml = (content) => {
-    const title = escapeHtml(content.title || 'Preview');
-    const body = escapeHtml(content.body || '');
-    // Minimal styling to make it visible and similar to server output
-    return `
-      <article class="local-preview-quick" style="padding:1.25rem">
-        <h2 style=\"margin-top:0;\">${title}</h2>
-        <div>${body.replace(/\n/g, '<br/>')}</div>
-      </article>
-    `;
-  };
-
-  const closeTypedPromptDialog = () => {
-    showTypedPromptDialog = false;
-    // Return focus to the textarea for keyboard users
-    const el = document.getElementById('prompt-textarea');
-    if (el) el.focus();
-  };
-
-  
-
+  // Local client-side preview builder removed — PreviewWindow provides fallback rendering
   const handlePreviewNow = async () => {
     const current = get(contentStore);
     if (!current) {
@@ -213,9 +139,10 @@
     isPreviewing = true;
     try {
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      const html = await import('../lib/api').then((m) => m.loadPreview(current));
-      const { previewStore } = await import('../stores');
-      previewStore.set(html);
+  const html = await import('../lib/api').then((m) => m.loadPreview(current));
+  const { previewStore } = await import('../stores');
+  // delegate previewStore.set to PreviewWindow-update flow; set here to ensure store update
+  previewStore.set(html);
       uiStateStore.set({ status: 'success', message: 'Preview updated' });
     } catch (err) {
       uiStateStore.set({ status: 'error', message: err.message || 'Preview failed' });
@@ -351,17 +278,7 @@
   {/if}
 </div>
 
-  {#if showTypedPromptDialog}
-    <div class="typed-prompt-backdrop" role="dialog" aria-modal="true">
-      <div class="typed-prompt-modal" role="document">
-    <h3 id="typed-prompt-title">Hi</h3>
-  <p class="typed-prompt-text">Hi</p>
-        <div class="typed-prompt-actions">
-          <button on:click={closeTypedPromptDialog} data-testid="typed-prompt-ok">OK</button>
-        </div>
-      </div>
-    </div>
-  {/if}
+  <!-- typed-prompt dialog removed: preview now centralized in PreviewWindow -->
 
 <style>
   .prompt-container {
