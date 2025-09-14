@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { savePromptContent, updatePromptContent } from "../lib/api";
 
 // DEV-only helper: wrap writable so set/update calls are logged during development
 const IS_DEV =
@@ -42,6 +43,29 @@ export const promptStore = devWritable("promptStore", "");
  * @type {import('svelte/store').Writable<object | null>}
  */
 export const contentStore = devWritable("contentStore", null);
+
+/**
+ * Persist content to the server prompts API.
+ * If `content.promptId` exists, perform an update; otherwise create a new prompt.
+ * Returns the persisted content object from the server.
+ */
+export async function persistContent(content) {
+  if (!content) throw new Error("No content provided to persistContent");
+  try {
+    let persisted;
+    if (content.promptId) {
+      persisted = await updatePromptContent(content.promptId, content);
+    } else {
+      persisted = await savePromptContent(content);
+    }
+    // Update local store with server-provided data
+    contentStore.set({ ...(content || {}), ...(persisted || {}) });
+    return persisted;
+  } catch (err) {
+    console.warn("persistContent failed", err && err.message);
+    throw err;
+  }
+}
 
 /**
  * Store for the HTML preview.

@@ -15,7 +15,7 @@ Owner: @dev-team (or whoever picks the task)
 
 ## 2. Store & Handler Cleanup (Phase 2) — 45m
 
-[ ] Update `client/src/stores/contentStore` to fetch/save via the API which persists to PostgreSQL.
+[ ] Update `client/src/stores/contentStore` to fetch/save via the API which persists to PostgreSQL. (in-progress)
 
 - Acceptance: Setting `contentStore` triggers a POST to server endpoints which persist data.
 - [x] Remove local preview shortcut from `PromptInput.svelte` (the code path that directly writes `previewStore`).
