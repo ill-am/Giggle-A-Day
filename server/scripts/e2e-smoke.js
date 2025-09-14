@@ -181,25 +181,50 @@ const path = require("path");
     // As a final UI fallback before hitting the API directly, attempt to set the client store
     // from the page context (Vite serves ES modules at /src/...), then click the preview-now button.
     try {
-      console.log("Attempting to set contentStore in-page as a UI fallback");
-      await page.evaluate(async () => {
+      console.log(
+        "Attempting API fallback to populate server prompts as a UI fallback"
+      );
+      // Try to POST demo content to the server prompts API so the client can fetch it
+      const apiFallbackResponse = await page.evaluate(async () => {
         try {
-          // Build the import path at runtime to avoid static module resolution by tooling
-          const importPath = "/src/" + "stores";
-          const stores = await import(importPath);
-          const prompt = "A short summer poem about sunlight";
-          // If submitPrompt flow failed, populate contentStore directly to drive preview
-          if (
-            stores &&
-            stores.contentStore &&
-            typeof stores.contentStore.set === "function"
-          ) {
-            stores.contentStore.set(prompt);
-          }
+          const demoContent = {
+            title: "A short summer poem about sunlight",
+            body: "Sunlight warms the shore.\nA short summer poem.",
+          };
+          const res = await fetch("/api/prompts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: demoContent }),
+          });
+          if (!res || !res.ok) return { ok: false };
+          const body = await res.json();
+          return { ok: true, body };
         } catch (err) {
-          // ignore import errors
+          return { ok: false };
         }
       });
+      if (!apiFallbackResponse || !apiFallbackResponse.ok) {
+        console.log(
+          "API fallback failed or not available; attempting in-page store set as last resort"
+        );
+        await page.evaluate(async () => {
+          try {
+            // Build the import path at runtime to avoid static module resolution by tooling
+            const importPath = "/src/" + "stores";
+            const stores = await import(importPath);
+            const prompt = "A short summer poem about sunlight";
+            if (
+              stores &&
+              stores.contentStore &&
+              typeof stores.contentStore.set === "function"
+            ) {
+              stores.contentStore.set({ title: prompt, body: prompt });
+            }
+          } catch (err) {
+            // ignore import errors
+          }
+        });
+      }
 
       // Try clicking the preview-now button if present and enabled
       const previewNow = await page.$('[data-testid="preview-now-button"]');

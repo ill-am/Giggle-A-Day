@@ -41,7 +41,14 @@
     try {
       const response = await saveOverride(originalContent, changes);
       if (response && response.data) {
-        contentStore.set(response.data.content);
+        try {
+          const { persistContent } = await import('../stores');
+          await persistContent(response.data.content);
+        } catch (e) {
+          // Fallback to local set if persist helper isn't available or fails
+          contentStore.set(response.data.content);
+          console.warn('OverrideControls: persistContent failed, falling back to local set', e && e.message);
+        }
         uiStateStore.set({ status: 'success', message: 'Changes saved.' });
       } else {
         throw new Error('Invalid response from server.');

@@ -16,7 +16,15 @@ async function fetchWithRetry(url, options = {}) {
   };
   delete options.retryConfig;
 
-  const endpoint = new URL(url, window.location.origin).pathname;
+  // Resolve a safe base for relative URLs. In test or Node environments
+  // window.location.origin may be missing or undici may reject relative URLs,
+  // so fall back to http://localhost to ensure fetch receives an absolute URL.
+  const base =
+    typeof window !== "undefined" && window.location && window.location.origin
+      ? window.location.origin
+      : "http://localhost";
+  const resolved = new URL(url, base);
+  const endpoint = resolved.pathname;
   const method = options.method || "GET";
 
   Logger.apiRequest(endpoint, method, {
@@ -28,7 +36,8 @@ async function fetchWithRetry(url, options = {}) {
 
   for (let attempt = 1; attempt <= config.maxRetries; attempt++) {
     try {
-      const response = await fetch(url, options);
+      // Use an absolute URL when calling fetch to avoid runtime errors in Node/undici
+      const response = await fetch(resolved.href, options);
 
       // Log the response
       Logger.apiResponse(endpoint, response.status, {

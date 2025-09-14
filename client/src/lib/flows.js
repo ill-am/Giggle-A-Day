@@ -12,6 +12,7 @@ import {
   setUiLoading,
   setUiSuccess,
   setUiError,
+  persistContent,
 } from "../stores";
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
@@ -101,18 +102,11 @@ export async function generateAndPreview(
       throw new Error("Invalid response structure from server.");
     }
 
-    // Persist content to server prompts API when possible
+    // Persist content to server prompts API when possible using centralized helper
     let persisted = content;
     try {
-      if (content.promptId) {
-        persisted = await updatePromptContent(content.promptId, content);
-      } else {
-        // server-side create may return prompt/result identifiers
-        const created = await savePromptContent(content);
-        persisted = { ...(content || {}), ...(created || {}) };
-      }
-      // Update contentStore with any server-provided ids/overrides
-      contentStore.set(persisted);
+      persisted = await persistContent(content);
+      // persistContent updates the local store with server data
     } catch (saveErr) {
       // If persistence fails, still use generated content locally but surface an error
       contentStore.set(content);
