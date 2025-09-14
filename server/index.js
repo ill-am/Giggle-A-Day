@@ -1866,6 +1866,79 @@ app.get("/api/pdf_exports/:id", (req, res, next) => {
   })();
 });
 
+// --- CONTENT HELPER ENDPOINTS ---
+// Return JSON content for a given AI result id
+app.get("/content/result/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id) || id < 1) {
+    return sendValidationError(res, "Invalid result ID", {
+      provided: req.params.id,
+      required: "positive integer",
+    });
+  }
+
+  try {
+    const row = await crud.getAIResultById(id);
+    if (!row) {
+      return res
+        .status(404)
+        .json({ success: false, error: { message: "AI result not found" } });
+    }
+    const resultObj =
+      typeof row.result === "string" ? JSON.parse(row.result) : row.result;
+    const usable =
+      resultObj && resultObj.content ? resultObj.content : resultObj;
+    return res.status(200).json({ success: true, content: usable });
+  } catch (err) {
+    console.error("/content/result/:id error", err);
+    return res
+      .status(500)
+      .json({ success: false, error: { message: "Failed to load AI result" } });
+  }
+});
+
+// Return JSON content for the latest AI result for a given prompt id
+app.get("/content/prompt/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id) || id < 1) {
+    return sendValidationError(res, "Invalid prompt ID", {
+      provided: req.params.id,
+      required: "positive integer",
+    });
+  }
+
+  try {
+    const results = await crud.getAIResults();
+    const filtered = results
+      .filter((r) => r.prompt_id === id)
+      .sort((a, b) => (a.id || 0) - (b.id || 0));
+    const latest = filtered.length ? filtered[filtered.length - 1] : null;
+    if (!latest) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          error: { message: "No AI results found for this prompt" },
+        });
+    }
+    const resultObj =
+      typeof latest.result === "string"
+        ? JSON.parse(latest.result)
+        : latest.result;
+    const usable =
+      resultObj && resultObj.content ? resultObj.content : resultObj;
+    return res.status(200).json({ success: true, content: usable });
+  } catch (err) {
+    console.error("/content/prompt/:id error", err);
+    return res
+      .status(500)
+      .json({
+        success: false,
+        error: { message: "Failed to load prompt results" },
+      });
+  }
+});
+
 // --- MULTI-POEM EBOOK EXPORT FOR SMOKE TESTS ---
 app.post("/api/export/book", async (req, res) => {
   // Accept body with { poems: [...] } or load sample file if empty
