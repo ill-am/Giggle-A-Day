@@ -11,6 +11,18 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 
+// Controller for the in-flight preview request so it can be cancelled
+let previewAbortController = null;
+
+export function cancelPreview() {
+  try {
+    if (previewAbortController) {
+      previewAbortController.abort();
+      previewAbortController = null;
+    }
+  } catch (e) {}
+}
+
 function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS) {
   return Promise.race([
     promise,
@@ -34,10 +46,15 @@ export async function previewFromContent(
     throw err;
   }
 
+  // Cancel any previously running preview to avoid race conditions
+  cancelPreview();
+  previewAbortController = new AbortController();
+  const signal = previewAbortController.signal;
+
   setUiLoading("Loading preview...");
 
   try {
-    const html = await withTimeout(loadPreview(content), timeoutMs);
+    const html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
     // Ensure previewStore is updated with the returned HTML
     previewStore.set(html);
     uiStateStore.set({ status: "success", message: "Preview loaded" });

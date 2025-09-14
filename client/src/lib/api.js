@@ -118,10 +118,11 @@ export async function submitPrompt(prompt) {
   }
 }
 
-export async function loadPreview(content) {
+export async function loadPreview(content, options = {}) {
   Logger.debug("Loading preview", {
     contentKeys: content ? Object.keys(content) : "no content",
   });
+  const signal = options && options.signal;
 
   // Ensure content has required structure
   // If content references a resultId or promptId, resolve it first using
@@ -139,7 +140,7 @@ export async function loadPreview(content) {
         );
       const resp = await fetchWithRetry(
         `/preview?resultId=${encodeURIComponent(content.resultId)}`,
-        { retryConfig: { maxRetries: 2 } }
+        { retryConfig: { maxRetries: 2 }, signal }
       );
       if (resp && resp.ok) {
         const html = await resp.text();
@@ -170,7 +171,7 @@ export async function loadPreview(content) {
         );
       const resp = await fetchWithRetry(
         `/preview?promptId=${encodeURIComponent(content.promptId)}`,
-        { retryConfig: { maxRetries: 2 } }
+        { retryConfig: { maxRetries: 2 }, signal }
       );
       if (resp && resp.ok) {
         const html = await resp.text();
@@ -199,7 +200,7 @@ export async function loadPreview(content) {
       if (content.resultId) {
         const resp = await fetchWithRetry(
           `/content/result/${encodeURIComponent(content.resultId)}`,
-          {}
+          { signal }
         );
         if (resp && resp.ok) {
           const json = await resp.json();
@@ -208,7 +209,7 @@ export async function loadPreview(content) {
       } else if (content.promptId) {
         const resp = await fetchWithRetry(
           `/content/prompt/${encodeURIComponent(content.promptId)}`,
-          {}
+          { signal }
         );
         if (resp && resp.ok) {
           const json = await resp.json();
@@ -250,6 +251,7 @@ export async function loadPreview(content) {
         headers: { "Content-Type": "application/json" },
         body: payloadStr,
         retryConfig: { maxRetries: 3, retryableStatuses: [500, 503] },
+        signal,
       });
       if (!response.ok) {
         const error = new Error(`Preview failed: ${response.status}`);
@@ -276,6 +278,7 @@ export async function loadPreview(content) {
           maxRetries: 3,
           retryableStatuses: [500, 503],
         },
+        signal,
       }
     );
 
