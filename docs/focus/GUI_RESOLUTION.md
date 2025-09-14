@@ -27,10 +27,10 @@ Owner: @dev-team (or whoever picks the task)
 
 - [ ] Move all preview responsibilities to `PreviewWindow.svelte`.
   - Acceptance: `PromptInput` no longer touches `previewStore` or buildLocalPreviewHtml.
-- [ ] Implement cancellation for in-flight `loadPreview` requests (AbortController or token).
-  - Acceptance: Rapid successive prompts cancel previous requests and show latest preview.
-- [ ] Ensure debouncing remains only in `PreviewWindow` and does not conflict with direct updates.
-  - Acceptance: Auto-preview works; no double-render flashes in automated tests.
+- [x] Implement cancellation for in-flight `loadPreview` requests (AbortController or token).
+- Acceptance: Rapid successive prompts cancel previous requests and show latest preview.
+- [x] Ensure debouncing remains only in `PreviewWindow` and does not conflict with direct updates.
+- Acceptance: Auto-preview works; no double-render flashes in automated tests.
 
 ## 4. Status & UI Feedback (Phase 4) — 30m
 
