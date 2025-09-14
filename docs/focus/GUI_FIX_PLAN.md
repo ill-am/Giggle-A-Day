@@ -1,5 +1,7 @@
 # GUI Fix Implementation Plan
 
+> Actionable checklist and implementation tasks are in `GUI_RESOLUTION.md`.
+
 ## Phase 1: PostgreSQL Integration (30 mins)
 
 1. Infrastructure (Complete)
@@ -83,3 +85,7 @@
    - Concurrent transaction handling
 
 Total estimated time: 4 hours
+
+---
+
+See also: `GUI_RESOLUTION.md` for step-by-step checkable tasks.

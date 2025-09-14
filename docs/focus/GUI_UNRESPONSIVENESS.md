@@ -1,5 +1,7 @@
 # GUI Unresponsiveness Analysis
 
+> Actionable remediations and step-by-step tasks are in `GUI_RESOLUTION.md`.
+
 ## 1. Preview Update Race Conditions
 
 - **Flow**: User submits prompt → createPrompt called → preview update triggered
@@ -53,3 +55,5 @@
   - Loading states don't properly reflect operation progress
   - Debouncing conflicts with direct updates
 - **Impact**: Confusing user feedback, apparent unresponsiveness
+
+See `GUI_RESOLUTION.md` for prioritized fixes and acceptance criteria.
