@@ -174,3 +174,257 @@ Total Estimated Time: 8-9 hours
 - Document all changes
 - Test after each major change
 - Maintain backup points
+
+## Emergency 2-hour Sprint (do-or-die checklist)
+
+Goal: Get a working, "as-is" application (frontend + backend with PostgreSQL) in 2 hours. This section is time-boxed and prescriptive — follow steps in order, stop at any irreversible change, and keep commits small.
+
+0. Preconditions (5 minutes)
+
+- Ensure you have a working local dev environment or start the devcontainer. If using the devcontainer, build and attach first.
+
+1. Start quick health checks (10 minutes) ✅ Done
+
+- From repo root, run the DB health script to confirm DB and Prisma:
+
+```bash
+./server/scripts/db-health.sh --check=all
+```
+
+- If DB is down, start the devcontainer db service (or run docker-compose):
+
+```bash
+cd .devcontainer
+docker compose up -d db
+```
+- Results
+
+```bash
+./server/scripts/db-health.sh --check=all
+DB: UP
+Prisma: OK
+Schema: VALID
+```
+
+2. Start servers in parallel (10 minutes)  ✅ Done
+
+- If in the devcontainer, the attach command should start both servers; otherwise run:
+
+```bash
+concurrently "cd client && npm run dev" "cd server && npm run dev"
+```
+
+- Happening at start up
+
+```bash
+concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'
+[1] 
+[1] > server@1.0.0 dev
+[1] > nodemon index.js
+[1] 
+[0] 
+[0] > client@0.0.0 dev
+[0] > vite
+[0] 
+[1] [nodemon] 3.1.10
+[1] [nodemon] to restart at any time, enter `rs`
+[1] [nodemon] watching path(s): *.*
+[1] [nodemon] watching extensions: js,mjs,cjs,json
+[1] [nodemon] starting `node index.js`
+[1] Serving /samples from /workspaces/vanilla/server/samples
+[1] AI service: MockAIService enabled (USE_REAL_AI not set)
+[1] Connected to SQLite database at /workspaces/vanilla/data/your-database-name.db
+[1] All tables and pragmas initialized successfully.
+[1] Database initialized successfully
+[1] Jobs DB opened at /workspaces/vanilla/server/data/jobs.db
+[1] [Puppeteer] Initialization attempt 1/5
+[1] [Puppeteer] Using Chrome executable at: /usr/bin/google-chrome-stable
+[1] PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true - will not download bundled Chromium on install.
+[0] 2:35:26 PM [vite] (client) Re-optimizing dependencies because lockfile has changed
+[0] 
+[0]   VITE v6.3.5  ready in 1519 ms
+[0] 
+[0]   ➜  Local:   http://localhost:5173/
+[0]   ➜  Network: http://172.18.0.3:5173/
+[1] [Puppeteer] Initialization successful
+[1] Server listening on port 3000
+[1] [Health] Not ready: {
+[1]   "status": "initializing",
+[1]   "timestamp": "2025-09-14T14:35:34.727Z",
+[1]   "uptime": 8918,
+[1]   "gracePeriod": true,
+[1]   "services": {
+[1]     "puppeteer": {
+[1]       "status": "ok",
+[1]       "phase": "ready",
+[1]       "error": null,
+[1]       "healthChecks": 0,
+[1]       "ready": true,
+[1]       "transitioning": false,
+[1]       "retryCount": 0
+[1]     },
+[1]     "db": {
+[1]       "status": "ok",
+[1]       "error": null,
+[1]       "phase": "ready",
+[1]       "ready": true
+[1]     }
+[1]   }
+[1] }
+[1] GET /health 503 3.627 ms - 297
+[1] [Health] Not ready: {
+[1]   "status": "initializing",
+[1]   "timestamp": "2025-09-14T14:35:44.783Z",
+[1]   "uptime": 18974,
+[1]   "gracePeriod": true,
+[1]   "services": {
+[1]     "puppeteer": {
+[1]       "status": "ok",
+[1]       "phase": "ready",
+[1]       "error": null,
+[1]       "healthChecks": 0,
+[1]       "ready": true,
+[1]       "transitioning": false,
+[1]       "retryCount": 0
+[1]     },
+[1]     "db": {
+[1]       "status": "ok",
+[1]       "error": null,
+[1]       "phase": "ready",
+[1]       "ready": true
+[1]     }
+[1]   }
+[1] }
+[1] GET /health 503 0.651 ms - 298
+[1] [Health] Not ready: {
+[1]   "status": "initializing",
+[1]   "timestamp": "2025-09-14T14:35:54.838Z",
+[1]   "uptime": 29029,
+[1]   "gracePeriod": true,
+[1]   "services": {
+[1]     "puppeteer": {
+[1]       "status": "ok",
+[1]       "phase": "ready",
+[1]       "error": null,
+[1]       "healthChecks": 0,
+[1]       "ready": true,
+[1]       "transitioning": false,
+[1]       "retryCount": 0
+[1]     },
+[1]     "db": {
+[1]       "status": "ok",
+[1]       "error": null,
+[1]       "phase": "ready",
+[1]       "ready": true
+[1]     }
+[1]   }
+[1] }
+[1] GET /health 503 0.598 ms - 298
+[1] GET / 304 0.748 ms - -
+[1] GET /health 200 35.523 ms - 289
+[1] GET /health 200 31.228 ms - 289
+[1] GET /health 200 41.681 ms - 289
+[1] GET /health 200 42.536 ms - 289
+```
+
+3. Quick smoke test (15 minutes)  [Partially, continue]
+
+- Test these endpoints locally and confirm expected responses:
+
+```bash
+# health
+curl http://localhost:3000/health
+
+# result
+`curl http://localhost:3000/health
+{"status":"ok","timestamp":"2025-09-14T15:22:29.673Z","uptime":1449073,"gracePeriod":false,"services":{"puppeteer":{"status":"ok","phase":"ready","error":null,"healthChecks":141,"ready":true,"transitioning":false,"retryCount":0},"db":{"status":"ok","error":null,"phase":"ready","ready":true}}}
+`
+# prompt (example)
+curl -X POST http://localhost:3000/prompt -H "Content-Type: application/json" -d '{"prompt":"short haiku about rain"}'
+
+# result
+`$ curl -X POST http://localhost:3000/prompt -H "Content-Type: application/json" -d '{"prompt":"short haiku about rain"}'
+{"success":true,"data":{"content":{"title":"Mock: short haiku about rain","body":"This is a mock response for prompt: short haiku about rain.","layout":"poem-single-column"},"metadata":{"model":"mock-1","tokens":22},"promptId":53,"resultId":34}}
+`
+
+# preview (replace ID as needed)
+curl "http://localhost:3000/preview?id=1"
+
+# result
+`
+`
+```
+
+4. Fast fixes (30 minutes)
+
+- If endpoints fail due to DB/Prisma issues:
+  - Inspect `server/prisma/prisma-client.js` and ensure it exports a working Prisma client.
+  - Re-generate client if necessary:
+
+```bash
+cd server
+npx prisma generate
+```
+
+- If migrations are missing or tables absent, reapply migrations:
+
+```bash
+npx prisma migrate deploy
+```
+
+5. Frontend quick adjustments (25 minutes)
+
+- If the client fails to fetch (CORS, wrong endpoints), update `client/src/config` or `client/src/lib/api.js` to point at `http://localhost:3000`.
+- Implement temporary fallback UI for server errors: display raw error JSON in preview pane so you can proceed.
+
+6. PDF export sanity (15 minutes)
+
+- Trigger export via the UI or directly:
+
+```bash
+curl "http://localhost:3000/export?id=1" --output /tmp/test-ebook.pdf
+```
+
+- If Puppeteer fails to find Chrome, set `CHROME_PATH` env var and ensure `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` in `server` process.
+
+7. Finalize and stabilize (20 minutes)
+
+- Once a minimal loop works (prompt -> preview -> export), commit small fixes and push:
+
+```bash
+git add -A
+git commit -m "chore: emergency sprint fixes — quick restore of prompt/preview/export flow"
+git push origin gui/restore
+```
+
+- Create short postmortem notes in `docs/focus/` listing what was changed and why.
+
+Emergency Sprint Constraints & Rules
+
+- Only make changes necessary for the minimal loop. Defer refactors.
+- Keep commits small and descriptive. If a change risks data loss, create a branch and tag it.
+- If you encounter a blocker that will take >30 minutes, switch to the next checklist item.
+
+---
+
+Appendix: Useful commands (copyable)
+
+```bash
+# start DB (devcontainer)
+cd .devcontainer && docker compose up -d db
+
+# quick DB healthcheck
+./server/scripts/db-health.sh --check=all
+
+# regenerate prisma client
+cd server && npx prisma generate
+
+# apply migrations
+cd server && npx prisma migrate deploy
+
+# start both dev servers (if not using devcontainer auto-attach)
+concurrently "cd client && npm run dev" "cd server && npm run dev"
+
+# smoke prompt
+curl -X POST http://localhost:3000/prompt -H 'Content-Type: application/json' -d '{"prompt":"short haiku about rain"}'
+```

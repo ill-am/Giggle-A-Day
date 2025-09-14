@@ -119,7 +119,9 @@
     }
     try {
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
+      if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview called with', newContent && (newContent.resultId || newContent.promptId ? { resultId: newContent.resultId, promptId: newContent.promptId } : { keys: Object.keys(newContent) }));
       const html = await loadPreview(newContent);
+      if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview loadPreview returned HTML length=', html ? html.length : 0);
       previewStore.set(html);
       // trigger brief flash to draw attention
       flash = true;
@@ -139,6 +141,15 @@
       updatePreview(content);
     }
   });
+
+  // When content changes (including being set with resultId/promptId), prefer
+  // resolving server-side content by calling updatePreview. This keeps behavior
+  // consistent: if an id is present, the server helper endpoints will be used
+  // by loadPreview to fetch the authoritative HTML.
+  $: if (content) {
+    // trigger an immediate update when content changes from other parts of the app
+    updatePreview(content);
+  }
 </script>
 
   <div class="preview-container">

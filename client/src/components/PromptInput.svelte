@@ -53,8 +53,15 @@
     uiStateStore.set({ status: 'loading', message: 'Generating content...' });
     try {
       const response = await submitPrompt(currentPrompt);
-      if (response && response.data) {
-        contentStore.set(response.data.content);
+      // Normalize response shape: prefer response.data but accept direct
+      const payload = response && (response.data || response) || {};
+      if (payload && payload.content) {
+        const stored = {
+          ...(payload.content || {}),
+          ...(payload.resultId ? { resultId: payload.resultId } : {}),
+          ...(payload.promptId ? { promptId: payload.promptId } : {}),
+        };
+        contentStore.set(stored);
         uiStateStore.set({ status: 'success', message: 'Content generated successfully.' });
         // Auto-trigger preview after generation completes
         await handlePreviewNow();
@@ -141,12 +148,16 @@
       const response = await submitPrompt(p);
 
       // Normalize response shape: support both { data: { content } } and { content }
-      const json = response && (response.data || response);
+      const json = response && (response.data || response) || {};
       if (!json) throw new Error('Empty response from server');
-      if (json && json.content) {
-        contentStore.set(json.content);
-      } else if (json && json.data && json.data.content) {
-        contentStore.set(json.data.content);
+      if (json && (json.content || (json.data && json.data.content))) {
+        const payload = json.content || (json.data && json.data.content) || json;
+        const stored = {
+          ...(payload || {}),
+          ...(json.resultId ? { resultId: json.resultId } : {}),
+          ...(json.promptId ? { promptId: json.promptId } : {}),
+        };
+        contentStore.set(stored);
       } else {
         throw new Error('Unexpected server payload');
       }
@@ -331,6 +342,13 @@
   {#if uiState.status === 'error'}
     <p class="error-message">{uiState.message}</p>
   {/if}
+
+  {#if import.meta.env.DEV}
+    <div class="dev-status">
+      <label for="dev-status-textarea">Dev status</label>
+      <textarea id="dev-status-textarea" readonly rows="4">{JSON.stringify({ status: uiState.status, message: uiState.message, previewLength: $previewStore ? $previewStore.length : 0 }, null, 2)}</textarea>
+    </div>
+  {/if}
 </div>
 
   {#if showTypedPromptDialog}
@@ -430,4 +448,6 @@
     box-shadow: 0 0 0 4px rgba(192,57,43,0.12);
     transform: scale(1.03);
   }
+  .dev-status { margin-top: 0.75rem }
+  .dev-status textarea { width: 100%; font-family: monospace; font-size: 0.9rem; background:#f4f6f8; border: 1px dashed #ccc; padding:0.5rem }
 </style>

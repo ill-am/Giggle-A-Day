@@ -109,7 +109,9 @@ export async function submitPrompt(prompt) {
     Logger.info("Prompt submitted successfully", {
       promptLength: prompt.length,
     });
-    return data;
+    // Normalize shape: prefer the inner `data` envelope when present so
+    // callers receive { content, metadata, promptId, resultId } directly.
+    return data && data.data ? data.data : data;
   } catch (error) {
     Logger.error("Prompt submission error", { error });
     throw error;
@@ -122,14 +124,111 @@ export async function loadPreview(content) {
   });
 
   // Ensure content has required structure
-  if (!content || !content.title || !content.body) {
-    const error = new Error("Preview content must include title and body");
-    Logger.error("Preview validation failed", {
-      error,
-      providedFields: content ? Object.keys(content) : [],
-      required: ["title", "body"],
-    });
-    throw error;
+  // If content references a resultId or promptId, resolve it first using
+  // helper endpoints added on the server: /content/result/:id and /content/prompt/:id
+  try {
+    // If the content references a stored result/prompt id, prefer fetching the
+    // rendered HTML directly via /preview?resultId= or /preview?promptId= which
+    // the dev server proxies to the backend. This avoids relying on /content
+    // helper endpoints which may not be proxied by the frontend dev server.
+    if (content && content.resultId) {
+      if (import.meta.env.DEV)
+        console.debug(
+          "[DEV] loadPreview: attempting /preview?resultId=",
+          content.resultId
+        );
+      const resp = await fetchWithRetry(
+        `/preview?resultId=${encodeURIComponent(content.resultId)}`,
+        { retryConfig: { maxRetries: 2 } }
+      );
+      if (resp && resp.ok) {
+        const html = await resp.text();
+        Logger.info("Loaded preview by resultId", {
+          resultId: content.resultId,
+          length: html.length,
+        });
+        if (import.meta.env.DEV)
+          console.debug(
+            "[DEV] loadPreview: /preview?resultId returned HTML length=",
+            html.length
+          );
+        return html;
+      } else {
+        if (import.meta.env.DEV)
+          console.debug(
+            "[DEV] loadPreview: /preview?resultId returned",
+            resp && resp.status
+          );
+      }
+    }
+
+    if (content && content.promptId) {
+      if (import.meta.env.DEV)
+        console.debug(
+          "[DEV] loadPreview: attempting /preview?promptId=",
+          content.promptId
+        );
+      const resp = await fetchWithRetry(
+        `/preview?promptId=${encodeURIComponent(content.promptId)}`,
+        { retryConfig: { maxRetries: 2 } }
+      );
+      if (resp && resp.ok) {
+        const html = await resp.text();
+        Logger.info("Loaded preview by promptId", {
+          promptId: content.promptId,
+          length: html.length,
+        });
+        if (import.meta.env.DEV)
+          console.debug(
+            "[DEV] loadPreview: /preview?promptId returned HTML length=",
+            html.length
+          );
+        return html;
+      } else {
+        if (import.meta.env.DEV)
+          console.debug(
+            "[DEV] loadPreview: /preview?promptId returned",
+            resp && resp.status
+          );
+      }
+    }
+
+    // Fallback: if /preview by id didn't work, try loading JSON content via
+    // the helper endpoints and continue with the normal preview flow.
+    if (content && (content.resultId || content.promptId)) {
+      if (content.resultId) {
+        const resp = await fetchWithRetry(
+          `/content/result/${encodeURIComponent(content.resultId)}`,
+          {}
+        );
+        if (resp && resp.ok) {
+          const json = await resp.json();
+          content = { ...(json.content || {}), resultId: content.resultId };
+        }
+      } else if (content.promptId) {
+        const resp = await fetchWithRetry(
+          `/content/prompt/${encodeURIComponent(content.promptId)}`,
+          {}
+        );
+        if (resp && resp.ok) {
+          const json = await resp.json();
+          content = { ...(json.content || {}), promptId: content.promptId };
+        }
+      }
+    }
+
+    if (!content || !content.title || !content.body) {
+      const error = new Error("Preview content must include title and body");
+      Logger.error("Preview validation failed", {
+        error,
+        providedFields: content ? Object.keys(content) : [],
+        required: ["title", "body"],
+      });
+      throw error;
+    }
+  } catch (err) {
+    Logger.error("Failed to resolve content by id", { err });
+    throw err;
   }
 
   try {
