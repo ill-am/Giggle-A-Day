@@ -1,6 +1,6 @@
 <script>
   import { contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
-  import { loadPreview } from '../lib/api';
+  import { previewFromContent } from '../lib/flows';
   import Spinner from './Spinner.svelte';
   import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
@@ -119,10 +119,10 @@
     }
     try {
       uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview called with', newContent && (newContent.resultId || newContent.promptId ? { resultId: newContent.resultId, promptId: newContent.promptId } : { keys: Object.keys(newContent) }));
-      const html = await loadPreview(newContent);
-      if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview loadPreview returned HTML length=', html ? html.length : 0);
-      previewStore.set(html);
+  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview called with', newContent && (newContent.resultId || newContent.promptId ? { resultId: newContent.resultId, promptId: newContent.promptId } : { keys: Object.keys(newContent) }));
+  const html = await previewFromContent(newContent);
+  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview previewFromContent returned HTML length=', html ? html.length : 0);
+  // previewFromContent already sets previewStore
       // trigger brief flash to draw attention
       flash = true;
       setTimeout(() => (flash = false), 600);
