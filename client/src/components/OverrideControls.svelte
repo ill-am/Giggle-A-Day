@@ -42,12 +42,15 @@
       const response = await saveOverride(originalContent, changes);
       if (response && response.data) {
         try {
-          const { persistContent } = await import('../stores');
-          await persistContent(response.data.content);
+          const { safePersistContent } = await import('../lib/persistHelper');
+          const result = await safePersistContent(response.data.content);
+          if (!result) {
+            contentStore.set(response.data.content);
+          }
         } catch (e) {
           // Fallback to local set if persist helper isn't available or fails
           contentStore.set(response.data.content);
-          console.warn('OverrideControls: persistContent failed, falling back to local set', e && e.message);
+          console.warn('OverrideControls: safePersistContent failed, falling back to local set', e && e.message);
         }
         uiStateStore.set({ status: 'success', message: 'Changes saved.' });
       } else {

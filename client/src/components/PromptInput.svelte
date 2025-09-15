@@ -32,7 +32,8 @@
       return;
     }
 
-    isGenerating = true;
+  console.debug('[DEV] handleGenerateNow invoked, prompt=', $promptStore);
+  isGenerating = true;
     generateFlash = true;
     try {
       await generateAndPreview(prompt);
@@ -48,6 +49,7 @@
   // Preview-now handler (keeps current behaviour but centralises preview updates)
   async function handlePreviewNow() {
     const current = $contentStore;
+    console.debug('[DEV] handlePreviewNow invoked, currentContent=', current);
     if (!current) {
       uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
       return;
@@ -74,7 +76,8 @@
       title: 'Summer Poems — Demo',
       body: '<div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer1.svg);background-size:cover;background-position:center;"><h1>Summer Poem 1</h1><p>By Unknown</p><pre>Roses are red\\nViolets are blue\\nSummer breeze carries you</pre></div><div style="page-break-after:always;padding:48px;background-image:url(/samples/images/summer2.svg);background-size:cover;background-position:center;"><h1>Summer Poem 2</h1><p>By Unknown</p><pre>Sun on the sand\\nWaves lap the shore\\nA page on each</pre></div>'
     };
-    promptStore.set('Load demo: two short summer poems, one per page');
+  console.debug('[DEV] loadDemo invoked');
+  promptStore.set('Load demo: two short summer poems, one per page');
     // Persist demo in background and fall back to local set if it fails
     const persisted = await safePersistContent(demo);
     if (!persisted) {
@@ -90,12 +93,14 @@
       uiStateStore.set({ status: 'loading', message: 'Running runtime diagnostics...' });
       try {
         const api = await import('../lib/api');
-        const resp = await api.submitPrompt(testPrompt);
+          console.debug('[DEV] runRuntimeDiag: submitting prompt');
+          const resp = await api.submitPrompt(testPrompt);
         // show raw response in dev-status area
         try {
           const txt = JSON.stringify(resp, null, 2);
           // write directly to the dev-status textarea via contentStore dev area
           promptStore.set(testPrompt);
+          console.debug('[DEV] runRuntimeDiag: server resp=', resp);
           contentStore.set((resp && resp.data && resp.data.content) || resp.content || null);
           // attempt to load preview HTML for the returned content
           const content = (resp && resp.data && resp.data.content) || resp.content || null;

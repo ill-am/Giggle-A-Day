@@ -52,6 +52,16 @@
     lastPreview = value;
   }
 
+  function logStores() {
+    try {
+      console.log('Imported stores:', { contentStore, previewStore, uiStateStore });
+      try { console.log('contentStore.__instanceId', contentStore && contentStore.__instanceId); } catch (e) {}
+      try { console.log('previewStore.__instanceId', previewStore && previewStore.__instanceId); } catch (e) {}
+      try { console.log('promptStore (via import):', typeof window !== 'undefined' && window.__STORES && window.__STORES.promptStore ? 'present' : 'absent'); } catch (e) {}
+      try { console.log('GLOBAL_STORES_KEY', typeof window !== 'undefined' && window['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
+    } catch (e) { console.warn('logStores failed', e); }
+  }
+
   // computed reactive flag: true when previewStore contains non-empty HTML
   $: computedHasPreview = previewHtmlLocal && String(previewHtmlLocal).trim().length > 0;
 
@@ -94,6 +104,43 @@
   // Preview controls
   let autoPreview = true;
   let flash = false;
+
+  // DEV/test helper: allow forcing a local preview from the current content
+  // so we can determine whether stores are being updated in the running UI.
+  async function forceLocalPreview() {
+    try {
+      if (!content) {
+        console.warn('[DEV] forceLocalPreview called but `content` is empty');
+        return;
+      }
+      // Use the client-side fallback HTML builder so the preview pane is
+      // populated without requiring a successful server preview call.
+      console.log('[DEV] forceLocalPreview: setting previewStore from content', content && { title: content.title });
+      if (typeof previewStore.set !== 'function') {
+        console.error('[DEV] previewStore.set is not a function', previewStore);
+      } else {
+        previewStore.set(buildLocalPreviewHtml(content));
+        uiStateStore.set({ status: 'success', message: 'Forced local preview' });
+      }
+    } catch (e) {
+      uiStateStore.set({ status: 'error', message: `Force preview failed: ${e && e.message}` });
+    }
+  }
+
+  function setTestContent() {
+    try {
+      const test = { title: 'Test Title', body: 'This is a test body.' };
+      console.log('[DEV] setTestContent: attempting contentStore.set', test);
+      if (!contentStore || typeof contentStore.set !== 'function') {
+        console.error('[DEV] contentStore.set is not available', contentStore);
+        return;
+      }
+      contentStore.set(test);
+      console.log('[DEV] setTestContent: contentStore.set executed');
+    } catch (e) {
+      console.error('[DEV] setTestContent failed', e);
+    }
+  }
 
   // Build a tiny client-side preview HTML (safe-escaped) to use as a fallback
   const escapeHtml = (str) => {
@@ -140,6 +187,17 @@
     if (content) {
       updatePreview(content);
     }
+    // Mount-time diagnostics: log store instance ids and global singleton
+    try {
+      console.log('[DEV] PreviewWindow mounted. store diagnostics:');
+      try { console.log('  contentStore.__instanceId', contentStore && contentStore.__instanceId); } catch (e) {}
+      try { console.log('  previewStore.__instanceId', previewStore && previewStore.__instanceId); } catch (e) {}
+      try { console.log('  uiStateStore.__instanceId', uiStateStore && uiStateStore.__instanceId); } catch (e) {}
+      try { console.log('  window.__LAST_CONTENT_SET', typeof window !== 'undefined' && window.__LAST_CONTENT_SET); } catch (e) {}
+      try { console.log('  window.__STRAWBERRY_SINGLETON_STORES__', typeof window !== 'undefined' && window['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
+      try { console.log('  previewStore.set func?', previewStore && typeof previewStore.set); } catch (e) {}
+      try { console.log('  contentStore.set func?', contentStore && typeof contentStore.set); } catch (e) {}
+    } catch (e) {}
   });
 
   // When content changes (including being set with resultId/promptId), prefer
@@ -153,6 +211,23 @@
 </script>
 
   <div class="preview-container">
+  <div class="debug-panel" aria-hidden="false">
+    <details>
+      <summary>Debug: store state</summary>
+      <div class="debug-rows">
+        <div><strong>contentStore</strong>:
+              <pre>{JSON.stringify(content, null, 2)}</pre>
+              <div class="global-last">window.__LAST_CONTENT_SET: {JSON.stringify(typeof window !== 'undefined' && window.__LAST_CONTENT_SET ? window.__LAST_CONTENT_SET : null, null, 2)}</div>
+        </div>
+        <div><strong>previewStore (length)</strong>: { $previewStore ? $previewStore.length : 0 }</div>
+        <div class="debug-actions">
+          <button data-testid="force-local-preview" on:click={forceLocalPreview}>Force local preview</button>
+          <button data-testid="set-test-content" on:click={setTestContent}>Set test content</button>
+          <button data-testid="log-stores" on:click={logStores}>Log stores</button>
+        </div>
+      </div>
+    </details>
+  </div>
   <div class="preview-controls">
     <label><input type="checkbox" data-testid="auto-preview-checkbox" bind:checked={autoPreview} /> Auto-preview</label>
     <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>

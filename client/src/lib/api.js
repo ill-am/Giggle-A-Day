@@ -71,6 +71,15 @@ async function fetchWithRetry(url, options = {}) {
 
       return response;
     } catch (error) {
+      // If the request was aborted, do not retry — rethrow immediately.
+      if (error && (error.name === "AbortError" || error.type === "aborted")) {
+        Logger.apiError(endpoint, error, {
+          attempt,
+          maxRetries: config.maxRetries,
+        });
+        throw error;
+      }
+
       lastError = error;
 
       Logger.apiError(endpoint, error, {

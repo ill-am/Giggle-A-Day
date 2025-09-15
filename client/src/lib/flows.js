@@ -66,6 +66,17 @@ export async function previewFromContent(
     uiStateStore.set({ status: "success", message: "Preview loaded" });
     return html;
   } catch (err) {
+    // If the request was aborted (due to a newer preview request), treat
+    // it as a non-error — don't surface it to the user or clear the
+    // existing preview. This prevents noisy AbortError logs when users
+    // rapidly change prompts or when a previous request is intentionally
+    // cancelled.
+    if (err && (err.name === "AbortError" || err.type === "aborted")) {
+      // Keep existing preview and UI state; return an empty string so
+      // callers can continue without treating this as a failure.
+      return "";
+    }
+
     setUiError(err.message || "Preview failed");
     // clear preview on failure to avoid stale views
     try {
@@ -102,27 +113,42 @@ export async function generateAndPreview(
       throw new Error("Invalid response structure from server.");
     }
 
-    // Persist content to server prompts API when possible using centralized helper
-    let persisted = content;
-    try {
-      persisted = await persistContent(content);
-      // persistContent updates the local store with server data
-    } catch (saveErr) {
-      // If persistence fails, still use generated content locally but surface an error
-      contentStore.set(content);
-      console.warn(
-        "Failed to persist generated content to server",
-        saveErr && saveErr.message
-      );
-      // Surface a non-blocking UI warning
-      uiStateStore.set({
-        status: "error",
-        message: "Saved locally; failed to persist to server.",
-      });
-    }
+    // Immediately set the generated content locally so the UI can render a
+    // fallback preview without waiting for network persistence.
+    contentStore.set(content);
 
-    // Trigger preview for the newly generated content
-    const html = await previewFromContent(persisted, timeoutMs);
+    // Persist content to server prompts API in background. If it succeeds,
+    // persistContent will update contentStore with server-provided fields
+    // (like promptId). If it fails, we surface a non-blocking warning but
+    // don't block the user from seeing the preview.
+    let persisted = content;
+    (async () => {
+      try {
+        const result = await persistContent(content);
+        persisted = result || content;
+        // After persistence, attempt to refresh the preview with persisted data
+        try {
+          await previewFromContent(persisted, timeoutMs);
+        } catch (e) {
+          // ignore preview refresh errors here; previewFromContent already
+          // sets UI state appropriately
+        }
+      } catch (saveErr) {
+        console.warn(
+          "Failed to persist generated content to server",
+          saveErr && saveErr.message
+        );
+        // Surface a non-blocking UI warning
+        uiStateStore.set({
+          status: "error",
+          message: "Saved locally; failed to persist to server.",
+        });
+      }
+    })();
+
+    // Trigger preview for the newly generated content (use local content so
+    // the user sees something immediately).
+    const html = await previewFromContent(content, timeoutMs);
     return html;
   } catch (err) {
     setUiError(err.message || "Generation failed");

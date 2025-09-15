@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         "/prompt": createProxy("/prompt", DEV_AUTH_TOKEN),
         "/preview": createProxy("/preview", DEV_AUTH_TOKEN),
+        "/api": createProxy("/api", DEV_AUTH_TOKEN),
         "/override": createProxy("/override", DEV_AUTH_TOKEN),
         "/export": createProxy("/export", DEV_AUTH_TOKEN),
       },
