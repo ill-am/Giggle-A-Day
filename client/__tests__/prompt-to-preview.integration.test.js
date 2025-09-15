@@ -8,6 +8,7 @@ import {
   uiStateStore,
 } from "../src/stores";
 import { afterEach, test, expect } from "vitest";
+import { waitForPreviewReady } from "../test-utils/previewReady";
 import { get } from "svelte/store";
 
 afterEach(() => {
@@ -30,9 +31,11 @@ test("end-to-end: prompt -> generate -> preview (local shortcut)", async () => {
   const genBtn = await screen.findByTestId("generate-button");
   await fireEvent.click(genBtn);
 
+  // Wait for PreviewWindow to signal it has updated (server or fallback)
+  await waitForPreviewReady(screen);
   // Assert: preview content shows the title derived from the prompt (the heading element)
+  // Heading level may vary (h1/h2) depending on preview template; match by role+name only
   const previewTitle = await screen.findByRole("heading", {
-    level: 2,
     name: /Test Title/,
   });
   expect(previewTitle).toBeTruthy();
