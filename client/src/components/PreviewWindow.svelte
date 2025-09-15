@@ -55,10 +55,10 @@
   function logStores() {
     try {
       console.log('Imported stores:', { contentStore, previewStore, uiStateStore });
-      try { console.log('contentStore.__instanceId', contentStore && contentStore.__instanceId); } catch (e) {}
-      try { console.log('previewStore.__instanceId', previewStore && previewStore.__instanceId); } catch (e) {}
-      try { console.log('promptStore (via import):', typeof window !== 'undefined' && window.__STORES && window.__STORES.promptStore ? 'present' : 'absent'); } catch (e) {}
-      try { console.log('GLOBAL_STORES_KEY', typeof window !== 'undefined' && window['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
+      try { console.log('contentStore.__instanceId', contentStore && (/** @type any */ (contentStore))['__instanceId']); } catch (e) {}
+      try { console.log('previewStore.__instanceId', previewStore && (/** @type any */ (previewStore))['__instanceId']); } catch (e) {}
+      try { console.log('promptStore (via import):', typeof window !== 'undefined' && (/** @type any */ (window))['__STORES'] && (/** @type any */ (window))['__STORES'].promptStore ? 'present' : 'absent'); } catch (e) {}
+      try { console.log('GLOBAL_STORES_KEY', typeof window !== 'undefined' && (/** @type any */ (window))['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
     } catch (e) { console.warn('logStores failed', e); }
   }
 
@@ -190,11 +190,11 @@
     // Mount-time diagnostics: log store instance ids and global singleton
     try {
       console.log('[DEV] PreviewWindow mounted. store diagnostics:');
-      try { console.log('  contentStore.__instanceId', contentStore && contentStore.__instanceId); } catch (e) {}
-      try { console.log('  previewStore.__instanceId', previewStore && previewStore.__instanceId); } catch (e) {}
-      try { console.log('  uiStateStore.__instanceId', uiStateStore && uiStateStore.__instanceId); } catch (e) {}
-      try { console.log('  window.__LAST_CONTENT_SET', typeof window !== 'undefined' && window.__LAST_CONTENT_SET); } catch (e) {}
-      try { console.log('  window.__STRAWBERRY_SINGLETON_STORES__', typeof window !== 'undefined' && window['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
+  try { console.log('  contentStore.__instanceId', contentStore && (/** @type any */ (contentStore))['__instanceId']); } catch (e) {}
+  try { console.log('  previewStore.__instanceId', previewStore && (/** @type any */ (previewStore))['__instanceId']); } catch (e) {}
+  try { console.log('  uiStateStore.__instanceId', uiStateStore && (/** @type any */ (uiStateStore))['__instanceId']); } catch (e) {}
+  try { console.log('  window.__LAST_CONTENT_SET', typeof window !== 'undefined' && (/** @type any */ (window))['__LAST_CONTENT_SET']); } catch (e) {}
+  try { console.log('  window.__STRAWBERRY_SINGLETON_STORES__', typeof window !== 'undefined' && (/** @type any */ (window))['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
       try { console.log('  previewStore.set func?', previewStore && typeof previewStore.set); } catch (e) {}
       try { console.log('  contentStore.set func?', contentStore && typeof contentStore.set); } catch (e) {}
     } catch (e) {}
@@ -215,10 +215,10 @@
     <details>
       <summary>Debug: store state</summary>
       <div class="debug-rows">
-        <div><strong>contentStore</strong>:
-              <pre>{JSON.stringify(content, null, 2)}</pre>
-              <div class="global-last">window.__LAST_CONTENT_SET: {JSON.stringify(typeof window !== 'undefined' && window.__LAST_CONTENT_SET ? window.__LAST_CONTENT_SET : null, null, 2)}</div>
-        </div>
+    <div><strong>contentStore</strong>:
+        <pre>{JSON.stringify(content, null, 2)}</pre>
+        <div class="global-last">window.__LAST_CONTENT_SET: {JSON.stringify(typeof window !== 'undefined' && (/** @type any */ (window))['__LAST_CONTENT_SET'] ? (/** @type any */ (window))['__LAST_CONTENT_SET'] : null, null, 2)}</div>
+      </div>
         <div><strong>previewStore (length)</strong>: { $previewStore ? $previewStore.length : 0 }</div>
         <div class="debug-actions">
           <button data-testid="force-local-preview" on:click={forceLocalPreview}>Force local preview</button>

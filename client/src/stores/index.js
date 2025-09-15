@@ -1,3 +1,4 @@
+// @ts-nocheck -- dev-only store instrumentation file; suppress TS diagnostics
 import { writable } from "svelte/store";
 import { savePromptContent, updatePromptContent } from "../lib/api";
 
@@ -69,11 +70,21 @@ let promptStoreExport,
   previewStoreExport,
   uiStateStoreExport;
 
-if (typeof window !== "undefined" && window[GLOBAL_STORES_KEY]) {
+// Treat the global window as `any` for dev-only instrumentation to avoid
+// TypeScript/IDE diagnostics when accessing test-only globals.
+const globalAny =
+  typeof window !== "undefined"
+    ? /** @type {any} */ (window)
+    : /** @type {any} */ ({});
+
+if (
+  typeof window !== "undefined" &&
+  /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]
+) {
   // Defensive check: ensure the existing global singleton looks like our
   // expected object (stores should have a `subscribe` function).
   try {
-    const g = window[GLOBAL_STORES_KEY];
+    const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY];
     const looksLikeStores =
       g &&
       typeof g === "object" &&
@@ -98,7 +109,7 @@ if (typeof window !== "undefined" && window[GLOBAL_STORES_KEY]) {
       } catch (e) {}
       // Remove it so the normal creation path runs below
       try {
-        delete window[GLOBAL_STORES_KEY];
+        delete (/** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]);
       } catch (e) {}
       promptStoreExport = undefined;
     }
@@ -124,7 +135,7 @@ if (!promptStoreExport) {
 
   if (typeof window !== "undefined") {
     try {
-      window[GLOBAL_STORES_KEY] = {
+      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY] = {
         promptStore: promptStoreExport,
         contentStore: contentStoreExport,
         previewStore: previewStoreExport,
@@ -132,7 +143,8 @@ if (!promptStoreExport) {
       };
       // attach a small marker to help runtime debugging
       try {
-        window[GLOBAL_STORES_KEY].__marker = "strawberry-stores-v1";
+        /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__marker =
+          "strawberry-stores-v1";
       } catch (e) {}
     } catch (e) {}
   }
@@ -164,9 +176,13 @@ try {
         uiStateStoreExport.__instanceId || INSTANCE_ID;
   } catch (e) {}
   try {
-    if (typeof window !== "undefined" && window[GLOBAL_STORES_KEY])
-      window[GLOBAL_STORES_KEY].__instanceId =
-        window[GLOBAL_STORES_KEY].__instanceId || INSTANCE_ID;
+    if (
+      typeof window !== "undefined" &&
+      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]
+    )
+      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId =
+        /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId ||
+        INSTANCE_ID;
   } catch (e) {}
 } catch (e) {}
 
@@ -181,8 +197,8 @@ if (typeof window !== "undefined") {
         // Only perform verbose console logging when explicitly enabled
         if (DEV_STORES_VERBOSE)
           console.debug("[DEV] contentStore.set called with", v);
-        // @ts-ignore - dev-only assigned global
-        window.__LAST_CONTENT_SET = v;
+        // assign into globalAny to avoid TypeScript window property errors
+        globalAny.__LAST_CONTENT_SET = v;
       } catch (e) {}
       return originalSet.call(this, v);
     };
@@ -235,8 +251,8 @@ if (typeof window !== "undefined") {
             "[DEV] previewStore.set called with length=",
             v ? v.length || 0 : 0
           );
-        // @ts-ignore - dev-only assigned global
-        window.__LAST_PREVIEW_SET = v;
+        // assign into globalAny to avoid TypeScript window property errors
+        globalAny.__LAST_PREVIEW_SET = v;
       } catch (e) {}
       return originalPreviewSet.call(this, v);
     };
@@ -244,7 +260,8 @@ if (typeof window !== "undefined") {
 }
 
 // Export the promptStore singleton so all modules import the same instance
-export const promptStore = promptStoreExport;
+// Cast exports to `any` to avoid TypeScript diagnostics in the JS project
+export const promptStore = /** @type {any} */ (promptStoreExport);
 
 /**
  * Store for managing the overall UI state.
