@@ -28,6 +28,11 @@ Owner: @dev-team (or whoever picks the task)
 - [x] Remove `handleGenerateClick` and typed-prompt dialog state from `PromptInput.svelte`
   - Acceptance: Only `handleGenerateNow` is used; UI retains expected behavior
 
+> Recent change: generated content is now set immediately to `contentStore` when a user clicks Generate. Persistence to the server is performed in the background and will attempt to refresh the preview once the server responds. This improves perceived responsiveness and keeps the preview UI snappy.
+
+- [~] Persist-on-generate is non-blocking (in-progress)
+  - Acceptance: User sees an immediate preview after generation; background persistence updates `contentStore` with server IDs when available and attempts a preview refresh.
+
 ## 3. Preview Consolidation (Phase 3) — 30m
 
 - [x] Set up basic PreviewWindow component with core functionality
@@ -42,6 +47,10 @@ Owner: @dev-team (or whoever picks the task)
   - Acceptance: Rapid successive prompts cancel previous requests and show latest preview
 - [x] Ensure debouncing remains only in `PreviewWindow`
   - Acceptance: Auto-preview works; no double-render flashes in automated tests
+
+Notes:
+
+- Integration tests were updated to prefer DOM-level assertions (user-visible behavior) over internal store state. This reduces brittleness during refactors.
 
 ## 4. Status & UI Feedback (Phase 4) — 30m
 
@@ -83,6 +92,11 @@ Owner: @dev-team (or whoever picks the task)
   - Acceptance: Documentation accurately reflects current state and remaining work
 
 Total focused dev time (adjusted estimate): 4 hours 15 minutes
+
+Recent progress summary:
+
+- Immediate preview UX: implemented — generated content is set locally and preview shows instantly (background persist + refresh).
+- Tests: client integration/unit tests updated to assert DOM where appropriate; client test suite passing locally.
 
 Notes:
 
