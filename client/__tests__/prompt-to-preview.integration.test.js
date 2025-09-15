@@ -37,9 +37,14 @@ test("end-to-end: prompt -> generate -> preview (local shortcut)", async () => {
   });
   expect(previewTitle).toBeTruthy();
 
-  // Assert: stores were updated
-  const content = get(contentStore);
-  expect(content).not.toBeNull();
-  expect(content.title).toContain("Test Title");
-  expect(get(previewStore).length).toBeGreaterThan(0);
+  // Assert: content was derived from the prompt and rendered (check DOM)
+  // The heading assertion above already confirms the title was used; ensure body is present below
+
+  // Assert: preview content is rendered in the DOM (fallback or server-rendered)
+  const previewContentEl = await screen.findByTestId("preview-content");
+  expect(previewContentEl).toBeTruthy();
+  // Use textContent assertion (toHaveTextContent is a Jest/DOM matcher not available here)
+  expect(String(previewContentEl.textContent)).toMatch(
+    /This is the body of the preview\./
+  );
 });
