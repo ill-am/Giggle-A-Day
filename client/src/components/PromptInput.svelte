@@ -9,14 +9,6 @@
   let isGenerating = false;
   let isPreviewing = false;
 
-  // Quick helper: insert a suggested prompt
-  async function insertSummerSuggestion() {
-    const suggestion = `A short, sunlit summer poem about cicadas and long shadows.`;
-    promptStore.set(suggestion);
-    await tick();
-    const el = document.getElementById('prompt-textarea');
-    if (el && el instanceof HTMLTextAreaElement) el.focus();
-  }
 
   // Primary generate handler (used by Generate button)
   async function handleGenerateNow() {
@@ -157,36 +149,7 @@
   ></textarea>
 
   <div class="controls-row">
-    <button
-      class="suggestion"
-      on:click={insertSummerSuggestion}
-      title="Insert summer prompt suggestion"
-      aria-label="Insert a summer prompt suggestion"
-      data-testid="summer-suggestion"
-      disabled={$uiStateStore.status === 'loading'}
-    >
-      Summer suggestion
-    </button>
-
-    <button
-      class="demo"
-      on:click={loadDemo}
-      title="Load full V0.1 demo content"
-      data-testid="load-demo"
-      disabled={$uiStateStore.status === 'loading'}
-    >
-      Load V0.1 demo
-    </button>
-
-      <button
-        class="diag"
-        on:click={runRuntimeDiag}
-        title="Runtime diagnostics"
-        data-testid="runtime-diag"
-        disabled={$uiStateStore.status === 'loading'}
-      >
-        Runtime Diag
-      </button>
+    <!-- Developer helper buttons removed: only Generate and Preview remain -->
 
     <button
       data-testid="generate-button"
@@ -234,7 +197,7 @@
 <style>
   .prompt-container { display: flex; flex-direction: column; gap: 0.75rem; text-align: left; }
   .controls-row { display:flex; gap:0.5rem; align-items:center }
-  .suggestion { background: #f6e58d; color: #2d3436; padding: 0.5rem; border-radius:4px; border:none }
+  /* Developer helper button styles removed */
   label { font-weight: bold; }
   textarea { width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #ccc; font-family: inherit; font-size: 1rem; }
   button { padding: 0.75rem; border-radius: 4px; border: none; background-color: #2c3e50; color: white; cursor: pointer; font-size: 1rem; transition: background-color 0.2s; }
