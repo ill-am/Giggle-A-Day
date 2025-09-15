@@ -86,7 +86,6 @@
 
     // DEV-only runtime diagnostics: submit a test prompt and show raw responses
     async function runRuntimeDiag() {
-      if (!import.meta.env.DEV) return;
       const testPrompt = 'Runtime diag test\\nThis is a diagnostic body';
       uiStateStore.set({ status: 'loading', message: 'Running runtime diagnostics...' });
       try {
@@ -174,17 +173,15 @@
       Load V0.1 demo
     </button>
 
-    {#if import.meta.env.DEV}
       <button
         class="diag"
         on:click={runRuntimeDiag}
-        title="Runtime diagnostics (DEV only)"
+        title="Runtime diagnostics"
         data-testid="runtime-diag"
         disabled={$uiStateStore.status === 'loading'}
       >
         Runtime Diag
       </button>
-    {/if}
 
     <button
       data-testid="generate-button"
