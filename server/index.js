@@ -636,6 +636,7 @@ app.post("/prompt", (req, res, next) => {
 
 const { createAIService } = require("./aiService");
 const aiService = createAIService();
+const genieService = require("./genieService");
 
 app.post("/prompt", async (req, res, next) => {
   const { prompt } = req.body;
@@ -787,6 +788,35 @@ app.get("/preview", async (req, res) => {
     res.send(previewTemplate(contentObj));
   } catch (err) {
     sendValidationError(res, "Invalid content format", { error: err.message });
+  }
+});
+
+// Demo generator endpoints using genieService (delegates to sampleService)
+app.post("/genie", async (req, res) => {
+  try {
+    const prompt = req.body && req.body.prompt;
+    const result = await genieService.generate(prompt);
+    return res.status(201).json(result);
+  } catch (err) {
+    console.error("/genie error", err && err.message);
+    const status = err && err.status ? err.status : 500;
+    return res.status(status).json({ error: err && err.message });
+  }
+});
+
+app.get("/genie", (req, res) => {
+  try {
+    const txt = genieService.readLatest();
+    if (txt === null) return sendValidationError(res, "No saved prompt found");
+    const content = {
+      title: `Prompt: ${txt.split(" ").slice(0, 6).join(" ")}`,
+      body: txt.replace(/\n/g, "<br />"),
+    };
+    res.setHeader("Content-Type", "text/html");
+    return res.send(previewTemplate(content));
+  } catch (err) {
+    console.error("/genie GET error", err && err.message);
+    return res.status(500).json({ error: err && err.message });
   }
 });
 
