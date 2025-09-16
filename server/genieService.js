@@ -29,6 +29,6 @@ module.exports = {
   },
 
   readLatest() {
-    return sampleService.readLatestPrompt();
+    return sampleService.readLatest();
   },
 };
