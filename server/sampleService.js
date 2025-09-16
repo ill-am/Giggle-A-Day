@@ -1,6 +1,15 @@
 const fs = require("fs");
 const path = require("path");
 
+// Default to the repository-level samples/ directory so the file is located at
+// <repo-root>/samples/latest_prompt.txt regardless of the server working dir.
+const DEFAULT_SAMPLES_PATH = path.resolve(
+  __dirname,
+  "..",
+  "samples",
+  "latest_prompt.txt"
+);
+
 // Atomically write to disk: write to a temp file then rename.
 function safeWriteFileSync(filePath, contents) {
   const dir = path.dirname(filePath);
@@ -23,8 +32,7 @@ function buildContent(prompt, opts = {}) {
 }
 
 function savePrompt(prompt, options = {}) {
-  const filename =
-    options.filename || path.resolve(process.cwd(), "latest_prompt.txt");
+  const filename = options.filename || DEFAULT_SAMPLES_PATH;
   safeWriteFileSync(filename, String(prompt));
   return filename;
 }
@@ -42,8 +50,7 @@ function generateFromPrompt(prompt) {
 }
 
 function readLatest(options = {}) {
-  const filename =
-    options.filename || path.resolve(process.cwd(), "latest_prompt.txt");
+  const filename = options.filename || DEFAULT_SAMPLES_PATH;
   if (!fs.existsSync(filename)) return null;
   return fs.readFileSync(filename, { encoding: "utf8" });
 }
