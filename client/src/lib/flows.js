@@ -5,6 +5,7 @@ import {
   savePromptContent,
   updatePromptContent,
 } from "./api";
+import genieServiceFE from "./genieServiceFE";
 import {
   contentStore,
   previewStore,
@@ -103,9 +104,25 @@ export async function generateAndPreview(
   setUiLoading("Generating content...");
 
   try {
-    const response = await withTimeout(submitPrompt(prompt), timeoutMs);
-    // submitPrompt returns an object; legacy callers expect response.data.content
+    // Prefer using the frontend genie service which may implement a dev/demo
+    // implementation or delegate to the server. Fall back to submitPrompt
+    // to preserve existing behaviour.
+    let response;
+    try {
+      response = await withTimeout(
+        genieServiceFE.generate(prompt, {}),
+        timeoutMs
+      );
+    } catch (e) {
+      // If the frontend service fails for some reason, fall back to the
+      // existing server API call to avoid breaking the flow.
+      response = await withTimeout(submitPrompt(prompt), timeoutMs);
+    }
+
+    // genieServiceFE.generate returns { content, copies, meta } or submitPrompt
+    // returns the legacy shape { data: { content } } so normalize both.
     const content =
+      (response && response.content) ||
       (response && response.data && response.data.content) ||
       response.content ||
       null;
