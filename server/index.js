@@ -654,24 +654,43 @@ app.post("/prompt", async (req, res, next) => {
   }
 
   try {
-    // Use AI service abstraction with new content format
-    const aiResponse = await aiService.generateContent(prompt);
-    // Use Promise-style CRUD for clarity
-    const dbResult = await crud.createPrompt(prompt);
-    const aiResult = await crud.createAIResult(dbResult.id, aiResponse.content);
+    // Default to the demo genieService which delegates to sampleService.
+    // This keeps the frontend wiring unchanged while allowing the demo
+    // implementation to run locally without client changes.
+    const genieResult = await genieService.generate(prompt);
 
-    res.status(201).json({
-      success: true,
-      data: {
-        ...aiResponse,
-        promptId: dbResult.id,
-        resultId: aiResult.id,
-      },
-    });
+    // Ensure we have a data envelope to return
+    const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
+
+    // Attempt to persist prompt and ai result to DB for compatibility with
+    // downstream flows. Failures to persist should not block the demo response.
+    try {
+      const dbResult = await crud.createPrompt(prompt);
+      data.promptId = dbResult && dbResult.id ? dbResult.id : null;
+      try {
+        // Create an AI result record using the genie content as the result
+        const aiResult = await crud.createAIResult(data.promptId, {
+          content: data.content,
+          metadata: {},
+        });
+        data.resultId = aiResult && aiResult.id ? aiResult.id : null;
+      } catch (e) {
+        // Non-fatal: log and continue
+        console.warn(
+          "/prompt: failed to create AI result record",
+          e && e.message
+        );
+      }
+    } catch (e) {
+      // Non-fatal persistence failure; continue returning the demo payload
+      console.warn("/prompt: failed to persist prompt to DB", e && e.message);
+    }
+
+    return res.status(201).json({ success: true, data });
   } catch (err) {
-    // Enhanced AI service error handling
+    // Surface generator errors consistently
     err.status = err.status || 500;
-    err.message = `AI Service Error: ${err.message}`;
+    err.message = `Generation Error: ${err.message}`;
     next(err);
   }
 });
