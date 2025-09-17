@@ -634,9 +634,9 @@ app.post("/prompt", (req, res, next) => {
   }
 });
 
-const { createAIService } = require("./aiService");
-const aiService = createAIService();
-const { service: serviceImpl, name: serviceName } = require("./serviceAdapter");
+const { service: serviceImpl } = require("./serviceAdapter");
+// Demo genieService (delegates to sampleService) used by POST /prompt
+const genieService = require("./genieService");
 
 app.post("/prompt", async (req, res, next) => {
   const { prompt } = req.body;
@@ -935,7 +935,7 @@ app.post("/override", (req, res) => {
 
 // --- PDF EXPORT ENDPOINT ---
 // Backwards-compatible export endpoint: accept GET with query or POST with JSON body
-app.post("/api/export", async (req, res, next) => {
+app.post("/api/export", async (req, res) => {
   const fs = require("fs");
   const path = require("path");
   const {
@@ -1030,7 +1030,7 @@ app.post("/api/export", async (req, res, next) => {
 });
 
 // Backwards-compatible POST /export for legacy clients that post to /export
-app.post("/export", async (req, res, next) => {
+app.post("/export", async (req, res) => {
   const {
     sendValidationError,
     sendProcessingError,
@@ -2590,6 +2590,10 @@ module.exports.gracefulShutdown = gracefulShutdown;
 // Centralized error handler (placed at end to capture errors from all routes)
 app.use((err, req, res, _next) => {
   const timestamp = new Date().toISOString();
+  // Mark `_next` as used to satisfy linters while keeping the signature
+  // as an Express error handler (arity 4). This preserves error-handler
+  // behavior without introducing a runtime side-effect.
+  void _next;
   const requestId = req && req.id ? req.id : "-";
   console.error("--- Error Handler ---");
   console.error("Time:", timestamp);
