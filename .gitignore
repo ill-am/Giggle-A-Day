@@ -37,6 +37,9 @@ shared/dist/vitest.config.*
 /package-lock.json
 tmp/
 
+# Devcontainer local secrets (do NOT commit)
+.devcontainer/.env
+
 # Test and runtime logs
 run-*.log
 run-*.zip
