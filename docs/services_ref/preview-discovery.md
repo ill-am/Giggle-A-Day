@@ -88,7 +88,7 @@ Quick implementation plan (checkable)
 
 - [ ] Ensure middleware remains opt-in (already guarded by `process.env.DEV_AUTH_TOKEN` and `NODE_ENV === 'development'`).
 - [ ] Make `DEV_AUTH_TOKEN` reliably available to the Vite dev server process at startup by adding one of the following (choose one and apply):
-  - [ ] **Preferred for Codespaces:** add `remoteEnv` mapping in `.devcontainer/devcontainer.json`.
+  - [x] **Preferred for Codespaces:** add `remoteEnv` mapping in `.devcontainer/devcontainer.json`.
     - Snippet to add under `customizations.vscode` or top-level `remoteEnv` section:
       ```json
       "remoteEnv": {
