@@ -79,3 +79,38 @@ Status: discovery started.
 I'll now perform the first live check: attempt a direct `curl` to the server `/preview?content=...` without `x-dev-auth` and with a header to observe the response. This will test server-side enforcement and preview output. I'll document results below.
 \n## Live checks performed (results)
 \n- Direct `curl` to `http://localhost:3000/preview?content=...` returned `HTTP/1.1 200 OK` when called without `x-dev-auth` header from the current shell.\n- The shell has `DEV_AUTH_TOKEN` set (`${DEV_AUTH_TOKEN}`) but `NODE_ENV` in shell is empty. The server-side dev-auth middleware only activates if `NODE_ENV === "development"` and `DEV_AUTH_TOKEN` is set.\n- A request with `x-dev-auth: <token>` also returned `200 OK`.\n\nConclusion: In this running environment the preview endpoints accept requests without the dev auth token (either because the middleware is disabled or token-check is not enforced), and the preview endpoints generated HTML successfully for a simple test payload.\nDOC
+
+## Decision: Option B (Keep dev-auth, low-friction)
+
+We will keep the `x-dev-auth` dev-token mechanism but implement it in a low-friction, well-documented way that can be completed in under an hour. The goal is to preserve the safety benefit for shared/devcloud workspaces while avoiding intermittent 401s for developers.
+
+Quick implementation plan (checkable)
+
+- [ ] Ensure middleware remains opt-in (already guarded by `process.env.DEV_AUTH_TOKEN` and `NODE_ENV === 'development'`).
+- [ ] Make `DEV_AUTH_TOKEN` reliably available to the Vite dev server process at startup by adding one of the following (choose one and apply):
+  - [ ] **Preferred for Codespaces:** add `remoteEnv` mapping in `.devcontainer/devcontainer.json`.
+    - Snippet to add under `customizations.vscode` or top-level `remoteEnv` section:
+      ```json
+      "remoteEnv": {
+        "DEV_AUTH_TOKEN": "${localEnv:DEV_AUTH_TOKEN}"
+      }
+      ```
+  - [ ] **Alternate:** write `client/.env` in `postCreateCommand` so Vite `loadEnv` will pick it up:
+    ```bash
+    if [ -n "${DEV_AUTH_TOKEN:-}" ]; then
+      mkdir -p client
+      printf "DEV_AUTH_TOKEN=%s\n" "$DEV_AUTH_TOKEN" > client/.env
+      chmod 600 client/.env
+    fi
+    ```
+- [ ] Restore the simple `postAttachCommand` concurrently line in `.devcontainer/devcontainer.json` so devs use the standard `concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'` start, avoiding helper scripts that set envs after Vite starts.
+- [ ] Add a short doc snippet in `docs/services_ref` explaining the purpose and how to set `DEV_AUTH_TOKEN` for shared hosts.
+- [ ] Add a lightweight CI smoke test (existing `scripts/ci-smoke-test.sh`) that includes `x-dev-auth` when `DEV_AUTH_TOKEN` is present.
+
+Quick validation steps (after applying)
+
+- [ ] Start devcontainer or Vite server and confirm Vite logs or `client-dev.log` show `DEV_AUTH_TOKEN` as present in the process environment (do not log the raw token; a masked echo is fine).
+- [ ] Use browser DevTools or a sample `curl` via the Vite dev server to confirm `x-dev-auth` is forwarded and server accepts requests.
+- [ ] Verify preview updates via UI and that no intermittent 401s occur.
+
+If for any reason this cannot be implemented in under an hour, we will fall back to Option A (remove dev-auth) to avoid blocking developer productivity.
