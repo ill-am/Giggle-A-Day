@@ -636,7 +636,7 @@ app.post("/prompt", (req, res, next) => {
 
 const { createAIService } = require("./aiService");
 const aiService = createAIService();
-const genieService = require("./genieService");
+const { service: serviceImpl, name: serviceName } = require("./serviceAdapter");
 
 app.post("/prompt", async (req, res, next) => {
   const { prompt } = req.body;
@@ -810,11 +810,11 @@ app.get("/preview", async (req, res) => {
   }
 });
 
-// Demo generator endpoints using genieService (delegates to sampleService)
+// Demo generator endpoints using the selected service implementation
 app.post("/genie", async (req, res) => {
   try {
     const prompt = req.body && req.body.prompt;
-    const result = await genieService.generate(prompt);
+    const result = await serviceImpl.generate(prompt);
     return res.status(201).json(result);
   } catch (err) {
     console.error("/genie error", err && err.message);
@@ -825,7 +825,7 @@ app.post("/genie", async (req, res) => {
 
 app.get("/genie", (req, res) => {
   try {
-    const txt = genieService.readLatest();
+    const txt = serviceImpl.readLatest ? serviceImpl.readLatest() : null;
     if (txt === null) return sendValidationError(res, "No saved prompt found");
     const content = {
       title: `Prompt: ${txt.split(" ").slice(0, 6).join(" ")}`,
