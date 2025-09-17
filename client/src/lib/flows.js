@@ -24,10 +24,19 @@ let previewAbortController = null;
 export function cancelPreview() {
   try {
     if (previewAbortController) {
-      previewAbortController.abort();
+      // Only abort if the signal isn't already aborted to avoid spurious
+      // DOMExceptions in some environments.
+      try {
+        if (!previewAbortController.signal.aborted)
+          previewAbortController.abort();
+      } catch (inner) {
+        // ignore
+      }
       previewAbortController = null;
     }
-  } catch (e) {}
+  } catch (e) {
+    // swallow - cancellation should be best-effort
+  }
 }
 
 function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS) {
@@ -53,10 +62,14 @@ export async function previewFromContent(
     throw err;
   }
 
-  // Cancel any previously running preview to avoid race conditions
+  // Cancel any previously running preview to avoid race conditions and create
+  // a fresh controller for this request. Capture the controller locally so
+  // we can tell if a later cancellation corresponds to this request or a
+  // newer one.
   cancelPreview();
   previewAbortController = new AbortController();
-  const signal = previewAbortController.signal;
+  const myController = previewAbortController;
+  const signal = myController.signal;
 
   setUiLoading("Loading preview...");
 
@@ -65,6 +78,10 @@ export async function previewFromContent(
     // Ensure previewStore is updated with the returned HTML
     previewStore.set(html);
     uiStateStore.set({ status: "success", message: "Preview loaded" });
+    // If this request is still the active controller, clear the global
+    // reference so subsequent calls start fresh. If a newer request has
+    // replaced the global controller, leave it as-is.
+    if (previewAbortController === myController) previewAbortController = null;
     return html;
   } catch (err) {
     // If the request was aborted (due to a newer preview request), treat
@@ -75,6 +92,11 @@ export async function previewFromContent(
     if (err && (err.name === "AbortError" || err.type === "aborted")) {
       // Keep existing preview and UI state; return an empty string so
       // callers can continue without treating this as a failure.
+      // Clear the global controller only if it belongs to this request.
+      try {
+        if (previewAbortController === myController)
+          previewAbortController = null;
+      } catch (e) {}
       return "";
     }
 

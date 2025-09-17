@@ -9,11 +9,18 @@ const IS_DEV =
 function devWritable(name, initial) {
   const w = writable(initial);
   if (!IS_DEV) return w;
+  // Rate-limit verbose logging to avoid console-flood during rapid updates.
+  let lastLogTime = 0;
+  const LOG_MIN_INTERVAL_MS = 120; // ~8 logs per second max per store
   return {
     subscribe: w.subscribe,
     set(value) {
       try {
-        console.log(`STORE:${name}.set`, { value });
+        const now = Date.now();
+        if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
+          lastLogTime = now;
+          console.log(`STORE:${name}.set`, { value });
+        }
       } catch (e) {}
       w.set(value);
     },
@@ -21,7 +28,11 @@ function devWritable(name, initial) {
       w.update((prev) => {
         const next = fn(prev);
         try {
-          console.log(`STORE:${name}.update`, { prev, next });
+          const now = Date.now();
+          if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
+            lastLogTime = now;
+            console.log(`STORE:${name}.update`, { prev, next });
+          }
         } catch (e) {}
         return next;
       });
@@ -77,51 +88,39 @@ const globalAny =
     ? /** @type {any} */ (window)
     : /** @type {any} */ ({});
 
-if (
-  typeof window !== "undefined" &&
-  /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]
-) {
-  // Defensive check: ensure the existing global singleton looks like our
-  // expected object (stores should have a `subscribe` function).
-  try {
-    const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY];
-    const looksLikeStores =
-      g &&
-      typeof g === "object" &&
-      ((g.promptStore && typeof g.promptStore.subscribe === "function") ||
-        (g.contentStore && typeof g.contentStore.subscribe === "function") ||
-        (g.previewStore && typeof g.previewStore.subscribe === "function"));
-    if (looksLikeStores) {
-      ({
-        promptStore: promptStoreExport,
-        contentStore: contentStoreExport,
-        previewStore: previewStoreExport,
-        uiStateStore: uiStateStoreExport,
-      } = g);
-    } else {
-      // Malformed global singleton found (maybe overwritten by other code).
-      try {
-        console.warn(
-          "[DEV] Detected malformed",
-          GLOBAL_STORES_KEY,
-          "overwriting with fresh stores"
-        );
-      } catch (e) {}
-      // Remove it so the normal creation path runs below
-      try {
-        delete (/** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]);
-      } catch (e) {}
-      promptStoreExport = undefined;
-    }
-  } catch (e) {
-    try {
-      console.warn("[DEV] Error validating global stores key", e);
-    } catch (e) {}
-    try {
-      delete window[GLOBAL_STORES_KEY];
-    } catch (e) {}
-    promptStoreExport = undefined;
+// Defensive: ensure the global singleton container exists as early as possible.
+// This helps avoid HMR/module-duplication scenarios where multiple module
+// instances create separate stores. We intentionally only create the wrapper
+// object here; individual stores are created below if missing.
+try {
+  if (typeof window !== "undefined") {
+    /* Ensure a single global object is used by all module copies */
+    globalAny[GLOBAL_STORES_KEY] = globalAny[GLOBAL_STORES_KEY] || {};
   }
+} catch (e) {
+  // Swallow - defensive only for environments where `window` may be sealed.
+}
+
+// If a global container exists, prefer reusing any stores it already has.
+// Do not delete or overwrite the global object; instead merge missing
+// store references to avoid races with HMR and to keep the object stable.
+try {
+  if (typeof window !== "undefined") {
+    const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY];
+    if (g && typeof g === "object") {
+      try {
+        // If other module copies already provided store instances, reuse them.
+        promptStoreExport = promptStoreExport || g.promptStore;
+        contentStoreExport = contentStoreExport || g.contentStore;
+        previewStoreExport = previewStoreExport || g.previewStore;
+        uiStateStoreExport = uiStateStoreExport || g.uiStateStore;
+      } catch (e) {
+        // If reading properties fails for some reason, fall back to creation below.
+      }
+    }
+  }
+} catch (e) {
+  // swallow - defensive only
 }
 
 if (!promptStoreExport) {
@@ -135,18 +134,19 @@ if (!promptStoreExport) {
 
   if (typeof window !== "undefined") {
     try {
-      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY] = {
-        promptStore: promptStoreExport,
-        contentStore: contentStoreExport,
-        previewStore: previewStoreExport,
-        uiStateStore: uiStateStoreExport,
-      };
-      // attach a small marker to help runtime debugging
-      try {
-        /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__marker =
-          "strawberry-stores-v1";
-      } catch (e) {}
-    } catch (e) {}
+      // Merge into existing global container without overwriting it. This keeps
+      // the same object reference across HMR reloads while allowing new
+      // properties to be added by the first module that initializes them.
+      const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY] || {};
+      g.promptStore = g.promptStore || promptStoreExport;
+      g.contentStore = g.contentStore || contentStoreExport;
+      g.previewStore = g.previewStore || previewStoreExport;
+      g.uiStateStore = g.uiStateStore || uiStateStoreExport;
+      g.__marker = g.__marker || "strawberry-stores-v1";
+      globalAny[GLOBAL_STORES_KEY] = g;
+    } catch (e) {
+      // swallow - defensive
+    }
   }
 }
 
@@ -198,7 +198,10 @@ if (typeof window !== "undefined") {
         if (DEV_STORES_VERBOSE)
           console.debug("[DEV] contentStore.set called with", v);
         // assign into globalAny to avoid TypeScript window property errors
-        globalAny.__LAST_CONTENT_SET = v;
+        try {
+          if (globalAny.__LAST_CONTENT_SET !== v)
+            globalAny.__LAST_CONTENT_SET = v;
+        } catch (e) {}
       } catch (e) {}
       return originalSet.call(this, v);
     };
@@ -252,7 +255,36 @@ if (typeof window !== "undefined") {
             v ? v.length || 0 : 0
           );
         // assign into globalAny to avoid TypeScript window property errors
-        globalAny.__LAST_PREVIEW_SET = v;
+        try {
+          // Frequency detection: record timestamps of recent preview updates
+          const now = Date.now();
+          globalAny.__PREVIEW_SET_HISTORY__ =
+            globalAny.__PREVIEW_SET_HISTORY__ || [];
+          globalAny.__PREVIEW_SET_HISTORY__.push(now);
+          // keep last N entries
+          if (globalAny.__PREVIEW_SET_HISTORY__.length > 20)
+            globalAny.__PREVIEW_SET_HISTORY__.shift();
+
+          // If updates are very frequent (e.g. >5 updates in 2s), capture a
+          // lightweight stack sample to help identify the writer. Store it
+          // once to avoid repeated heavy work.
+          const recent = globalAny.__PREVIEW_SET_HISTORY__.filter(
+            (ts) => now - ts < 2000
+          ).length;
+          if (recent > 5 && !globalAny.__PREVIEW_HIGH_FREQ_SAMPLE__) {
+            try {
+              const stack = new Error("preview-set-sample").stack;
+              globalAny.__PREVIEW_HIGH_FREQ_SAMPLE__ = {
+                firstObservedAt: now,
+                countIn2s: recent,
+                stack: String(stack).split("\n").slice(0, 6).join("\n"),
+              };
+            } catch (e) {}
+          }
+
+          if (globalAny.__LAST_PREVIEW_SET !== v)
+            globalAny.__LAST_PREVIEW_SET = v;
+        } catch (e) {}
       } catch (e) {}
       return originalPreviewSet.call(this, v);
     };

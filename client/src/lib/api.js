@@ -72,10 +72,17 @@ async function fetchWithRetry(url, options = {}) {
       return response;
     } catch (error) {
       // If the request was aborted, do not retry — rethrow immediately.
+      // Aborts are expected when the app cancels in-flight requests (for
+      // example when starting a new preview). Treat these as debug-level
+      // events instead of errors to avoid noisy error logs.
       if (error && (error.name === "AbortError" || error.type === "aborted")) {
-        Logger.apiError(endpoint, error, {
+        Logger.debug(`API Abort: ${endpoint}`, {
+          type: "api_abort",
+          endpoint,
           attempt,
           maxRetries: config.maxRetries,
+          // preserve the original error for local inspection when needed
+          error,
         });
         throw error;
       }
@@ -246,6 +253,16 @@ export async function loadPreview(content, options = {}) {
       throw error;
     }
   } catch (err) {
+    // If the resolution was aborted, treat as a debug-level event and
+    // rethrow so callers (like previewFromContent) can handle it.
+    if (err && (err.name === "AbortError" || err.type === "aborted")) {
+      Logger.debug("Content resolution aborted", {
+        type: "api_abort",
+        error: err,
+      });
+      throw err;
+    }
+
     Logger.error("Failed to resolve content by id", { err });
     throw err;
   }
@@ -316,6 +333,16 @@ export async function loadPreview(content, options = {}) {
     });
     return previewHtml;
   } catch (error) {
+    // Treat aborts as non-errors: callers expect AbortError to be thrown
+    // so they can decide whether to ignore it (e.g. previewFromContent).
+    if (error && (error.name === "AbortError" || error.type === "aborted")) {
+      Logger.debug("Preview request aborted", {
+        type: "api_abort",
+        error,
+      });
+      throw error;
+    }
+
     Logger.error("Preview loading error", { error });
     throw error;
   }
