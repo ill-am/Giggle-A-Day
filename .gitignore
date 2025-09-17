@@ -43,6 +43,8 @@ tmp/
 # Test and runtime logs
 run-*.log
 run-*.zip
+logs/
+samples/latest_prompt.txt
 
 # End-to-end test databases
 **/tmp-e2e.db

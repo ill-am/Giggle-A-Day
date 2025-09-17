@@ -183,3 +183,7 @@ Notes:
 
 - For deterministic CI runs set `USE_REAL_AI=false` and `JOBS_DB=/tmp/tmp-jobs.db` to avoid external calls and shared DB state.
 - If a PDF is generated, `server/pdfQuality.mjs` may be executed and its summary printed to stdout; CI workflows will fail on fatal validation errors.
+
+## Scripts
+
+- `scripts/ci-smoke-test.sh` — lightweight smoke test for the Generate→Preview endpoints. Usage: `./scripts/ci-smoke-test.sh http://localhost:3000` (requires `curl`, `jq`, and `python3`).
