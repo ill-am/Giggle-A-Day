@@ -1,6 +1,6 @@
 # E2E_PLUMBING
 
-This document describes the current [TUE 16th Sep 2025 @ 10:30AM] end-to-end plumbing for the "Generate" → preview flow in the AetherPress prototype (as implemented in branch `aetherV0/anew`). It records the concrete components, the request/response contracts, and testable observability hooks.
+This document describes the current **[TUE 16th Sep 2025 @ 10:30AM]** end-to-end plumbing for the "Generate" → preview flow in the AetherPress prototype (as implemented in branch `aetherV0/anew`). It records the concrete components, the request/response contracts, and testable observability hooks.
 
 ## High-level flow (click → preview)
 
@@ -33,6 +33,92 @@ This document describes the current [TUE 16th Sep 2025 @ 10:30AM] end-to-end plu
 - Frontend → GET `/preview?content=<encoded JSON>` or `/preview?promptId=<id>` or `/preview?resultId=<id>`
   - Success: `200` with `Content-Type: text/html` containing the rendered preview HTML.
   - Error: `4xx/5xx` with a descriptive HTML or JSON error.
+
+## Exact JSON contract (TUE 16th Sep 2025 @ 10:30AM)
+
+Below are the exact success and error JSON shapes the frontend and tests should rely on.
+
+POST /prompt (Success - JSON)
+
+```json
+{
+  "success": true,
+  "data": {
+    "content": {
+      "title": "string",
+      "body": "string",
+      "layout": "string (optional)",
+      "background": "string (optional)"
+    },
+    "copies": [
+      { "title": "string", "body": "string" },
+      { "title": "string", "body": "string" },
+      { "title": "string", "body": "string" }
+    ],
+    "promptId": 123, // optional numeric id assigned when persisted
+    "resultId": 456 // optional numeric id assigned for generated result
+  }
+}
+```
+
+Notes:
+
+- `content.title` and `content.body` MUST be present for preview rendering.
+- `copies`, `promptId`, and `resultId` are optional — callers must handle their absence gracefully.
+
+POST /prompt (Validation / Client Error - JSON)
+
+HTTP status: `400` (or other 4xx)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Prompt is required and must be a non-empty string",
+    "details": { "provided": "string" }
+  }
+}
+```
+
+POST /prompt (Server Error - JSON)
+
+HTTP status: `500` (or other 5xx)
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INTERNAL_ERROR",
+    "message": "Generation Error: <brief message>",
+    "details": null
+  }
+}
+```
+
+Preview endpoint variants:
+
+- `GET /preview?content=<encoded JSON>` returns raw HTML (`Content-Type: text/html`).
+- If using `POST /api/preview` (for large payloads), the server may return JSON:
+
+```json
+{
+  "preview": "<html>...</html>",
+  "metadata": {
+    /* optional */
+  }
+}
+```
+
+HTTP status mapping recommendations:
+
+- `200` success (preview or JSON)
+- `201` created (for POST /prompt when a new record is persisted)
+- `400` validation errors
+- `401` authentication errors
+- `403` authorization errors
+- `429` rate limiting
+- `500` server errors
 
 ## Observability & test hooks
 
