@@ -38,14 +38,15 @@ Out of scope (for this phase)
 - Prompt submission & preview content
   - Request: `POST /prompt`
     - Body: `{ "prompt": "..." }`
-    - Response: Backend returns the prompt content in triplicate
-  - Side effect: Backend writes prompt to `./samples/latest_prompt.txt`
+    - Response: JSON with shape `{ "content": "<tripled-text>" }` where `content` is plain text with newline separators (e.g. "hi\nhi\nhi").
+  - Side effect: Backend writes the prompt to the repository-root samples file at `./samples/latest_prompt.txt` (recommendation: server code use a repo-root-relative path such as `path.join(__dirname, '..', 'samples', 'latest_prompt.txt')`).
 
 Client responsibilities
 
-- Send prompt text to backend via POST /prompt
-- Display returned content in the preview pane element with `data-testid="preview-content"`
-- Show "loading" state while waiting for response
+- Send prompt text to backend via POST /prompt and parse the JSON response `{ content }`.
+- Display the `content` value in the preview pane element with `data-testid="preview-content"`.
+- Disable the Generate button and show a minimal loading indicator while awaiting the response; on success re-enable and update the preview.
+- On error (non-2xx response), show a concise error message derived from the response and re-enable the Generate button; do not modify the existing preview on error.
 
 ## Minimal store design
 
