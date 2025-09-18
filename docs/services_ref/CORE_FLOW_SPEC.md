@@ -32,10 +32,16 @@ Demo Interaction:
 
 ## Core Flow
 
-1. Frontend sends user's prompt to backend
-2. Backend stores prompt in `./samples/latest_prompt.txt`
-3. Backend sends back the prompt content in triplicate
-4. Frontend displays the returned content in the preview pane
+1. Frontend sends user's prompt to backend via `POST /prompt` with `{ "prompt": "..." }`.
+2. Backend stores the prompt in the repository `./samples/latest_prompt.txt` (use a repo-root-relative path).
+3. Backend responds with JSON: `{ "content": "<tripled-text>" }` (plain text with newline separators).
+4. Frontend parses the JSON, sets the `previewStore` to `content`, and the preview component renders it into the element with `data-testid="preview-content"`.
+
+Client UI behavior
+
+- The Generate button must be disabled while the request is in-flight and a minimal loading indicator shown.
+- On success, update the preview and re-enable the Generate button.
+- On error (non-2xx), display a brief error message and re-enable the Generate button; do not clear the existing preview content.
 
 ## Required Files
 
@@ -83,3 +89,51 @@ Demo Interaction:
 3. Verify:
    - `latest_prompt.txt` contains prompt
    - Preview shows tripled content
+
+## Implementation notes and examples
+
+1. Example cURL (request + expected response)
+
+```bash
+curl -s -X POST http://localhost:3000/prompt \
+  -H "Content-Type: application/json" \
+  -d '{"prompt":"hello"}'
+
+# Expected JSON response
+#{ "content": "hello\nhello\nhello" }
+```
+
+2. Error envelope example
+
+On failure the server should return a non-2xx response with JSON:
+
+```json
+{ "error": "<short message>" }
+```
+
+Client behavior should show the `error` message in the UI and re-enable controls.
+
+3. Repo-root samples path snippet (Node.js example)
+
+```js
+// server-side example
+import fs from "fs/promises";
+import path from "path";
+
+const samplesPath = path.join(__dirname, "..", "samples", "latest_prompt.txt");
+await fs.writeFile(samplesPath, promptText, "utf8");
+```
+
+4. Devcontainer note
+
+Ensure `./samples/` exists and is writeable in the devcontainer. Example (from repo root):
+
+```bash
+mkdir -p samples && chmod a+rw samples
+```
+
+5. PM verification checklist (manual steps)
+
+- Start dev servers (client + server) via devcontainer or local commands
+- Use the cURL example above and confirm: response shape, content, and `samples/latest_prompt.txt` content
+- In the UI: enter a prompt, click Generate, confirm preview shows tripled text and controls behave as specified
