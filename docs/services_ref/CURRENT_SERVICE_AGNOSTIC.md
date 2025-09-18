@@ -1,6 +1,5 @@
-[TUE 16th Sep 2025 @ 3:00PM]
-
 # CURRENT_SERVICE_AGNOSTIC
+[TUE 16th Sep 2025 @ 3:00PM]
 
 I’ll explain whether the plumbing is currently service‑agnostic, where the remaining coupling is, and what to check/require for a true “plumbing-agnostic” design — no code changes, just an informational assessment and a short verification checklist.
 
