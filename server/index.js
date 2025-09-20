@@ -213,6 +213,20 @@ let browserInstance;
 const MAX_PUPPETEER_RESTARTS = 5;
 
 async function startPuppeteer() {
+  // If we're running in a devolved/minimal dev mode, skip starting Puppeteer
+  if (
+    process.env.DEV_MINIMAL === "1" ||
+    process.env.SKIP_PUPPETEER === "1" ||
+    process.env.SKIP_PUPPETEER === "true"
+  ) {
+    console.log(
+      "DEV_MINIMAL or SKIP_PUPPETEER enabled — skipping Puppeteer initialization"
+    );
+    serviceState.puppeteer.startupPhase = "skipped";
+    serviceState.puppeteer.ready = false;
+    return;
+  }
+
   try {
     serviceState.puppeteer.transitioning = true;
     serviceState.puppeteer.startupPhase = "initializing";
