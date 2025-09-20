@@ -9,6 +9,7 @@ server/data/your-database-name.db
 # Generated content and samples
 samples/images/
 samples/*.pdf
+samples/latest_prompt.txt
 
 # Test/artifact outputs produced by headless e2e and smoke scripts
 test-artifacts/
@@ -22,6 +23,8 @@ server/tmp-exports/
 # Server runtime files
 server/server.pid
 server/server*.log
+server.out
+server.pid
 server/server-start.log
 
 # Temporary PDF output directories created by tests/smoke scripts
