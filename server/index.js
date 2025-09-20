@@ -42,12 +42,12 @@ async function rewriteImagesForExportAsync(html) {
   return imageRewrite.rewriteDemoImages(html, { inlineSvg: true });
 }
 
-// Serve sample images and assets for deterministic exports
+// Serve sample images and assets for deterministic exports from repository root
+const SAMPLES_DIR = path.resolve(process.cwd(), "samples");
 try {
-  const samplesDir = path.resolve(__dirname, "samples");
-  if (fs.existsSync(samplesDir)) {
-    app.use("/samples", express.static(samplesDir));
-    console.log("Serving /samples from", samplesDir);
+  if (fs.existsSync(SAMPLES_DIR)) {
+    app.use("/samples", express.static(SAMPLES_DIR));
+    console.log("Serving /samples from", SAMPLES_DIR);
   }
 } catch (e) {
   console.warn("Failed to register /samples static handler", e && e.message);
@@ -624,16 +624,26 @@ app.post("/prompt", async (req, res, next) => {
     // If running minimal dev flow or caller explicitly requested min_flow,
     // write the prompt to samples/latest_prompt.txt for preview/debug convenience.
     const minFlowRequested =
-      req.query && (req.query.min_flow === "1" || req.query.min_flow === "true");
-    const devMinimal = process.env.DEV_MINIMAL === "1" || process.env.DEV_MINIMAL === "true";
+      req.query &&
+      (req.query.min_flow === "1" || req.query.min_flow === "true");
+    const devMinimal =
+      process.env.DEV_MINIMAL === "1" || process.env.DEV_MINIMAL === "true";
     if (minFlowRequested || devMinimal) {
       try {
         const samplesDir = path.resolve(process.cwd(), "samples");
-        if (!fs.existsSync(samplesDir)) fs.mkdirSync(samplesDir, { recursive: true });
-        fs.writeFileSync(path.join(samplesDir, "latest_prompt.txt"), String(prompt), "utf8");
+        if (!fs.existsSync(samplesDir))
+          fs.mkdirSync(samplesDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(samplesDir, "latest_prompt.txt"),
+          String(prompt),
+          "utf8"
+        );
         console.log("Wrote samples/latest_prompt.txt for minimal flow");
       } catch (e) {
-        console.warn("Failed to write samples/latest_prompt.txt", e && e.message);
+        console.warn(
+          "Failed to write samples/latest_prompt.txt",
+          e && e.message
+        );
       }
     }
 
