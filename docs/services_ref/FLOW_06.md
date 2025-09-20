@@ -4,6 +4,23 @@
 
 This file records the minimal demo implementation for the tripled-text preview flow described in `CORE_FLOW_SPEC.md`.
 
+**Clarification:** Treat FLOW_06 as a tiny starter/demo ("Hello, world!") app: keep it trivial, make sure it runs, and ensure passing criteria/tests are minimal but meaningful; how simple this starter program should be; how thorough its tests must be, exact passing criteria, and a small pragmatic verification checklist you (or the PM) can run immediately.
+
+ - Summary statement
+
+    Treat FLOW_06 as a minimal, deterministic starter: the smallest end-to-end flow that proves the system wiring works (client → server → repo write → preview).
+    Complexity: trivial by design — minimal UI, a single POST endpoint, file-write side effect, and display of returned text.
+    Tests: small, focused, fast unit/integration checks (curl-based smoke + one UI assertion). Tests should prioritize that the flow runs and the environment supports required components (file system write, server listening). No high-coverage or flaky e2e automation is required at this stage.
+
+ - How complicated is the "Hello, world!" starter here?
+
+    Very simple: implement exactly what's in FLOW_06/CORE_FLOW_SPEC/MIN_CLIENT_SPEC:
+        Server: one route POST /prompt that validates body, writes prompt to samples/latest_prompt.txt, and returns { "content": "<prompt>\n<prompt>\n<prompt>" }.
+        Client: single page with an input, a Generate button, and preview element with data-testid="preview-content".
+        Stores: just promptStore, previewStore, optional uiStateStore.
+    Expected dev effort: small (1–3 hours) to implement and verify locally on a dev environment already configured (or devcontainer).
+    No advanced patterns: skip AbortController, retries, background processing, HMR quirks, or heavy instrumentation for initial pass.
+
 ## Core Purpose
 
 - Input: user types a short prompt
