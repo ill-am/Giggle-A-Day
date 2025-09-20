@@ -621,6 +621,22 @@ app.post("/prompt", async (req, res, next) => {
     const dbResult = await crud.createPrompt(prompt);
     const aiResult = await crud.createAIResult(dbResult.id, aiResponse.content);
 
+    // If running minimal dev flow or caller explicitly requested min_flow,
+    // write the prompt to samples/latest_prompt.txt for preview/debug convenience.
+    const minFlowRequested =
+      req.query && (req.query.min_flow === "1" || req.query.min_flow === "true");
+    const devMinimal = process.env.DEV_MINIMAL === "1" || process.env.DEV_MINIMAL === "true";
+    if (minFlowRequested || devMinimal) {
+      try {
+        const samplesDir = path.resolve(process.cwd(), "samples");
+        if (!fs.existsSync(samplesDir)) fs.mkdirSync(samplesDir, { recursive: true });
+        fs.writeFileSync(path.join(samplesDir, "latest_prompt.txt"), String(prompt), "utf8");
+        console.log("Wrote samples/latest_prompt.txt for minimal flow");
+      } catch (e) {
+        console.warn("Failed to write samples/latest_prompt.txt", e && e.message);
+      }
+    }
+
     res.status(201).json({
       success: true,
       data: {
