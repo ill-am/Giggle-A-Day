@@ -1,6 +1,6 @@
 # Devolvement Plan
 
-This folder documents the controlled devolution strategy used to simplify the `aether-dev` application into progressively-minimal, runnable branches. Follow this guide when producing or reviewing devolved branches.
+This folder documents the controlled devolution strategy used to simplify the `aether-dev` - prototype V0.1 - application into progressively-minimal, runnable branches. Follow this guide when producing or reviewing devolved branches.
 
 Principles
 
