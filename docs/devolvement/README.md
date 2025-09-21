@@ -1,5 +1,15 @@
 # Devolvement Plan
 
+> NOTE: general application flow and current preview failure
+>
+> - Frontend: user composes a prompt in the UI and submits it (client-side Svelte app).
+> - Frontend → Backend: the client POSTs the prompt to `POST /prompt` (or the app's canonical prompt endpoint).
+> - Backend processing: the server orchestrates AI (text + image) calls, assembles content, and may enqueue background jobs or generate assets synchronously.
+> - Preview generation: the backend produces an HTML preview (or metadata/URL for a preview) and writes artifacts (for example `samples/latest_prompt.txt`, image assets, or a preview payload).
+> - Frontend update: the client fetches the preview (GET `/preview` or via returned payload) and updates the live preview pane.
+>
+> Important: the final leg — the frontend updating its preview from backend-generated content — has been failing despite weeks of troubleshooting. Devolvement is proceeding so we can produce minimal, runnable branches and verify the core flow incrementally until the full preview update path is restored.
+
 This folder documents the controlled devolution strategy used to simplify the `aether-dev` - prototype V0.1 - application into progressively-minimal, runnable branches. Follow this guide when producing or reviewing devolved branches.
 
 Principles
