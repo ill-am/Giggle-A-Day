@@ -668,11 +668,12 @@ app.post("/prompt", async (req, res, next) => {
       const dbResult = await crud.createPrompt(prompt);
       data.promptId = dbResult && dbResult.id ? dbResult.id : null;
       try {
-        // Create an AI result record using the genie content as the result
-        const aiResult = await crud.createAIResult(data.promptId, {
-          content: data.content,
-          metadata: {},
-        });
+        // Persist only the `content` object so stored `result` equals the
+        // API-visible `content` (this keeps DB shape compatible with tests).
+        const aiResult = await crud.createAIResult(
+          data.promptId,
+          data.content || {}
+        );
         data.resultId = aiResult && aiResult.id ? aiResult.id : null;
       } catch (e) {
         // Non-fatal: log and continue
@@ -2659,7 +2660,7 @@ app.use((err, req, res, _next) => {
         try {
           res.end();
         } catch (er) {
-          // ignore warn logging errors
+          void er; // ignore warn logging errors
         }
       }
       return;
@@ -2677,10 +2678,12 @@ app.use((err, req, res, _next) => {
       } else {
         try {
           res.end();
-        } catch (er) {}
+        } catch (er) {
+          void er;
+        }
       }
     } catch (ee) {
-      // ignore final shutdown errors
+      void ee; // ignore final shutdown errors
     }
   }
 });
