@@ -23,6 +23,8 @@ server/tmp-exports/
 server/server.pid
 server/server*.log
 server/server-start.log
+server.pid
+server.out
 
 # Temporary PDF output directories created by tests/smoke scripts
 # Ignore top-level and nested tmp-pdf* directories
