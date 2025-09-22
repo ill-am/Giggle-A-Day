@@ -130,12 +130,22 @@ async function startServer(options = {}) {
     const skipPuppeteer =
       process.env.SKIP_PUPPETEER === "true" ||
       process.env.SKIP_PUPPETEER === "1";
-    if (skipPuppeteer) {
+    if (skipPuppeteer || DEV_MINIMAL) {
+      // When skipping Puppeteer for CI/tests or running in DEV_MINIMAL mode,
+      // mark the puppeteer subsystem as intentionally skipped but treat the
+      // service as "ready" for purposes of the HTTP readiness middleware.
+      // This keeps preview endpoints responsive while avoiding Puppeteer
+      // startup and Chromium requirements. Consumers must still guard against
+      // a null `browserInstance` when attempting exports.
       console.log(
-        "SKIP_PUPPETEER=true - skipping Puppeteer initialization (test/CI mode)"
+        "SKIP_PUPPETEER or DEV_MINIMAL enabled - not starting Puppeteer (skipped)"
       );
       serviceState.puppeteer.startupPhase = "skipped";
-      serviceState.puppeteer.ready = false;
+      // Mark ready so readiness middleware does not block requests. Browser
+      // instance will remain null; endpoints that need a live browser should
+      // return a clear service-unavailable response.
+      serviceState.puppeteer.ready = true;
+      browserInstance = null;
     } else {
       await startPuppeteer();
     }
@@ -956,7 +966,25 @@ app.post("/api/export", async (req, res) => {
   // Use the same synchronous fallback logic as the GET /export route
   let page;
   try {
+    // If Puppeteer was intentionally skipped for CI/tests or DEV_MINIMAL,
+    // provide a clear error code so callers can distinguish "disabled" from
+    // transient "not ready" states.
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",
@@ -1049,6 +1077,21 @@ app.post("/export", async (req, res) => {
   let page;
   try {
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",
@@ -1127,6 +1170,21 @@ app.get("/export", async (req, res) => {
     const contentObj = JSON.parse(content);
 
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",
