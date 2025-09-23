@@ -1,5 +1,21 @@
 # AetherPress Client
 
+Overview flow (ASCII):
+
+    [User types prompt]
+    				 |
+    				 v
+    [PromptInput.svelte] --generate--> [client/src/lib/flows.generateAndPreview]
+    				 |                                      |
+    				 v                                      v
+     contentStore.set(content)               submitPrompt() or genieServiceFE
+    				 |                                      |
+    				 v                                      v
+    	PreviewWindow observes content  <- previewFromContent -> loadPreview -> /preview or /api/preview
+    				 |                                      |
+    				 v                                      v
+    previewStore.set(html)  ------------------>  PreviewWindow {@html $previewStore}
+
 Note: Developer-only helper buttons (`Load V0.1 demo` and `Run smoke test`) are visually hidden in the UI for the rapid-feedback prototype; they exist only for local debugging and may be removed later.
 
 Frontend SPA for AetherPress content generation and management.
@@ -9,6 +25,8 @@ Frontend SPA for AetherPress content generation and management.
 The `scripts/` directory contains utility scripts for development and testing:
 
 - `health-check.sh`: Frontend availability and response monitoring
+
+See `client/docs/CLIENT_E2E_FLOW.md` for the canonical end-to-end flow and smoke-check guidance.
 
 ## Current GUI status (developer-facing)
 

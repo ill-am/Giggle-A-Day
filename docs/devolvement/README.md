@@ -28,14 +28,25 @@ Recommended workflow
    ```
 2. Create a devolved branch (branch from latest devolved or `aether-dev`):
    ```bash
-   git checkout -b aether-dev/devolve-<NN>-<short-desc>
+   git checkout -b AE-devolve/<NN>-<short-desc>
    ```
 3. Implement only the gating/stub changes for the targeted subsystem and add a smoke script.
 4. Commit, push, run the smoke script, and open a small PR for review.
 
-Devolution order (recommended)
+Devolution order (Recommended/Updated, after 01-skip-puppeteer)
+1. Puppeteer (skip/replace renderer) ✅ See `01-skip-puppeteer-README.md`
+2. HMR / store instrumentation simplification
+3. Envelope/response-shape simplification
+4. Readiness/warmup gating
+5. Background job workers
+6. Dev auth / restrictive auth flows
+7. Rate-limiting / throttling
+8. Database (switch to in-memory or mock)
+9. Competing handlers / route ambiguity
+10. Optional features (PDF export, advanced previews)
 
-1. Puppeteer (skip/replace renderer)
+Old (Original, reference only) ❎
+1. Puppeteer (skip/replace renderer) ✅ See `01-skip-puppeteer-README.md`
 2. Background job workers
 3. Readiness/warmup gating
 4. Rate-limiting / throttling
