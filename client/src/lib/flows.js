@@ -152,6 +152,20 @@ export async function generateAndPreview(
       throw new Error("Invalid response structure from server.");
     }
 
+    // Normalize generated content: if the generator returned only minimal
+    // shape (for example only `{ prompt }` or no title/body), derive missing
+    // fields from the original prompt. This prevents the preview step from
+    // failing when a generator returns minimal data.
+    try {
+      if (content && !content.body) content.body = String(prompt);
+      if (content && !content.title) {
+        const words = String((content && content.body) || prompt)
+          .split(/\s+/)
+          .filter(Boolean);
+        content.title = `Prompt: ${words.slice(0, 6).join(" ")}`;
+      }
+    } catch (e) {}
+
     // Immediately set the generated content locally so the UI can render a
     // fallback preview without waiting for network persistence.
     contentStore.set(content);

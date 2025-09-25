@@ -1,8 +1,8 @@
-## CLIENT_E2E_FLOW — End-to-end application flow
+# CLIENT_E2E_FLOW — End-to-end application flow
 
 This document captures the end-to-end flow from frontend prompt entry through backend processing, preview generation, and frontend preview update. Use this as the canonical sequence for client E2E tests and for understanding how the preview pane is populated.
 
-High-level concise flow (bulletized):
+## High-level concise flow (bulletized):
 
 - User enters a prompt into the UI (`PromptInput.svelte`) and clicks Generate.
 - Frontend calls `generateAndPreview(prompt)` in `client/src/lib/flows.js`.
@@ -19,13 +19,13 @@ High-level concise flow (bulletized):
     - for large payloads: `POST /api/preview` with JSON `{ content }` (returns `{ preview }`)
   - on success `previewFromContent` sets `previewStore.set(html)` and updates `uiStateStore` to success.
 
-Detailed backend processing notes:
+## Detailed backend processing notes:
 
 - `POST /prompt` (server): accepts `{ prompt }`, calls AI or local generator to produce `content`, stores prompt and AI result in the DB, and returns an envelope that may include `content`, `promptId`, and `resultId`.
 - `GET /preview` (server): supports `?content=<json>`, `?resultId=`, and `?promptId=` query forms. Validates `title` and `body` then returns server-rendered HTML using `previewTemplate(content)`.
 - `POST /api/preview` (server): accepts JSON body with content and returns `{ preview: "<html>" }` — used for large payloads or when POST is preferred.
 
-Client rendering & hooks:
+### Client rendering & hooks:
 
 - `previewStore` holds the raw HTML string returned by the server (or client fallback HTML).
 - `PreviewWindow.svelte` injects the HTML into the DOM via Svelte's {@html $previewStore} inside `<div data-testid="preview-content">`.
@@ -34,12 +34,12 @@ Client rendering & hooks:
   - Temporary attributes set for automation: `data-preview-ready`, `data-preview-timestamp` on the preview element and `document.body` (briefly)
   - Global dev hooks: `window.__LAST_PREVIEW_HTML`, `window.__preview_updated_ts`, `window.__preview_html_snippet`
 
-Cancellation, timeouts, and retries:
+### Cancellation, timeouts, and retries:
 
 - The client `fetchWithRetry` wrapper implements retries with exponential backoff for transient status codes (e.g., 500, 503, 429). `loadPreview` uses `AbortController` and `previewFromContent` wraps calls with a timeout (default 10s).
 - Aborted preview requests are treated as non-errors so UI does not flash unexpected error messages when a new preview request supersedes an older one.
 
-Acceptance criteria for automated verification (smoke test):
+### Acceptance criteria for automated verification (smoke test):
 
 1. POST or GET `/preview` with a sample payload `{ title, body }` returns HTML containing `title` and `body` text.
 2. Client `PreviewWindow` updates `previewStore` and the DOM element `[data-testid="preview-content"]` contains the server-rendered HTML.
@@ -47,7 +47,7 @@ Acceptance criteria for automated verification (smoke test):
 
 Use this document to construct deterministic client tests that exercise the prompt→preview→DOM update cycle.
 
-Smoke check (quick verification)
+### Smoke check (quick verification)
 
 - There's a small helper script at `client/scripts/fetch-preview-wait.cjs` that will call the backend preview endpoints and save the returned HTML to `client/test-artifacts/preview-fetched.html` after the returned HTML contains a sample title.
 - Example manual run (from repo root):
@@ -62,6 +62,6 @@ node client/scripts/fetch-preview-wait.cjs --url http://localhost:3000 --out cli
 npm --prefix client run smoke:fetch-preview
 ```
 
-Automated E2E harness
+### Automated E2E harness
 
 - A lightweight Playwright test (`client/tests/e2e/generate-and-verify.spec.mjs`) can drive the client UI to click Generate and then run the fetch script to verify the preview HTML is produced and saved. This provides a simple, reproducible smoke that ties the UI click to the final preview artifact.
