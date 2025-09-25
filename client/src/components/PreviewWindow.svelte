@@ -1,19 +1,17 @@
 <script>
   import { contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
-  import { previewFromContent } from '../lib/flows';
   import Spinner from './Spinner.svelte';
   import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
 
-  import { debounce } from '../lib/utils';
+  // Note: PreviewWindow is now consumer-only. Preview generation/fetching
+  // is performed by the flows module which writes into `previewStore`.
+  // The component will only render `$previewStore` and provide a dev-only
+  // `forceLocalPreview` for manual/fallback previewing.
 
   let content;
-  contentStore.subscribe(value => {
+  contentStore.subscribe((value) => {
     content = value;
-    if (content && autoPreview) {
-      // Debounced auto update to avoid rapid requests
-      debouncedUpdate(content);
-    }
   });
 
   // Instrument previewStore updates using Svelte's auto-subscription ($previewStore)
@@ -159,34 +157,9 @@
     return `\n      <article class="local-preview-fallback" style="padding:1.25rem">\n        <h2 style=\"margin-top:0;\">${title}</h2>\n        <div>${body.replace(/\n/g, '<br/>')}</div>\n      </article>\n    `;
   };
 
-  const updatePreview = async (newContent) => {
-    if (!newContent) {
-      previewStore.set('');
-      return;
-    }
-    try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview called with', newContent && (newContent.resultId || newContent.promptId ? { resultId: newContent.resultId, promptId: newContent.promptId } : { keys: Object.keys(newContent) }));
-  const html = await previewFromContent(newContent);
-  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview previewFromContent returned HTML length=', html ? html.length : 0);
-  // previewFromContent already sets previewStore
-      // trigger brief flash to draw attention
-      flash = true;
-      setTimeout(() => (flash = false), 600);
-      uiStateStore.set({ status: 'success', message: 'Preview loaded' });
-    } catch (error) {
-      uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
-      previewStore.set('');
-    }
-  };
-
-  // Debounced auto update to avoid rapid requests (200ms for snappier feel)
-  const debouncedUpdate = debounce(updatePreview, 200);
-
+  // onMount diagnostics only; do not trigger preview fetching here.
   onMount(() => {
-    if (content) {
-      updatePreview(content);
-    }
+    // Mount-time diagnostics: log store instance ids and global singleton
     // Mount-time diagnostics: log store instance ids and global singleton
     try {
       console.log('[DEV] PreviewWindow mounted. store diagnostics:');
@@ -200,14 +173,9 @@
     } catch (e) {}
   });
 
-  // When content changes (including being set with resultId/promptId), prefer
-  // resolving server-side content by calling updatePreview. This keeps behavior
-  // consistent: if an id is present, the server helper endpoints will be used
-  // by loadPreview to fetch the authoritative HTML.
-  $: if (content) {
-    // trigger an immediate update when content changes from other parts of the app
-    updatePreview(content);
-  }
+  // When content changes, PreviewWindow remains passive — flows should write
+  // into `previewStore` to update the rendered preview. This avoids races
+  // where the component and flows both attempt to fetch the preview.
 </script>
 
   <div class="preview-container">
