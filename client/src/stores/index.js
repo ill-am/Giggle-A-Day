@@ -213,15 +213,17 @@ if (typeof window !== "undefined") {
  * If `content.promptId` exists, perform an update; otherwise create a new prompt.
  * Returns the persisted content object from the server.
  */
-export async function persistContent() {
+export async function persistContent(
+  api = { savePromptContent, updatePromptContent }
+) {
   const content = get(contentStore);
   if (!content) throw new Error("No content in store to persist");
   try {
     let persisted;
     if (content.promptId) {
-      persisted = await updatePromptContent(content.promptId, content);
+      persisted = await api.updatePromptContent(content.promptId, content);
     } else {
-      persisted = await savePromptContent(content);
+      persisted = await api.savePromptContent(content);
     }
     // Update local store with server-provided data
     try {
