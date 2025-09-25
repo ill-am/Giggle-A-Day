@@ -177,15 +177,7 @@ export async function generateAndPreview(
     let persisted = content;
     (async () => {
       try {
-        const result = await persistContent(content);
-        persisted = result || content;
-        // After persistence, attempt to refresh the preview with persisted data
-        try {
-          await previewFromContent(persisted, timeoutMs);
-        } catch (e) {
-          // ignore preview refresh errors here; previewFromContent already
-          // sets UI state appropriately
-        }
+        await persistContent();
       } catch (saveErr) {
         console.warn(
           "Failed to persist generated content to server",

@@ -1,5 +1,5 @@
 // @ts-nocheck -- dev-only store instrumentation file; suppress TS diagnostics
-import { writable } from "svelte/store";
+import { writable, get } from "svelte/store";
 import { savePromptContent, updatePromptContent } from "../lib/api";
 
 // DEV-only helper: wrap writable so set/update calls are logged during development
@@ -213,8 +213,9 @@ if (typeof window !== "undefined") {
  * If `content.promptId` exists, perform an update; otherwise create a new prompt.
  * Returns the persisted content object from the server.
  */
-export async function persistContent(content) {
-  if (!content) throw new Error("No content provided to persistContent");
+export async function persistContent() {
+  const content = get(contentStore);
+  if (!content) throw new Error("No content in store to persist");
   try {
     let persisted;
     if (content.promptId) {
@@ -229,7 +230,8 @@ export async function persistContent(content) {
         persisted,
       });
     } catch (e) {}
-    contentStore.set({ ...(content || {}), ...(persisted || {}) });
+    const existingContent = get(contentStore);
+    contentStore.set({ ...existingContent, ...persisted });
     return persisted;
   } catch (err) {
     console.warn("persistContent failed", err && err.message);
