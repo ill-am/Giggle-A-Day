@@ -1,87 +1,23 @@
 <script>
-  import { contentStore, previewStore, uiStateStore, setUiLoading, setUiSuccess, setUiError } from '../stores';
-  import { previewFromContent } from '../lib/flows';
+  import { contentStore, previewStore, uiStateStore } from '../stores';
   import Spinner from './Spinner.svelte';
-  import PreviewSkeleton from './PreviewSkeleton.svelte';
   import { onMount } from 'svelte';
 
-  import { debounce } from '../lib/utils';
-
+  // Subscribe to contentStore to get the content object for background images
+  // and the client-side fallback preview.
   let content;
   contentStore.subscribe(value => {
     content = value;
-    if (content && autoPreview) {
-      // Debounced auto update to avoid rapid requests
-      debouncedUpdate(content);
-    }
   });
 
-  // Instrument previewStore updates using Svelte's auto-subscription ($previewStore)
-  // reactive local preview HTML used by the template to avoid any indirect render races
-  let lastPreview = '';
-  let previewHtmlLocal = '';
-
-  $: if (typeof $previewStore !== 'undefined' && $previewStore !== lastPreview) {
-    const value = $previewStore;
-    previewHtmlLocal = value || '';
-    console.log('PreviewWindow: previewStore updated, length=', value ? value.length : 0);
-    // set DOM-visible attribute for tests when preview is present and include a timestamp
-    try {
-      if (typeof document !== 'undefined' && document.body) {
-        const ts = String(Date.now());
-        // mark body for backward compatibility
-        try { document.body.setAttribute('data-preview-ready', value ? '1' : '0'); } catch (e) {}
-        try { document.body.setAttribute('data-preview-timestamp', value ? ts : ''); } catch (e) {}
-        try { window.dispatchEvent(new CustomEvent('preview-ready', { detail: { timestamp: ts } })); } catch (e) {}
-        setTimeout(() => { try { document.body.removeAttribute('data-preview-ready'); document.body.removeAttribute('data-preview-timestamp'); } catch (e) {} }, 8000);
-        // also mark the preview-content element directly so automated checks targeting it succeed
-        try {
-          const el = document.querySelector('[data-testid="preview-content"]');
-          if (el) {
-            el.setAttribute('data-preview-ready', value ? '1' : '0');
-            if (value) el.setAttribute('data-preview-timestamp', ts);
-            else el.removeAttribute('data-preview-timestamp');
-          }
-        } catch (e) {}
-        // expose last preview HTML to tests
-        try { if (typeof window !== 'undefined') window['__LAST_PREVIEW_HTML'] = value; } catch (e) {}
-        // ensure UI state and local flag reflect the preview presence so the template renders
-        try { uiStateStore.set({ status: 'success', message: 'Preview loaded' }); } catch (e) {}
-      }
-    } catch (e) {}
-    lastPreview = value;
-  }
-
-  function logStores() {
-    try {
-      console.log('Imported stores:', { contentStore, previewStore, uiStateStore });
-      try { console.log('contentStore.__instanceId', contentStore && (/** @type any */ (contentStore))['__instanceId']); } catch (e) {}
-      try { console.log('previewStore.__instanceId', previewStore && (/** @type any */ (previewStore))['__instanceId']); } catch (e) {}
-      try { console.log('promptStore (via import):', typeof window !== 'undefined' && (/** @type any */ (window))['__STORES'] && (/** @type any */ (window))['__STORES'].promptStore ? 'present' : 'absent'); } catch (e) {}
-      try { console.log('GLOBAL_STORES_KEY', typeof window !== 'undefined' && (/** @type any */ (window))['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
-    } catch (e) { console.warn('logStores failed', e); }
-  }
-
-  // computed reactive flag: true when previewStore contains non-empty HTML
-  $: computedHasPreview = previewHtmlLocal && String(previewHtmlLocal).trim().length > 0;
-
+  // Subscribe to the UI state store.
   let uiState = { status: 'idle', message: '' };
   uiStateStore.subscribe(value => {
     uiState = value || { status: 'idle', message: '' };
   });
 
-  // expose debug hook for automated verification: latest preview HTML
-  let latestPreviewHtml = '';
-  $: if ($previewStore) {
-    latestPreviewHtml = $previewStore;
-    try { console.debug('[DEV] PreviewWindow: $previewStore length=', String($previewStore).length); } catch (e) {}
-    try {
-      // @ts-ignore
-      window.__preview_updated_ts = Date.now();
-      // @ts-ignore
-      window.__preview_html_snippet = String($previewStore).slice(0, 1200);
-    } catch (e) {}
-  }
+  // The component now primarily relies on the auto-subscribed $previewStore
+  // to render the preview content directly in the template.
 
   // Dev-only DOM marker to help automated verification detect updates
   $: if (import.meta.env.DEV && $previewStore) {
@@ -101,45 +37,17 @@
     }
   }
 
-  // Preview controls
+  // Preview controls state
   let autoPreview = true;
-  let flash = false;
+  let flash = false; // This can be triggered by the $previewStore reactive block if desired
 
-  // DEV/test helper: allow forcing a local preview from the current content
-  // so we can determine whether stores are being updated in the running UI.
-  async function forceLocalPreview() {
-    try {
-      if (!content) {
-        console.warn('[DEV] forceLocalPreview called but `content` is empty');
-        return;
-      }
-      // Use the client-side fallback HTML builder so the preview pane is
-      // populated without requiring a successful server preview call.
-      console.log('[DEV] forceLocalPreview: setting previewStore from content', content && { title: content.title });
-      if (typeof previewStore.set !== 'function') {
-        console.error('[DEV] previewStore.set is not a function', previewStore);
-      } else {
-        previewStore.set(buildLocalPreviewHtml(content));
-        uiStateStore.set({ status: 'success', message: 'Forced local preview' });
-      }
-    } catch (e) {
-      uiStateStore.set({ status: 'error', message: `Force preview failed: ${e && e.message}` });
-    }
-  }
+  // --- Debugging helpers ---
 
-  function setTestContent() {
+  function logStores() {
     try {
-      const test = { title: 'Test Title', body: 'This is a test body.' };
-      console.log('[DEV] setTestContent: attempting contentStore.set', test);
-      if (!contentStore || typeof contentStore.set !== 'function') {
-        console.error('[DEV] contentStore.set is not available', contentStore);
-        return;
-      }
-      contentStore.set(test);
-      console.log('[DEV] setTestContent: contentStore.set executed');
-    } catch (e) {
-      console.error('[DEV] setTestContent failed', e);
-    }
+      console.log('Imported stores:', { contentStore, previewStore, uiStateStore });
+      // You can add more specific store logging here if needed
+    } catch (e) { console.warn('logStores failed', e); }
   }
 
   // Build a tiny client-side preview HTML (safe-escaped) to use as a fallback
@@ -159,85 +67,18 @@
     return `\n      <article class="local-preview-fallback" style="padding:1.25rem">\n        <h2 style=\"margin-top:0;\">${title}</h2>\n        <div>${body.replace(/\n/g, '<br/>')}</div>\n      </article>\n    `;
   };
 
-  const updatePreview = async (newContent) => {
-    if (!newContent) {
-      previewStore.set('');
-      return;
-    }
-    try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview called with', newContent && (newContent.resultId || newContent.promptId ? { resultId: newContent.resultId, promptId: newContent.promptId } : { keys: Object.keys(newContent) }));
-  const html = await previewFromContent(newContent);
-  if (import.meta.env.DEV) console.debug('[DEV] PreviewWindow.updatePreview previewFromContent returned HTML length=', html ? html.length : 0);
-  // previewFromContent already sets previewStore
-      // trigger brief flash to draw attention
-      flash = true;
-      setTimeout(() => (flash = false), 600);
-      uiStateStore.set({ status: 'success', message: 'Preview loaded' });
-    } catch (error) {
-      uiStateStore.set({ status: 'error', message: `Failed to load preview: ${error.message}` });
-      previewStore.set('');
-    }
-  };
+  // --- Reactive logic for when the preview store changes ---
 
-  // Debounced auto update to avoid rapid requests (200ms for snappier feel)
-  const debouncedUpdate = debounce(updatePreview, 200);
-
-  onMount(() => {
-    if (content) {
-      updatePreview(content);
-    }
-    // Mount-time diagnostics: log store instance ids and global singleton
-    try {
-      console.log('[DEV] PreviewWindow mounted. store diagnostics:');
-  try { console.log('  contentStore.__instanceId', contentStore && (/** @type any */ (contentStore))['__instanceId']); } catch (e) {}
-  try { console.log('  previewStore.__instanceId', previewStore && (/** @type any */ (previewStore))['__instanceId']); } catch (e) {}
-  try { console.log('  uiStateStore.__instanceId', uiStateStore && (/** @type any */ (uiStateStore))['__instanceId']); } catch (e) {}
-  try { console.log('  window.__LAST_CONTENT_SET', typeof window !== 'undefined' && (/** @type any */ (window))['__LAST_CONTENT_SET']); } catch (e) {}
-  try { console.log('  window.__STRAWBERRY_SINGLETON_STORES__', typeof window !== 'undefined' && (/** @type any */ (window))['__STRAWBERRY_SINGLETON_STORES__']); } catch (e) {}
-      try { console.log('  previewStore.set func?', previewStore && typeof previewStore.set); } catch (e) {}
-      try { console.log('  contentStore.set func?', contentStore && typeof contentStore.set); } catch (e) {}
-    } catch (e) {}
-  });
-
-  // When content changes (including being set with resultId/promptId), prefer
-  // resolving server-side content by calling updatePreview. This keeps behavior
-  // consistent: if an id is present, the server helper endpoints will be used
-  // by loadPreview to fetch the authoritative HTML.
-  $: if (content) {
-    // trigger an immediate update when content changes from other parts of the app
-    updatePreview(content);
+  $: if ($previewStore) {
+    // When the preview store is updated from anywhere in the app,
+    // this component will reactively re-render.
+    // We can also trigger side-effects here, like a flash animation.
+    flash = true;
+    setTimeout(() => (flash = false), 600);
   }
 </script>
 
   <div class="preview-container">
-  <div class="debug-panel" aria-hidden="false">
-    <details>
-      <summary>Debug: store state</summary>
-      <div class="debug-rows">
-    <div><strong>contentStore</strong>:
-        <pre>{JSON.stringify(content, null, 2)}</pre>
-        <div class="global-last">window.__LAST_CONTENT_SET: {JSON.stringify(typeof window !== 'undefined' && (/** @type any */ (window))['__LAST_CONTENT_SET'] ? (/** @type any */ (window))['__LAST_CONTENT_SET'] : null, null, 2)}</div>
-      </div>
-        <div><strong>previewStore (length)</strong>: { $previewStore ? $previewStore.length : 0 }</div>
-        <div class="debug-actions">
-          <button data-testid="force-local-preview" on:click={forceLocalPreview}>Force local preview</button>
-          <button data-testid="set-test-content" on:click={setTestContent}>Set test content</button>
-          <button data-testid="log-stores" on:click={logStores}>Log stores</button>
-        </div>
-      </div>
-    </details>
-  </div>
-  <div class="preview-controls">
-    <label><input type="checkbox" data-testid="auto-preview-checkbox" bind:checked={autoPreview} /> Auto-preview</label>
-    <button data-testid="preview-now-button" on:click={() => updatePreview(content)} disabled={!content || uiState.status === 'loading'}>
-      {#if uiState.status === 'loading'}
-        Previewing...
-      {:else}
-        Preview Now
-      {/if}
-    </button>
-  </div>
 
   {#if uiState.status === 'loading'}
     <div class="loading-overlay">
@@ -295,19 +136,6 @@
   .bg-preview { position: absolute; inset: 0; opacity: 0.45; pointer-events: none }
   .bg-preview img { width: 100%; height: 100%; object-fit: cover }
   .preview-stage .preview-content { position: relative; z-index: 2 }
-
-  .small-spinner {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    border: 4px solid rgba(0,0,0,0.08);
-    border-top-color: #2c3e50;
-    animation: spin 0.9s linear infinite;
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 10;
-  }
 
   @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
 
