@@ -126,9 +126,8 @@ export async function generateAndPreview(
   setUiLoading("Generating content...");
 
   try {
-    // Prefer using the frontend genie service which may implement a dev/demo
-    // implementation or delegate to the server. Fall back to submitPrompt
-    // to preserve existing behaviour.
+    // on it to make the appropriate API call. The response will include
+    // the persisted content with a promptId.
     let response;
     try {
       response = await withTimeout(
@@ -136,9 +135,8 @@ export async function generateAndPreview(
         timeoutMs
       );
     } catch (e) {
-      // If the frontend service fails for some reason, fall back to the
-      // existing server API call to avoid breaking the flow.
-      response = await withTimeout(submitPrompt(prompt), timeoutMs);
+      // If the frontend service fails, we can't proceed.
+      throw new Error(`genieServiceFE.generate failed: ${e.message}`);
     }
 
     // genieServiceFE.generate returns { content, copies, meta } or submitPrompt
@@ -170,34 +168,8 @@ export async function generateAndPreview(
     // fallback preview without waiting for network persistence.
     contentStore.set(content);
 
-    // Persist content to server prompts API in background. If it succeeds,
-    // persistContent will update contentStore with server-provided fields
-    // (like promptId). If it fails, we surface a non-blocking warning but
-    // don't block the user from seeing the preview.
-    let persisted = content;
-    (async () => {
-      try {
-        const result = await persistContent(content);
-        persisted = result || content;
-        // After persistence, attempt to refresh the preview with persisted data
-        try {
-          await previewFromContent(persisted, timeoutMs);
-        } catch (e) {
-          // ignore preview refresh errors here; previewFromContent already
-          // sets UI state appropriately
-        }
-      } catch (saveErr) {
-        console.warn(
-          "Failed to persist generated content to server",
-          saveErr && saveErr.message
-        );
-        // Surface a non-blocking UI warning
-        uiStateStore.set({
-          status: "error",
-          message: "Saved locally; failed to persist to server.",
-        });
-      }
-    })();
+    // The content is already persisted by the `genieServiceFE.generate` call,
+    // which delegates to `submitPrompt`. The `contentStore` is now up-to-date.
 
     // Trigger preview for the newly generated content (use local content so
     // the user sees something immediately).

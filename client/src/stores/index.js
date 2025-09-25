@@ -229,7 +229,11 @@ export async function persistContent(content) {
         persisted,
       });
     } catch (e) {}
-    contentStore.set({ ...(content || {}), ...(persisted || {}) });
+    contentStore.set({
+      ...(persisted || {}),
+      title: content.title || (persisted && persisted.title),
+      body: content.body || (persisted && persisted.body),
+    });
     return persisted;
   } catch (err) {
     console.warn("persistContent failed", err && err.message);
