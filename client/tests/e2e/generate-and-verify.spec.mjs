@@ -9,8 +9,7 @@ import fs from "fs";
 // 3. Wait for preview-ready marker (window.__preview_updated_ts or data attribute)
 // 4. Run the fetch-preview-wait.cjs script to persist the returned HTML
 
-const ROOT = path.resolve(process.cwd(), "..");
-const CLIENT_ROOT = path.resolve(process.cwd());
+const ROOT = path.resolve(process.cwd());
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
