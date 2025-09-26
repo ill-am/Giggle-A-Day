@@ -226,13 +226,14 @@ export async function persistContent(api) {
         return out;
       })();
 
-      // Dev debug
+      // Dev debug - only log in development to avoid noisy test output
       try {
-        console.debug("[DEV] persistContent: updating contentStore with", {
-          content,
-          persisted,
-          normalized,
-        });
+        if (import.meta && import.meta.env && import.meta.env.DEV)
+          console.debug("[DEV] persistContent: updating contentStore with", {
+            content,
+            persisted,
+            normalized,
+          });
       } catch (e) {}
 
       // Atomically merge persisted fields into the existing content to avoid

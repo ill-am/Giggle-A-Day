@@ -66,7 +66,7 @@ describe("flows.generateAndPreview / previewFromContent", () => {
     expect(get(uiStateStore).status).toBe("error");
   });
 
-  it.skip(
+  it(
     "generateAndPreview: request timeout sets uiState error",
     { timeout: 500 },
     async () => {
@@ -77,9 +77,20 @@ describe("flows.generateAndPreview / previewFromContent", () => {
 
       const promise = generateAndPreview("a valid prompt", 100);
 
-      await vi.runAllTimersAsync();
+      // Attach a rejection handler early so the rejected promise doesn't
+      // trigger Vitest's unhandled rejection warning when the fake timer
+      // fires. We capture the error for later assertions.
+      let caughtError = null;
+      promise.catch((e) => {
+        caughtError = e;
+      });
 
-      await expect(promise).rejects.toThrow(/Request timed out/);
+      await vi.runAllTimersAsync();
+      // allow microtasks to flush
+      await Promise.resolve();
+
+      expect(caughtError).toBeTruthy();
+      expect(String(caughtError)).toMatch(/Request timed out/);
       expect(get(uiStateStore).status).toBe("error");
       vi.useRealTimers();
     }

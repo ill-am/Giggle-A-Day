@@ -126,8 +126,10 @@ export async function generateAndPreview(
   setUiLoading("Generating content...");
 
   try {
-    // Step 1: Kick off the generation and get the server response.
-    const response = await submitPrompt(prompt);
+    // Step 1: Kick off the generation and get the server response. Wrap the
+    // submit step in a timeout so tests that simulate a never-resolving
+    // submission can be exercised deterministically.
+    const response = await withTimeout(submitPrompt(prompt), timeoutMs);
 
     // Extract the actual content from the response object.
     // The server may wrap the content in `data.content`.
