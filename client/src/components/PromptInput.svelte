@@ -1,6 +1,6 @@
 <script>
   import { promptStore, contentStore, previewStore, uiStateStore } from '$lib/stores';
-  import { submitPrompt, exportToPdf, loadPreview } from '../lib/api';
+  import { submitPrompt, exportToPdf } from '../lib/api';
   import { generateAndPreview } from '../lib/flows';
   import { tick } from 'svelte';
 
@@ -61,7 +61,9 @@
       const testPrompt = 'Runtime diag test\\nThis is a diagnostic body';
       uiStateStore.set({ status: 'loading', message: 'Running runtime diagnostics...' });
       try {
-          const resp = await submitPrompt(testPrompt);
+        const api = await import('../lib/api');
+          console.debug('[DEV] runRuntimeDiag: submitting prompt');
+          const resp = await api.submitPrompt(testPrompt);
         // show raw response in dev-status area
         try {
           const txt = JSON.stringify(resp, null, 2);
@@ -73,10 +75,11 @@
           const content = (resp && resp.data && resp.data.content) || resp.content || null;
           if (content) {
             try {
-              const html = await loadPreview(content);
+              const html = await api.loadPreview(content);
               // expose preview snippet to dev textarea
               uiStateStore.set({ status: 'success', message: `Diag OK — preview ${String(html).slice(0,200)}` });
               // also set previewStore for immediate rendering
+              const { previewStore } = await import('../stores');
               previewStore.set(html);
             } catch (e) {
               uiStateStore.set({ status: 'error', message: `Preview diag failed: ${e && e.message}` });

@@ -98,7 +98,7 @@ Here is the systematic plan to diagnose and resolve the Store Singleton Violatio
     - Any other components or utility files that use the stores.
   - [x] **c. Refactor Imports:** Replace all inconsistent or relative import paths with a single, canonical path. If a `$lib` alias exists, prefer using `$lib/stores/index.js` (or equivalent). If not, ensure all relative paths are correct and consistent.
 
-- [x] **3. Verify the Fix** (Estimated Time: 5 minutes)
-  - [x] **a. Clean Up Diagnostics:** Remove the `instanceId` property and all `console.log` statements added during diagnosis.
+- [ ] **3. Verify the Fix** (Estimated Time: 5 minutes)
+  - [ ] **a. Clean Up Diagnostics:** Remove the `instanceId` property and all `console.log` statements added during diagnosis.
   - [ ] **b. Final Test:** Run the application and trigger the content generation flow.
   - [ ] **c. Expected Result:** The preview window should now update correctly, as both the logic and UI layers will be referencing the exact same store instance.
