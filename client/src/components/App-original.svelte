@@ -1,6 +1,6 @@
 <script>
   // Basic App component for AetherPress Svelte frontend
-  import { appState } from '../stores/appState.js';
+  import { appState } from '$lib/stores/appState.js';
 
   // Fetch backend health status on mount
   let health = null;

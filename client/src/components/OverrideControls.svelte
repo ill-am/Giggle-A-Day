@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { contentStore, uiStateStore } from '../stores';
+  import { contentStore, uiStateStore } from '$lib/stores';
   import { saveOverride } from '../lib/api';
-  import { onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   let originalContent: object | null;
   let localContent = { title: '', body: '' };
@@ -23,6 +23,12 @@
       updateContent(changes);
     }, 500); // 500ms debounce
   };
+
+  onMount(() => {
+    return () => {
+      window.clearTimeout(debounceTimer);
+    };
+  });
 
   const handleTitleInput = (event: Event) => {
     const target = event.currentTarget as HTMLInputElement;
@@ -64,7 +70,9 @@
 
   onDestroy(() => {
     contentUnsubscribe();
-    window.clearTimeout(debounceTimer);
+    if (typeof window !== 'undefined') {
+      window.clearTimeout(debounceTimer);
+    }
   });
 </script>
 

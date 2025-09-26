@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { contentStore, uiStateStore } from '../stores';
+  import { contentStore, uiStateStore } from '$lib/stores';
   import { exportToPdf } from '../lib/api';
 
   let content: object | null;

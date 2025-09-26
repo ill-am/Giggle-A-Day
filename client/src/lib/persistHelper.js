@@ -1,5 +1,5 @@
-import { persistContent } from "../stores";
-import { uiStateStore } from "../stores";
+import { persistContent } from "$lib/stores";
+import { uiStateStore } from "$lib/stores";
 
 /**
  * Run persistContent in background and never throw to the caller.

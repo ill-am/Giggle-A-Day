@@ -1,5 +1,5 @@
 <script>
-  import { promptStore, contentStore, previewStore, uiStateStore } from '../stores';
+  import { promptStore, contentStore, previewStore, uiStateStore } from '$lib/stores';
   import { submitPrompt, exportToPdf } from '../lib/api';
   import { generateAndPreview } from '../lib/flows';
   import { tick } from 'svelte';

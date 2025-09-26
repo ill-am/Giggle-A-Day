@@ -1,11 +1,28 @@
 <script>
-  import { previewStore, uiStateStore } from '../stores';
+  import { onMount } from 'svelte';
+  import { previewStore, uiStateStore } from '$lib/stores';
   import Spinner from './Spinner.svelte';
+
+  onMount(() => {
+    // @ts-ignore
+  });
 
   let uiState = { status: 'idle', message: '' };
   uiStateStore.subscribe(value => {
     uiState = value || { status: 'idle', message: '' };
   });
+
+  // Test hook: Set an attribute on the body when the preview is rendered
+  // so that integration tests can reliably wait for the update.
+  $: {
+    if (typeof document !== 'undefined') {
+      if ($previewStore && $previewStore.length > 0) {
+        document.body.setAttribute('data-preview-ready', '1');
+      } else {
+        document.body.removeAttribute('data-preview-ready');
+      }
+    }
+  }
 </script>
 
 <div class="preview-container">

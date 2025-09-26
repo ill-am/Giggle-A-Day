@@ -18,7 +18,7 @@ function devWritable(name, initial) {
         const now = Date.now();
         if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
           lastLogTime = now;
-          console.log(`STORE:${name}.set`, { value });
+          console.debug(`STORE:${name}.set`, { value });
         }
       } catch (e) {}
       w.set(value);
@@ -30,7 +30,7 @@ function devWritable(name, initial) {
           const now = Date.now();
           if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
             lastLogTime = now;
-            console.log(`STORE:${name}.update`, { prev, next });
+            console.debug(`STORE:${name}.update`, { prev, next });
           }
         } catch (e) {}
         return next;
@@ -149,41 +149,7 @@ if (!promptStoreExport) {
   }
 }
 
-// Attach small instance ids to each store object to aid runtime debugging
-try {
-  const INSTANCE_ID = (
-    Math.random().toString(36) + Date.now().toString(36)
-  ).slice(2, 12);
-  try {
-    if (contentStoreExport && typeof contentStoreExport === "object")
-      contentStoreExport.__instanceId =
-        contentStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (previewStoreExport && typeof previewStoreExport === "object")
-      previewStoreExport.__instanceId =
-        previewStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (promptStoreExport && typeof promptStoreExport === "object")
-      promptStoreExport.__instanceId =
-        promptStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (uiStateStoreExport && typeof uiStateStoreExport === "object")
-      uiStateStoreExport.__instanceId =
-        uiStateStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (
-      typeof window !== "undefined" &&
-      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]
-    )
-      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId =
-        /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId ||
-        INSTANCE_ID;
-  } catch (e) {}
-} catch (e) {}
+// (diagnostic instance-id instrumentation removed)
 
 export const contentStore = contentStoreExport;
 
@@ -293,7 +259,7 @@ export async function persistContent(api) {
  * Store for the HTML preview.
  * @type {import('svelte/store').Writable<string>}
  */
-export const previewStore = previewStoreExport;
+export const previewStore = devWritable("previewStore", "");
 
 // DEV instrumentation: expose last set value and log when previewStore is updated
 if (typeof window !== "undefined") {

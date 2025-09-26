@@ -19,4 +19,9 @@ export default defineConfig({
     testTimeout: 10000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
+  resolve: {
+    alias: {
+      $lib: path.resolve(__dirname, "src"),
+    },
+  },
 });

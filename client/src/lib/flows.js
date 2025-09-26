@@ -14,7 +14,7 @@ import {
   setUiSuccess,
   setUiError,
   persistContent,
-} from "../stores";
+} from "$lib/stores";
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 

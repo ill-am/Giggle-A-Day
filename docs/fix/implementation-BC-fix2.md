@@ -76,27 +76,27 @@ The solution is to enforce a single, consistent way of importing the stores thro
 
 Here is the systematic plan to diagnose and resolve the Store Singleton Violation.
 
-- [ ] **1. Diagnose the Singleton Violation** (Estimated Time: 10-15 minutes)
+- [x] **1. Diagnose the Singleton Violation** (Estimated Time: 10-15 minutes)
 
-  - [ ] **a. Tag the Store Instance:** Modify `client/src/stores/index.js` to add a unique `instanceId` to the `previewStore` upon creation.
+  - [x] **a. Tag the Store Instance:** Modify `client/src/stores/index.js` to add a unique `instanceId` to the `previewStore` upon creation.
     ```javascript
     export const previewStore = writable("");
     // @ts-ignore
     previewStore.instanceId = Math.random();
     ```
-  - [ ] **b. Log ID from Logic Layer:** In `client/src/lib/flows.js`, add a `console.log` at the beginning of the `generateAndPreview` function to print the `instanceId`.
-  - [ ] **c. Log ID from UI Layer:** In `client/src/components/PreviewWindow.svelte`, use the `onMount` lifecycle hook to `console.log` the `instanceId` from the store it imports.
-  - [ ] **d. Confirm Diagnosis:** Run the application, trigger the generate flow, and check the browser's developer console. If two different ID numbers are logged, the singleton violation is confirmed.
+  - [x] **b. Log ID from Logic Layer:** In `client/src/lib/flows.js`, add a `console.log` at the beginning of the `generateAndPreview` function to print the `instanceId`.
+  - [x] **c. Log ID from UI Layer:** In `client/src/components/PreviewWindow.svelte`, use the `onMount` lifecycle hook to `console.log` the `instanceId` from the store it imports.
+  - [x] **d. Confirm Diagnosis:** Run the application, trigger the generate flow, and check the browser's developer console. If two different ID numbers are logged, the singleton violation is confirmed.
 
-- [ ] **2. Enforce Consistent Import Paths** (Estimated Time: 15-20 minutes)
+- [x] **2. Enforce Consistent Import Paths** (Estimated Time: 15-20 minutes)
 
-  - [ ] **a. Check for Path Alias:** Review `jsconfig.json` and `vite.config.js` to identify any existing path aliases (e.g., `$lib` pointing to `src/lib`).
-  - [ ] **b. Audit Imports:** Systematically check every file that imports from `./stores` or `../stores`, including:
+  - [x] **a. Check for Path Alias:** Review `jsconfig.json` and `vite.config.js` to identify any existing path aliases (e.g., `$lib` pointing to `src/lib`).
+  - [x] **b. Audit Imports:** Systematically check every file that imports from `./stores` or `../stores`, including:
     - `client/src/lib/flows.js`
     - `client/src/components/PreviewWindow.svelte`
     - `client/src/components/PromptInput.svelte`
     - Any other components or utility files that use the stores.
-  - [ ] **c. Refactor Imports:** Replace all inconsistent or relative import paths with a single, canonical path. If a `$lib` alias exists, prefer using `$lib/stores/index.js` (or equivalent). If not, ensure all relative paths are correct and consistent.
+  - [x] **c. Refactor Imports:** Replace all inconsistent or relative import paths with a single, canonical path. If a `$lib` alias exists, prefer using `$lib/stores/index.js` (or equivalent). If not, ensure all relative paths are correct and consistent.
 
 - [ ] **3. Verify the Fix** (Estimated Time: 5 minutes)
   - [ ] **a. Clean Up Diagnostics:** Remove the `instanceId` property and all `console.log` statements added during diagnosis.

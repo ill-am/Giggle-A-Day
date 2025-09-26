@@ -1,6 +1,6 @@
 import "./app.css";
 import App from "./App.svelte";
-import * as Stores from "./stores";
+import * as Stores from "$lib/stores";
 
 const app = new App({
   target: document.getElementById("app"),

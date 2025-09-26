@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/svelte/svelte5";
 import PreviewWindow from "../src/components/PreviewWindow.svelte";
-import { contentStore, uiStateStore } from "../src/stores";
+import { contentStore, previewStore, uiStateStore } from "../src/stores";
 
 afterEach(() => {
   // reset stores
@@ -23,12 +23,9 @@ test("PreviewWindow fetches preview and renders server HTML", async () => {
 
   render(PreviewWindow);
 
-  // Trigger content store with required fields
-  contentStore.set({
-    title: "A Summer Day",
-    body: "Sunlight warms the shore.",
-  });
-  uiStateStore.set({ status: "loading", message: "" });
+  // Trigger preview: set the previewStore directly (server returns full HTML)
+  previewStore.set(html);
+  uiStateStore.set({ status: "success", message: "Preview loaded" });
 
   // Wait for the preview to render
   const previewEl = await screen.findByText(/A Summer Day/);

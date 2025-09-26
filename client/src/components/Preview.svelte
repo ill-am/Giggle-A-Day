@@ -11,10 +11,8 @@
   async function loadPreview() {
     try {
       loading = true;
-  try { if (import.meta.env && import.meta.env.DEV) console.log('Preview.svelte: loadPreview called, content=', content); } catch (e) {}
       const response = await previewEndpoint({ prompt: content });
-  previewHtml = response.preview;
-  try { if (import.meta.env && import.meta.env.DEV) console.log('Preview.svelte: received preview length=', previewHtml ? previewHtml.length : 0); } catch (e) {}
+      previewHtml = response.preview;
     } catch (e) {
       error = e.message;
       if (e.validationErrors) {
@@ -26,7 +24,6 @@
   }
 
   $: if (content) {
-  try { if (import.meta.env && import.meta.env.DEV) console.log('Preview.svelte: reactive content changed, triggering loadPreview'); } catch (e) {}
   loadPreview();
   }
 

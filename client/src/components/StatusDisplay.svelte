@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { uiStateStore } from '../stores';
+  import { uiStateStore } from '$lib/stores';
   import { fade } from 'svelte/transition';
   import { onMount, tick } from 'svelte';
 
