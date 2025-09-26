@@ -58,6 +58,46 @@ function devWritable(name, initial) {
 // (Vite HMR or differing import paths can cause duplicate module copies).
 const GLOBAL_STORES_KEY = "__STRAWBERRY_SINGLETON_STORES__";
 
+function getSingletonStores() {
+  // If we're on the server, always create new stores
+  if (typeof window === "undefined") {
+    return {
+      promptStore: devWritable("promptStore", ""),
+      contentStore: devWritable("contentStore", null),
+      previewStore: devWritable("previewStore", ""),
+      uiStateStore: devWritable("uiStateStore", {
+        status: "idle",
+        message: "",
+      }),
+    };
+  }
+
+  const globalAny = window;
+
+  // On the client, reuse stores from the window object if they exist, or create them once.
+  if (!globalAny[GLOBAL_STORES_KEY]) {
+    globalAny[GLOBAL_STORES_KEY] = {
+      promptStore: devWritable("promptStore", ""),
+      contentStore: devWritable("contentStore", null),
+      previewStore: devWritable("previewStore", ""),
+      uiStateStore: devWritable("uiStateStore", {
+        status: "idle",
+        message: "",
+      }),
+      __marker: "strawberry-stores-v1-hmr-proof",
+    };
+  }
+
+  return globalAny[GLOBAL_STORES_KEY];
+}
+
+const {
+  promptStore: promptStoreExport,
+  contentStore: contentStoreExport,
+  previewStore: previewStoreExport,
+  uiStateStore: uiStateStoreExport,
+} = getSingletonStores();
+
 // DEV flag for verbose store logging (shared scope)
 const DEV_STORES_VERBOSE = (() => {
   try {
