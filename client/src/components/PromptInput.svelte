@@ -7,7 +7,6 @@
   // Local reactive bindings to stores (use $store where appropriate in template)
   let generateFlash = false;
   let isGenerating = false;
-  let isPreviewing = false;
 
 
   // Primary generate handler (used by Generate button)
@@ -38,28 +37,6 @@
     }
   }
 
-  // Preview-now handler (keeps current behaviour but centralises preview updates)
-  async function handlePreviewNow() {
-    const current = $contentStore;
-    console.debug('[DEV] handlePreviewNow invoked, currentContent=', current);
-    if (!current) {
-      uiStateStore.set({ status: 'error', message: 'No content to preview. Generate content first.' });
-      return;
-    }
-    isPreviewing = true;
-    try {
-      uiStateStore.set({ status: 'loading', message: 'Loading preview...' });
-      const api = await import('../lib/api');
-      const html = await api.loadPreview(current);
-      previewStore.set(html);
-      uiStateStore.set({ status: 'success', message: 'Preview updated' });
-    } catch (err) {
-      uiStateStore.set({ status: 'error', message: err && err.message ? err.message : 'Preview failed' });
-    } finally {
-      isPreviewing = false;
-    }
-  }
-
   // Load demo content (persist if possible)
   import { safePersistContent } from '../lib/persistHelper';
 
@@ -76,7 +53,7 @@
       contentStore.set(demo);
     }
     uiStateStore.set({ status: 'loading', message: 'Loading demo preview...' });
-    await handlePreviewNow();
+    await generateAndPreview('Load demo: two short summer poems, one per page');
   }
 
     // DEV-only runtime diagnostics: submit a test prompt and show raw responses
@@ -127,7 +104,7 @@
     }
     uiStateStore.set({ status: 'loading', message: 'Running smoke test (preview → export)...' });
     try {
-      await handlePreviewNow();
+      await generateAndPreview($promptStore);
       await exportToPdf(current);
       uiStateStore.set({ status: 'success', message: 'Smoke test succeeded — PDF downloaded.' });
     } catch (err) {
@@ -154,9 +131,9 @@
     <button
       data-testid="generate-button"
       on:click={handleGenerateNow}
-      disabled={$uiStateStore.status === 'loading' || isGenerating || isPreviewing}
+      disabled={$uiStateStore.status === 'loading' || isGenerating}
       aria-busy={isGenerating}
-      aria-disabled={$uiStateStore.status === 'loading' || isPreviewing}
+      aria-disabled={$uiStateStore.status === 'loading'}
       aria-live="polite"
       title={$uiStateStore.status === 'loading' || isGenerating ? 'Generating... please wait' : 'Generate content from prompt'}
       class:flash={generateFlash}
@@ -169,15 +146,7 @@
       {/if}
     </button>
 
-    <button data-testid="preview-button" on:click={handlePreviewNow} disabled={$uiStateStore.status === 'loading' || isGenerating || isPreviewing}>
-      {#if isPreviewing}
-        Previewing...
-      {:else}
-        Preview
-      {/if}
-    </button>
-
-    <button data-testid="smoke-button" style="display:none" aria-hidden="true" title="Run preview→export smoke test (developer helper - hidden)" on:click={runSmokeTest} disabled={$uiStateStore.status === 'loading' || isGenerating || isPreviewing}>
+    <button data-testid="smoke-button" style="display:none" aria-hidden="true" title="Run preview→export smoke test (developer helper - hidden)" on:click={runSmokeTest} disabled={$uiStateStore.status === 'loading' || isGenerating}>
       Run smoke test
     </button>
   </div>

@@ -126,75 +126,42 @@ export async function generateAndPreview(
   setUiLoading("Generating content...");
 
   try {
-    // Prefer using the frontend genie service which may implement a dev/demo
-    // implementation or delegate to the server. Fall back to submitPrompt
-    // to preserve existing behaviour.
-    let response;
-    try {
-      response = await withTimeout(
-        genieServiceFE.generate(prompt, {}),
-        timeoutMs
-      );
-    } catch (e) {
-      // If the frontend service fails for some reason, fall back to the
-      // existing server API call to avoid breaking the flow.
-      response = await withTimeout(submitPrompt(prompt), timeoutMs);
-    }
+    // Step 1: Kick off the generation and get the server response.
+    const response = await submitPrompt(prompt);
 
-    // genieServiceFE.generate returns { content, copies, meta } or submitPrompt
-    // returns the legacy shape { data: { content } } so normalize both.
+    // Extract the actual content from the response object.
+    // The server may wrap the content in `data.content`.
     const content =
-      (response && response.content) ||
       (response && response.data && response.data.content) ||
       response.content ||
-      null;
-    if (!content) {
-      throw new Error("Invalid response structure from server.");
+      response;
+
+    // Validate the extracted content.
+    if (!content || !content.title || !content.body) {
+      console.error("Invalid server response structure:", response);
+      throw new Error("Invalid content response from server.");
     }
 
-    // Normalize generated content: if the generator returned only minimal
-    // shape (for example only `{ prompt }` or no title/body), derive missing
-    // fields from the original prompt. This prevents the preview step from
-    // failing when a generator returns minimal data.
-    try {
-      if (content && !content.body) content.body = String(prompt);
-      if (content && !content.title) {
-        const words = String((content && content.body) || prompt)
-          .split(/\s+/)
-          .filter(Boolean);
-        content.title = `Prompt: ${words.slice(0, 6).join(" ")}`;
-      }
-    } catch (e) {}
+    setUiLoading("Loading preview...");
 
-    // Immediately set the generated content locally so the UI can render a
-    // fallback preview without waiting for network persistence.
+    // Step 2: Fetch the real preview HTML, passing the content.
+    const previewHtml = await loadPreview(content);
+
+    // Step 3: Set the content in the store *before* persisting.
     contentStore.set(content);
 
-    // Persist content to server prompts API in background. If it succeeds,
-    // persistContent will update contentStore with server-provided fields
-    // (like promptId). If it fails, we surface a non-blocking warning but
-    // don't block the user from seeing the preview.
-    let persisted = content;
-    (async () => {
-      try {
-        await persistContent();
-      } catch (saveErr) {
-        console.warn(
-          "Failed to persist generated content to server",
-          saveErr && saveErr.message
-        );
-        // Surface a non-blocking UI warning
-        uiStateStore.set({
-          status: "error",
-          message: "Saved locally; failed to persist to server.",
-        });
-      }
-    })();
+    // Step 4: Set the authoritative preview content.
+    previewStore.set(previewHtml);
 
-    // Trigger preview for the newly generated content (use local content so
-    // the user sees something immediately).
-    const html = await previewFromContent(content, timeoutMs);
-    return html;
+    // Step 5: Update the UI state to success.
+    setUiSuccess("Preview loaded");
+
+    // Step 6: Persist the final content in the background.
+    persistContent().catch((err) => {
+      console.warn("Background content persistence failed:", err);
+    });
+
+    return previewHtml;
   } catch (err) {
     setUiError(err.message || "Generation failed");
     throw err;
