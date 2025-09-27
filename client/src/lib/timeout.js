@@ -8,15 +8,17 @@
  * @returns {Promise<T>} A promise that rejects if the timeout is reached
  */
 export function withTimeout(promise, timeoutMs = 5000) {
+  let timeoutId;
   const timeoutPromise = new Promise((_, reject) => {
-    const timeoutId = setTimeout(() => {
-      clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
       reject(new Error("Request timed out"));
     }, timeoutMs);
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
     // Clean up any pending timers
-    clearTimeout(timeoutPromise);
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   });
 }
