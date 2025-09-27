@@ -83,7 +83,6 @@
               // expose preview snippet to dev textarea
               uiStateStore.set({ status: 'success', message: `Diag OK — preview ${String(html).slice(0,200)}` });
               // also set previewStore for immediate rendering
-              const { previewStore } = await import('../stores');
               previewStore.set(html);
             } catch (e) {
               uiStateStore.set({ status: 'error', message: `Preview diag failed: ${e && e.message}` });
