@@ -18,8 +18,17 @@
     if (typeof document !== 'undefined') {
       if ($previewStore && $previewStore.length > 0) {
         document.body.setAttribute('data-preview-ready', '1');
+        if (typeof window !== 'undefined' && window.IS_DEV) {
+          console.debug('[DEV] PreviewWindow reactive update:', {
+            previewLength: $previewStore.length,
+            preview: $previewStore.substring(0, 100) + '...'
+          });
+        }
       } else {
         document.body.removeAttribute('data-preview-ready');
+        if (typeof window !== 'undefined' && window.IS_DEV) {
+          console.debug('[DEV] PreviewWindow reactive update: No preview content');
+        }
       }
     }
   }

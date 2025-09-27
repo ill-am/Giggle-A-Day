@@ -5,6 +5,9 @@ import {
   savePromptContent,
   updatePromptContent,
 } from "./api";
+
+const IS_DEV =
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
 import genieServiceFE from "./genieServiceFE";
 import {
   contentStore,
@@ -68,8 +71,26 @@ export async function previewFromContent(
 
   try {
     const html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
+
+    // Debug logging for preview chain
+    if (IS_DEV) {
+      console.debug("[DEV] Preview chain debug:", {
+        content: content,
+        previewHtml: html?.substring(0, 100) + "...",
+        htmlLength: html?.length,
+      });
+    }
+
     // Ensure previewStore is updated with the returned HTML
     previewStore.set(html);
+
+    if (IS_DEV) {
+      console.debug("[DEV] previewStore updated:", {
+        storeValue: get(previewStore)?.substring(0, 100) + "...",
+        valueLength: get(previewStore)?.length,
+      });
+    }
+
     uiStateStore.set({ status: "success", message: "Preview loaded" });
     // If this request is still the active controller, clear the global
     // reference so subsequent calls start fresh. If a newer request has
