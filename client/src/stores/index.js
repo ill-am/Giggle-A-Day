@@ -14,25 +14,29 @@ function devWritable(name, initial) {
   return {
     subscribe: w.subscribe,
     set(value) {
-      try {
-        const now = Date.now();
-        if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
-          lastLogTime = now;
-          console.debug(`STORE:${name}.set`, { value });
-        }
-      } catch (e) {}
+      if (IS_DEV) {
+        try {
+          const now = Date.now();
+          if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
+            lastLogTime = now;
+            console.debug(`STORE:${name}.set`, { value });
+          }
+        } catch (e) {}
+      }
       w.set(value);
     },
     update(fn) {
       w.update((prev) => {
         const next = fn(prev);
-        try {
-          const now = Date.now();
-          if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
-            lastLogTime = now;
-            console.debug(`STORE:${name}.update`, { prev, next });
-          }
-        } catch (e) {}
+        if (IS_DEV) {
+          try {
+            const now = Date.now();
+            if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
+              lastLogTime = now;
+              console.debug(`STORE:${name}.update`, { prev, next });
+            }
+          } catch (e) {}
+        }
         return next;
       });
     },

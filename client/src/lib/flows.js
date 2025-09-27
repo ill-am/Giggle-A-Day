@@ -39,14 +39,7 @@ export function cancelPreview() {
   }
 }
 
-function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Request timed out")), ms)
-    ),
-  ]);
-}
+import { withTimeout } from "./timeout";
 
 /**
  * Call the preview API for a piece of content and update stores/UI state.
@@ -129,7 +122,13 @@ export async function generateAndPreview(
     // Step 1: Kick off the generation and get the server response. Wrap the
     // submit step in a timeout so tests that simulate a never-resolving
     // submission can be exercised deterministically.
-    const response = await withTimeout(submitPrompt(prompt), timeoutMs);
+    const submitPromptWithTimeout = withTimeout(
+      submitPrompt(prompt),
+      timeoutMs
+    );
+
+    // Await the timed-out promise
+    const response = await submitPromptWithTimeout;
 
     // Extract the actual content from the response object.
     // The server may wrap the content in `data.content`.
@@ -147,7 +146,8 @@ export async function generateAndPreview(
     setUiLoading("Loading preview...");
 
     // Step 2: Fetch the real preview HTML, passing the content.
-    const previewHtml = await loadPreview(content);
+    const loadPreviewWithTimeout = withTimeout(loadPreview(content), timeoutMs);
+    const previewHtml = await loadPreviewWithTimeout;
 
     // Step 3: Set the content in the store *before* persisting.
     contentStore.set(content);

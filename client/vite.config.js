@@ -10,6 +10,12 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [svelte()],
+    resolve: {
+      alias: {
+        $lib: path.resolve(__dirname, "src/lib"),
+        $stores: path.resolve(__dirname, "src/stores"),
+      },
+    },
     server: {
       host: true, // Listen on all addresses
       port: 5173,

@@ -11,8 +11,9 @@
     // and show a minimal visible indicator for Opera where the banner may not show.
     // Remove these logs in production.
     try {
-      // eslint-disable-next-line no-console
-      console.debug('[DEV] uiState update:', value);
+      if (import.meta.env.DEV) {
+        console.debug('[DEV] uiState update:', value);
+      }
     } catch (e) {}
   });
 
