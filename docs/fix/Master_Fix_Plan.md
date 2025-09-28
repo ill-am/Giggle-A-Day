@@ -76,18 +76,47 @@ The process for each solution is:
     - capture `__LAST_PREVIEW_HTML`, `__STORE_WRITE_LOG__`, and the canonical registry for analysis.
 
   Key findings from the probe run:
+  **Key findings from the probe runs (after instrumentation):**
 
-  - The running frontend does execute the preview writer: `window.__LAST_PREVIEW_HTML` and `window.__STORE_WRITE_LOG__` contain the generated HTML and a write entry with matching `__chronos_id` to the canonical `__STORE_IDS__`.
-  - The `PreviewWindow` component, however, was still rendering the placeholder in the running UI. To triage this we:
-    - Rebound module-local store variables to canonical instances; added live-binding exports and module-local aliases so internal helpers (`setUiLoading`, `persistContent`) still reference the correct stores.
-    - After these changes both the unit/integration tests and the Playwright probe showed the writer ran and wrote to canonical store, but the PreviewWindow DOM still lacked `[data-testid="preview-content"]` in certain runs (probe-triggered generate showed \_\_LAST_PREVIEW_HTML populated while the preview DOM remained absent). This indicates a timing or render-conditional issue; next step is lightweight, guarded PreviewWindow instrumentation to capture what the mounted component observes at runtime.
+  - The running frontend does execute the preview writer. `window.__LAST_PREVIEW_HTML` and `window.__STORE_WRITE_LOG__` contain the generated HTML and a write-log entry whose `storeId` matches the canonical id found under `window.__CHRONOS_STORES__.__STORE_IDS__.previewStore`.
 
-  Next recommended tasks (short):
+  - Despite the canonical write, the mounted `PreviewWindow` component did not observe (or did not render) that value in the probe runs: the DOM still showed the placeholder and the component-level probe global (`window.__PREVIEW_WINDOW_LAST__`) was not populated by the component in earlier runs.
 
-  - Add a dev-only onMount subscription in `PreviewWindow.svelte` that writes the observed store id and local observed value to `window.__PREVIEW_WINDOW_LAST__` for direct comparison with `__STORE_WRITE_LOG__` (safe, gated, and removable after debugging).
-  - Re-run the Playwright probe to capture `__PREVIEW_WINDOW_LAST__` and confirm whether PreviewWindow saw the update.
+  - This is strong evidence of a persistent duplicate-store situation at runtime: the writer is writing to the canonical store, while the mounted component is (in at least some runs) subscribed to a different store instance created by a separate module evaluation (HMR/module-resolution divergence). That mismatch disconnects writer → UI even though the canonical container holds the correct value.
 
-  All updated files were committed and are ready to push.
+  - Small changes were made to reduce the surface area of the problem (rebinding module-local exports to canonical instances, simplifying `PreviewWindow.svelte` to avoid SSR/test harness issues). Those were necessary stabilizations but did not, by themselves, fully eliminate the mismatch observed in the running dev server.
+
+  Immediate diagnostic step already performed in this session:
+
+  - Added a dev-only, onMount subscription in `PreviewWindow.svelte` (guarded by `IS_DEV`) which writes what the mounted component actually observes into `window.__PREVIEW_WINDOW_LAST__`. Updated the Playwright probe to set `window.IS_DEV` prior to app bootstrap and to capture `__PREVIEW_WINDOW_LAST__` alongside other globals.
+
+  Observed outcome after the instrumentation:
+
+  - The probe confirms the canonical write log and canonical store ids are present, but `PreviewWindow` still did not consistently report seeing the same value (the component-level probe global was empty in the captured runs while the canonical write-log showed the new HTML). In short: the writer writes the canonical store; the mounted PreviewWindow is not reliably reading it.
+
+  Short-term recommended next steps (ordered, dev-only first):
+
+  1. Dev-only canonical observer (fast, decisive):
+
+  - Add a second, dev-only subscription in `PreviewWindow.svelte` that subscribes directly to the canonical store object (if present) at `window.__CHRONOS_STORES__.previewStore` and record what that subscription sees into `window.__PREVIEW_WINDOW_LAST__.canonicalObserved`. This will prove, at runtime, whether the canonical store actually contains the HTML _and_ whether a subscription from the component's context can see it.
+
+  2. If the canonical observer shows the component can see the canonical store when subscribed explicitly, that indicates the component's default import path still resolves to a different instance. The short-term remediation then is to ensure our store module always re-exports (rebinding) the canonical instance at import time (already partially implemented) and sweep any remaining import aliases.
+
+  3. If explicit canonical subscription still does not see the canonical value, the problem is deeper (multiple globals or fragmented runtime realms). In that case escalate to a broader runtime hardening approach:
+
+  - Force singletons at import time (definitive rebind) in `client/src/stores/index.js` so the module always sets its exports to the global canonical object (this is the durable fix for HMR-caused duplicates).
+  - Add a short test harness that validates runtime identity: a unit test that imports the store from multiple relative paths and asserts the `__chronos_id` values are identical.
+
+  4. After confirming the above, run the verification checklist (client tests, E2E smoke, manual HMR trial) and iterate.
+
+  Operational notes:
+
+  - The dev-only instrumentation is safe to enable in local dev sessions only (guarded by `IS_DEV`). Keep it temporary and remove after the root cause is fixed.
+  - The updated Playwright probe (`client/tmp/inspect-preview.mjs`) now sets `window.IS_DEV` before the app loads, triggers a generate, and captures the new developer diagnostics for easy comparison.
+
+  Current branch status:
+
+  - All updated files for the HMR-proof store work and the dev instrumentation were committed to branch `AE-devolve/01-skip-puppeteer-preview-solution1` and pushed upstream.
 
 - [ ] **3. Verification:**
   - [ ] **Client Tests:** Run the full Vitest suite for the client.
