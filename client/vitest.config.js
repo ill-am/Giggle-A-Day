@@ -9,7 +9,7 @@ export default defineConfig({
   root: path.resolve(__dirname),
   resolve: {
     alias: {
-      $lib: path.resolve(__dirname, "src/lib"),
+      $lib: path.resolve(__dirname, "src"),
       $stores: path.resolve(__dirname, "src/stores"),
     },
   },
@@ -25,9 +25,5 @@ export default defineConfig({
     testTimeout: 10000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
-  resolve: {
-    alias: {
-      $lib: path.resolve(__dirname, "src"),
-    },
-  },
+  // (aliases defined above)
 });

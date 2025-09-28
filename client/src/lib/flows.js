@@ -19,6 +19,8 @@ import {
   persistContent,
 } from "$lib/stores";
 
+const _win = typeof window !== "undefined" ? window : {};
+
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 
 // Controller for the in-flight preview request so it can be cancelled
@@ -82,6 +84,20 @@ export async function previewFromContent(
     }
 
     // Ensure previewStore is updated with the returned HTML
+    try {
+      if (IS_DEV) {
+        try {
+          console.debug(
+            "[DEV] previewStore.set (previewFromContent) storeId:",
+            previewStore && previewStore.__chronos_id,
+            "canonicalIds:",
+            (_win.__CHRONOS_STORES__ &&
+              _win.__CHRONOS_STORES__.__STORE_IDS__) ||
+              null
+          );
+        } catch (e) {}
+      }
+    } catch (e) {}
     previewStore.set(html);
 
     if (IS_DEV) {
@@ -174,6 +190,20 @@ export async function generateAndPreview(
     contentStore.set(content);
 
     // Step 4: Set the authoritative preview content.
+    try {
+      if (IS_DEV) {
+        try {
+          console.debug(
+            "[DEV] previewStore.set (generateAndPreview) storeId:",
+            previewStore && previewStore.__chronos_id,
+            "canonicalIds:",
+            (_win.__CHRONOS_STORES__ &&
+              _win.__CHRONOS_STORES__.__STORE_IDS__) ||
+              null
+          );
+        } catch (e) {}
+      }
+    } catch (e) {}
     previewStore.set(previewHtml);
 
     // Step 5: Update the UI state to success.
