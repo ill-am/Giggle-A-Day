@@ -6,7 +6,7 @@
 >
 > - Recent runtime diagnostics and probe outputs are available via `client/tmp/inspect-preview.mjs` (run locally to reproduce). The probe prints JSON containing `previewGlobal`, `writeLog`, `canonical`, and `previewWindowLast` fields.
 > - Relevant instrumented files: `client/src/stores/index.js`, `client/src/components/PreviewWindow.svelte` (dev-only onMount instrumentation records `window.__PREVIEW_WINDOW_LAST__`), and `client/tmp/inspect-preview.mjs`.
-> - To resume quickly: start the dev server (http://localhost:5173) and run `node client/tmp/inspect-preview.mjs`; paste the JSON output into the conversation and say: "Resume: read probe output".
+> - To resume quickly: the frontend and backend auto-start on session startup in this dev environment — you can run `node client/tmp/inspect-preview.mjs` immediately to collect the probe JSON. Paste the `previewGlobal`, `writeLog`, `canonical`, and `previewWindowLast` fields into the conversation and say: "Resume: read probe output".
 
 This document synthesizes all previous findings into a single, actionable strategy to resolve the frontend preview failure. It outlines the root cause and a prioritized list of solutions to be implemented systematically.
 
