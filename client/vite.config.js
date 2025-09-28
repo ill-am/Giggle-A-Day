@@ -12,46 +12,59 @@ export default defineConfig(({ mode }) => {
     plugins: [svelte()],
     resolve: {
       alias: {
-        $lib: path.resolve(__dirname, "src/lib"),
+        // $lib is used throughout the codebase as a top-level alias for `src`
+        // so that imports like `$lib/stores` resolve to `src/stores`.
+        $lib: path.resolve(__dirname, "src"),
+        // keep $stores for backwards-compatibility; it points directly to src/stores
         $stores: path.resolve(__dirname, "src/stores"),
-      },
-    },
-    server: {
-      host: true, // Listen on all addresses
-      port: 5173,
-      strictPort: true, // Exit if port is in use
-      hmr: {
-        // Enable HMR for GitHub Codespaces
-        clientPort: 443,
-        protocol: "wss",
-        host: process.env.CODESPACE_NAME
-          ? `${process.env.CODESPACE_NAME}-5173.app.github.dev`
-          : "localhost",
-      },
-      proxy: {
-        "/prompt": createProxy("/prompt", DEV_AUTH_TOKEN),
-        "/preview": createProxy("/preview", DEV_AUTH_TOKEN),
-        "/api": createProxy("/api", DEV_AUTH_TOKEN),
-        "/override": createProxy("/override", DEV_AUTH_TOKEN),
-        "/export": createProxy("/export", DEV_AUTH_TOKEN),
-      },
-      fs: {
-        strict: true,
-        allow: [".."], // Allow serving files from one level up
-      },
-      headers: {
-        // Ensure proper MIME types for Svelte files
-        "*.svelte": {
-          "Content-Type": "application/javascript",
-        },
-      },
-    },
-    resolve: {
-      alias: {
-        $lib: path.resolve("./src"),
       },
       extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json", ".svelte"],
     },
+    server: (() => {
+      const isE2E = Boolean(process.env.E2E) || Boolean(process.env.CI);
+      if (isE2E) {
+        // During E2E/CI runs we disable HMR to avoid external websocket
+        // handshakes that can be redirected (302) in cloud dev environments
+        // like Codespaces. Disabling HMR removes the websocket requirement
+        // and makes the dev server usable for headless browser tests.
+        return {
+          host: true,
+          port: 5173,
+          strictPort: true,
+          hmr: false,
+          proxy: {
+            "/prompt": createProxy("/prompt", DEV_AUTH_TOKEN),
+            "/preview": createProxy("/preview", DEV_AUTH_TOKEN),
+            "/api": createProxy("/api", DEV_AUTH_TOKEN),
+            "/override": createProxy("/override", DEV_AUTH_TOKEN),
+            "/export": createProxy("/export", DEV_AUTH_TOKEN),
+          },
+          fs: { strict: true, allow: [".."] },
+        };
+      }
+
+      return {
+        host: true, // Listen on all addresses
+        port: 5173,
+        strictPort: true, // Exit if port is in use
+        hmr: {
+          // Enable HMR for GitHub Codespaces
+          clientPort: 443,
+          protocol: "wss",
+          host: process.env.CODESPACE_NAME
+            ? `${process.env.CODESPACE_NAME}-5173.app.github.dev`
+            : "localhost",
+        },
+        proxy: {
+          "/prompt": createProxy("/prompt", DEV_AUTH_TOKEN),
+          "/preview": createProxy("/preview", DEV_AUTH_TOKEN),
+          "/api": createProxy("/api", DEV_AUTH_TOKEN),
+          "/override": createProxy("/override", DEV_AUTH_TOKEN),
+          "/export": createProxy("/export", DEV_AUTH_TOKEN),
+        },
+        fs: { strict: true, allow: [".."] },
+      };
+    })(),
     optimizeDeps: {
       include: ["svelte"],
     },

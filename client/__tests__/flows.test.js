@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 
 import * as Api from "../src/lib/api";
-import * as Stores from "../src/stores";
+import * as Persistence from "../src/lib/persistence";
 import { contentStore, previewStore, uiStateStore } from "../src/stores";
 import { generateAndPreview, previewFromContent } from "../src/lib/flows";
 import { vi as globalVi } from "vitest";
@@ -26,9 +26,9 @@ describe("flows.generateAndPreview / previewFromContent", () => {
     vi.spyOn(Api, "loadPreview").mockResolvedValue(mockHtml);
     // Ensure persistence returns a valid content shape so previewFromContent validation passes
     // Also update the contentStore to mimic the real persistContent side-effect
-    vi.spyOn(Stores, "persistContent").mockImplementation(async (c) => {
+    vi.spyOn(Persistence, "persistContent").mockImplementation(async (c) => {
       try {
-        Stores.contentStore.set(mockContent);
+        contentStore.set(mockContent);
       } catch (e) {}
       return mockContent;
     });

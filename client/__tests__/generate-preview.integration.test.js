@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 // Import modules dynamically so we can inject stubs
 const FLOWS_PATH = "../src/lib/flows.js";
 const STORES_PATH = "../src/stores/index.js";
+const PERSISTENCE_PATH = "../src/lib/persistence.js";
 
 function clearModuleCache() {
   Object.keys(require.cache).forEach((k) => delete require.cache[k]);

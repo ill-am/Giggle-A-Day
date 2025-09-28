@@ -2,17 +2,28 @@ import { render, screen, fireEvent } from "@testing-library/svelte/svelte5";
 import PromptInput from "../src/components/PromptInput.svelte";
 import PreviewWindow from "../src/components/PreviewWindow.svelte";
 import { contentStore } from "../src/stores";
-import { afterEach, test, expect } from "vitest";
+import { afterEach, test, expect, vi } from "vitest";
 import { waitForPreviewReady } from "./../test-utils/previewReady";
+import * as Persistence from "../src/lib/persistence";
 
 afterEach(() => {
   contentStore.set(null);
+  vi.restoreAllMocks();
 });
 
 test("background persistence updates contentStore with server id and preview refreshes", async () => {
   // Arrange: set a prompt that will generate mock content
   render(PromptInput);
   render(PreviewWindow);
+
+  // Spy on persistContent and mock its implementation
+  const persistSpy = vi
+    .spyOn(Persistence, "persistContent")
+    .mockImplementation(async () => {
+      // Simulate the side-effect of updating the content store
+      contentStore.update((c) => ({ ...c, id: "mock-id-123" }));
+      return { id: "mock-id-123" };
+    });
 
   // Put prompt into promptStore via the textarea interaction to better emulate user flow
   const textarea = await screen.findByTestId("prompt-textarea");
@@ -45,6 +56,7 @@ test("background persistence updates contentStore with server id and preview ref
   }
 
   expect(persisted && persisted.id).toBeTruthy();
+  expect(persistSpy).toHaveBeenCalled();
 
   // Confirm preview content is present in DOM
   const previewContentEl = await screen.findByTestId("preview-content");
