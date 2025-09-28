@@ -1,6 +1,6 @@
 <script>
   import { promptStore, contentStore, previewStore, uiStateStore } from '$lib/stores';
-  import { submitPrompt, exportToPdf } from '../lib/api';
+  import { generatePreview, exportToPdf } from '../lib/api';
   import { generateAndPreview } from '../lib/flows';
   import { tick } from 'svelte';
 
@@ -23,9 +23,11 @@
       return;
     }
 
-  if (import.meta.env.DEV) {
-    console.debug('[DEV] handleGenerateNow invoked, prompt=', $promptStore);
-  }
+    console.debug('[PromptInput] Starting generation:', {
+      prompt: prompt,
+      currentPreviewStore: $previewStore,
+      currentUiState: $uiStateStore
+    });
   isGenerating = true;
     generateFlash = true;
     try {
@@ -66,8 +68,8 @@
       uiStateStore.set({ status: 'loading', message: 'Running runtime diagnostics...' });
       try {
         const api = await import('../lib/api');
-          console.debug('[DEV] runRuntimeDiag: submitting prompt');
-          const resp = await api.submitPrompt(testPrompt);
+          console.debug('[DEV] runRuntimeDiag: generating preview');
+          const resp = await api.generatePreview(testPrompt);
         // show raw response in dev-status area
         try {
           const txt = JSON.stringify(resp, null, 2);

@@ -1,10 +1,5 @@
 import { get } from "svelte/store";
-import {
-  submitPrompt,
-  loadPreview,
-  savePromptContent,
-  updatePromptContent,
-} from "./api";
+import { generatePreview } from "./api";
 
 const IS_DEV =
   typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
@@ -21,32 +16,32 @@ import {
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 
-// Controller for the in-flight preview request so it can be cancelled
+import { withTimeout } from "./timeout";
+
+// Controller for managing preview request cancellation
 let previewAbortController = null;
 
-export function cancelPreview() {
-  try {
-    if (previewAbortController) {
-      // Only abort if the signal isn't already aborted to avoid spurious
-      // DOMExceptions in some environments.
-      try {
-        if (!previewAbortController.signal.aborted)
-          previewAbortController.abort();
-      } catch (inner) {
-        // ignore
-      }
-      previewAbortController = null;
-    }
-  } catch (e) {
-    // swallow - cancellation should be best-effort
+/**
+ * Cancel any ongoing preview request
+ */
+function cancelPreview() {
+  if (previewAbortController) {
+    previewAbortController.abort();
+    previewAbortController = null;
   }
 }
 
-import { withTimeout } from "./timeout";
+/**
+ * Load preview HTML for given content
+ */
+async function loadPreview(content) {
+  const response = await generatePreview(content);
+  return response.html;
+}
 
 /**
- * Call the preview API for a piece of content and update stores/UI state.
- * Returns the HTML string on success.
+ * Generate content and preview HTML in a single request.
+ * Updates stores and returns the preview HTML on success.
  */
 export async function previewFromContent(
   content,
@@ -70,7 +65,7 @@ export async function previewFromContent(
   setUiLoading("Loading preview...");
 
   try {
-    const html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
+    const html = await withTimeout(loadPreview(content), timeoutMs);
 
     // Debug logging for preview chain
     if (IS_DEV) {
@@ -137,56 +132,34 @@ export async function generateAndPreview(
     throw err;
   }
 
-  setUiLoading("Generating content...");
+  setUiLoading("Generating preview...");
 
   try {
-    // Step 1: Kick off the generation and get the server response. Wrap the
-    // submit step in a timeout so tests that simulate a never-resolving
-    // submission can be exercised deterministically.
-    const submitPromptWithTimeout = withTimeout(
-      submitPrompt(prompt),
-      timeoutMs
-    );
+    // Single API call to generate content and preview
+    const generateRequest = withTimeout(generatePreview(prompt), timeoutMs);
+    const { html, content } = await generateRequest;
 
-    // Await the timed-out promise
-    const response = await submitPromptWithTimeout;
-
-    // Extract the actual content from the response object.
-    // The server may wrap the content in `data.content`.
-    const content =
-      (response && response.data && response.data.content) ||
-      response.content ||
-      response;
-
-    // Validate the extracted content.
-    if (!content || !content.title || !content.body) {
-      console.error("Invalid server response structure:", response);
-      throw new Error("Invalid content response from server.");
+    if (!html) {
+      throw new Error("No preview HTML received");
     }
 
-    setUiLoading("Loading preview...");
+    // Update stores with the results
+    if (content) {
+      contentStore.set(content);
+      console.debug("[Flows] Content store updated");
+    }
 
-    // Step 2: Fetch the real preview HTML, passing the content.
-    const loadPreviewWithTimeout = withTimeout(loadPreview(content), timeoutMs);
-    const previewHtml = await loadPreviewWithTimeout;
-
-    // Step 3: Set the content in the store *before* persisting.
-    contentStore.set(content);
-
-    // Step 4: Set the authoritative preview content.
-    previewStore.set(previewHtml);
-
-    // Step 5: Update the UI state to success.
-    setUiSuccess("Preview loaded");
-
-    // Step 6: Persist the final content in the background.
-    persistContent().catch((err) => {
-      console.warn("Background content persistence failed:", err);
+    previewStore.set(html);
+    console.debug("[Flows] Preview store updated", {
+      htmlLength: html.length,
     });
 
-    return previewHtml;
-  } catch (err) {
-    setUiError(err.message || "Generation failed");
-    throw err;
+    setUiSuccess("Preview loaded");
+    return html;
+  } catch (error) {
+    const message = error.message || "Generation failed";
+    console.error("[Flows] Generation error:", error);
+    setUiError(message);
+    throw error;
   }
 }

@@ -22,12 +22,22 @@ function safeWriteFileSync(filePath, contents) {
 }
 
 function buildContent(prompt, opts = {}) {
-  const maxWords = opts.titleWords || 6;
+  // If explicit content is provided in options, use that
+  if (opts.title && opts.body) {
+    return {
+      title: opts.title,
+      body: opts.body,
+    };
+  }
+
+  // Otherwise build from prompt
+  const maxTitleWords = opts.titleWords || 5;
   const words = String(prompt || "")
     .split(/\s+/)
     .filter(Boolean);
-  const title = `Prompt: ${words.slice(0, maxWords).join(" ")}`;
+  const title = `Prompt: ${words.slice(0, maxTitleWords).join(" ")}`;
   const body = String(prompt || "");
+
   return { title, body };
 }
 

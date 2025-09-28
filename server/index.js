@@ -28,6 +28,7 @@ const db = require("./db");
 const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
+const previewService = require("./previewService");
 const imageRewrite = require("./utils/imageRewrite");
 const EXPORT_USE_LOCAL_IMAGES =
   process.env.EXPORT_USE_LOCAL_IMAGES === "1" ||
@@ -648,6 +649,9 @@ const { service: serviceImpl } = require("./serviceAdapter");
 // Demo genieService (delegates to sampleService) used by POST /prompt
 const genieService = require("./genieService");
 
+// Development flag - in Node.js we check for NODE_ENV
+const IS_DEV = process.env.NODE_ENV !== "production";
+
 app.post("/prompt", async (req, res, next) => {
   const { prompt } = req.body;
 
@@ -703,30 +707,73 @@ app.post("/prompt", async (req, res, next) => {
     err.status = err.status || 500;
     err.message = `Generation Error: ${err.message}`;
     next(err);
-  }
+  } // New consolidated endpoint that handles generation and preview in one step
+  app.post("/api/generate", async (req, res) => {
+    const { prompt } = req.body;
+
+    // Input validation
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return sendValidationError(
+        res,
+        "Prompt is required and must be non-empty",
+        {
+          provided: typeof prompt,
+          required: "non-empty string",
+        }
+      );
+    }
+
+    try {
+      // Step 1: Generate content
+      const genieResult = await genieService.generate(prompt);
+      const content = genieResult?.data?.content;
+
+      if (!content) {
+        throw new Error("Failed to generate content");
+      }
+
+      // Step 2: Generate preview HTML
+      const html = await previewService.generateHtml(content);
+
+      // Step 3: Persist everything in a single transaction
+      let ids = {};
+      try {
+        const dbResult = await crud.createPrompt(prompt);
+        ids.promptId = dbResult?.id;
+
+        if (ids.promptId) {
+          const aiResult = await crud.createAIResult(ids.promptId, content);
+          ids.resultId = aiResult?.id;
+        }
+      } catch (e) {
+        console.warn("/api/generate: persistence warning", e?.message);
+        // Continue even if persistence fails - preview is still valid
+      }
+
+      // Step 4: Return everything the frontend needs
+      return res.json({
+        html,
+        content, // Optional: frontend might want to store this
+        id: ids, // Optional: frontend might want these for future reference
+      });
+    } catch (error) {
+      console.error("/api/generate error:", error);
+      return res.status(500).json({
+        error: error.message || "Generation failed",
+        details: IS_DEV ? error.stack : undefined,
+      });
+    }
+  });
 });
 
 // --- PREVIEW ENDPOINT ---
 // Import error handling utilities
 const { sendValidationError } = require("./utils/errorHandler");
 
+// Return just the inner content - let the frontend handle the container and styling
 const previewTemplate = (content) => `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    .preview { max-width: 800px; margin: 2rem auto; font-family: system-ui; }
-    .preview h1 { color: #2c3e50; }
-    .preview .content { line-height: 1.6; }
-  </style>
-</head>
-<body>
-  <div class="preview">
-    <h1>${content.title}</h1>
-    <div class="content">${content.body}</div>
-  </div>
-</body>
-</html>
+<h1>${content.title}</h1>
+<div class="content">${content.body}</div>
 `;
 
 // NOTE: image rewrite is handled by `rewriteImagesForExportAsync` above.

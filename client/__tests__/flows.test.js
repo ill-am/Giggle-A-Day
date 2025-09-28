@@ -1,11 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
-
 import * as Api from "../src/lib/api";
-import * as Stores from "../src/stores";
 import { contentStore, previewStore, uiStateStore } from "../src/stores";
-import { generateAndPreview, previewFromContent } from "../src/lib/flows";
-import { vi as globalVi } from "vitest";
+import { generateAndPreview } from "../src/lib/flows";
 
 beforeEach(() => {
   // reset stores
@@ -15,39 +12,58 @@ beforeEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("flows.generateAndPreview / previewFromContent", () => {
-  it("generateAndPreview: successful flow sets stores and returns html", async () => {
-    const mockContent = { title: "T", body: "B" };
+describe("flows.generateAndPreview", () => {
+  it("generates and displays preview successfully", async () => {
     const mockHtml = "<div>preview</div>";
+    const mockContent = { title: "Test", body: "Test content" };
 
-    vi.spyOn(Api, "submitPrompt").mockResolvedValue({
-      data: { content: mockContent },
-    });
-    vi.spyOn(Api, "loadPreview").mockResolvedValue(mockHtml);
-    // Ensure persistence returns a valid content shape so previewFromContent validation passes
-    // Also update the contentStore to mimic the real persistContent side-effect
-    vi.spyOn(Stores, "persistContent").mockImplementation(async (c) => {
-      try {
-        Stores.contentStore.set(mockContent);
-      } catch (e) {}
-      return mockContent;
+    vi.spyOn(Api, "generatePreview").mockResolvedValue({
+      html: mockHtml,
+      content: mockContent
     });
 
-    const result = await generateAndPreview("a valid prompt");
+    const result = await generateAndPreview("test prompt");
 
+    expect(Api.generatePreview).toHaveBeenCalledWith("test prompt");
     expect(get(contentStore)).toEqual(mockContent);
     expect(get(previewStore)).toBe(mockHtml);
-    expect(get(uiStateStore).status).toBe("success");
+    expect(get(uiStateStore)).toEqual({
+      status: "success",
+      message: "Preview loaded"
+    });
     expect(result).toBe(mockHtml);
   });
 
-  it("previewFromContent: successful preview updates previewStore and returns html", async () => {
-    const content = { title: "Hello", body: "World" };
-    const html = "<p>ok</p>";
-    vi.spyOn(Api, "loadPreview").mockResolvedValue(html);
+  it("handles empty prompt", async () => {
+    await expect(generateAndPreview("")).rejects.toThrow("Prompt cannot be empty");
+    expect(get(uiStateStore)).toEqual({
+      status: "error",
+      message: "Prompt cannot be empty"
+    });
+  });
 
-    const res = await previewFromContent(content);
-    expect(res).toBe(html);
+  it("handles generation failure", async () => {
+    const error = new Error("Generation failed");
+    vi.spyOn(Api, "generatePreview").mockRejectedValue(error);
+
+    await expect(generateAndPreview("test prompt")).rejects.toThrow("Generation failed");
+    expect(get(uiStateStore)).toEqual({
+      status: "error",
+      message: "Generation failed"
+    });
+  });
+
+  it("handles missing HTML in response", async () => {
+    vi.spyOn(Api, "generatePreview").mockResolvedValue({
+      content: { title: "Test", body: "Test" }
+    });
+
+    await expect(generateAndPreview("test prompt")).rejects.toThrow("No preview HTML received");
+    expect(get(uiStateStore)).toEqual({
+      status: "error",
+      message: "No preview HTML received"
+    });
+  });
     expect(get(previewStore)).toBe(html);
     expect(get(uiStateStore).status).toBe("success");
   });

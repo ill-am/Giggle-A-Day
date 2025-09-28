@@ -1,9 +1,13 @@
 // @ts-nocheck -- dev-only store instrumentation file; suppress TS diagnostics
 import { writable, get } from "svelte/store";
 
-// DEV-only helper: wrap writable so set/update calls are logged during development
+// Always enable store debugging for now to track the issue
+const FORCE_DEBUG = true;
 const IS_DEV =
-  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
+  FORCE_DEBUG ||
+  (typeof import.meta !== "undefined" &&
+    import.meta.env &&
+    import.meta.env.DEV);
 
 // Create singletons on window in DEV to avoid multiple module instances
 // (Vite HMR or differing import paths can cause duplicate module copies).
@@ -108,7 +112,7 @@ function getOrCreateStore(name, initial) {
 const promptStoreExport = getOrCreateStore("promptStore", "");
 // Create or reuse base stores using our singleton pattern
 const contentStoreExport = getOrCreateStore("contentStore", null);
-const previewStoreExport = getOrCreateStore("previewStore", "");
+const previewStoreExport = getOrCreateStore("previewStore", null);
 const uiStateStoreExport = getOrCreateStore("uiStateStore", {
   status: "idle",
   message: "",

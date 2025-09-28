@@ -109,21 +109,20 @@ async function fetchWithRetry(url, options = {}) {
 }
 
 // API endpoints
-export async function submitPrompt(prompt) {
-  Logger.debug("Submitting prompt", { prompt });
+export async function generatePreview(prompt) {
+  Logger.debug("Generating preview", { prompt });
 
   try {
-    const response = await fetchWithRetry("/prompt", {
+    const response = await fetchWithRetry("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt }),
-      // Use default retry behaviour; do not retry on 401 so auth errors
-      // are surfaced to the UI immediately.
+      retryConfig: { maxRetries: 3 },
     });
 
     if (!response.ok) {
-      const error = new Error(`Error: ${response.status}`);
-      Logger.error("Prompt submission failed", {
+      const error = new Error(`Generation failed: ${response.status}`);
+      Logger.error("Preview generation failed", {
         error,
         status: response.status,
       });
@@ -131,14 +130,14 @@ export async function submitPrompt(prompt) {
     }
 
     const data = await response.json();
-    Logger.info("Prompt submitted successfully", {
+    Logger.info("Preview generated successfully", {
       promptLength: prompt.length,
+      htmlLength: data.html?.length,
     });
-    // Normalize shape: prefer the inner `data` envelope when present so
-    // callers receive { content, metadata, promptId, resultId } directly.
-    return data && data.data ? data.data : data;
+
+    return data;
   } catch (error) {
-    Logger.error("Prompt submission error", { error });
+    Logger.error("Preview generation error", { error });
     throw error;
   }
 }
@@ -153,10 +152,37 @@ export async function loadPreview(content, options = {}) {
   // If content references a resultId or promptId, resolve it first using
   // helper endpoints added on the server: /content/result/:id and /content/prompt/:id
   try {
-    // If the content references a stored result/prompt id, prefer fetching the
-    // rendered HTML directly via /preview?resultId= or /preview?promptId= which
-    // the dev server proxies to the backend. This avoids relying on /content
-    // helper endpoints which may not be proxied by the frontend dev server.
+    // Start with direct preview since that's most reliable in development
+    if (content && content.title && content.body) {
+      const formattedContent = {
+        title: content.title,
+        body: content.body,
+        layout: content.layout || "default",
+      };
+
+      Logger.debug("Requesting direct preview", { formattedContent });
+
+      const response = await fetchWithRetry("/api/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formattedContent),
+        retryConfig: { maxRetries: 3 },
+        signal,
+      });
+
+      if (response.ok) {
+        const json = await response.json();
+        const html = json.preview || "";
+        if (html && html.trim()) {
+          Logger.info("Direct preview successful", { length: html.length });
+          return html;
+        }
+      }
+
+      Logger.debug("Direct preview failed, trying id-based methods");
+    }
+
+    // Fall back to id-based preview if direct preview failed
     if (content && content.resultId) {
       if (import.meta.env.DEV)
         console.debug(
@@ -173,19 +199,20 @@ export async function loadPreview(content, options = {}) {
           resultId: content.resultId,
           length: html.length,
         });
-        if (import.meta.env.DEV)
-          console.debug(
-            "[DEV] loadPreview: /preview?resultId returned HTML length=",
-            html.length
-          );
-        return html;
-      } else {
-        if (import.meta.env.DEV)
-          console.debug(
-            "[DEV] loadPreview: /preview?resultId returned",
-            resp && resp.status
-          );
+        if (html && html.trim()) {
+          // Only return if we got actual content
+          if (import.meta.env.DEV)
+            console.debug(
+              "[DEV] loadPreview: /preview?resultId returned HTML length=",
+              html.length
+            );
+          return html;
+        }
       }
+      Logger.debug("Failed to load preview by resultId, will try next method", {
+        status: resp?.status,
+        resultId: content.resultId,
+      });
     }
 
     if (content && content.promptId) {
@@ -204,19 +231,20 @@ export async function loadPreview(content, options = {}) {
           promptId: content.promptId,
           length: html.length,
         });
-        if (import.meta.env.DEV)
-          console.debug(
-            "[DEV] loadPreview: /preview?promptId returned HTML length=",
-            html.length
-          );
-        return html;
-      } else {
-        if (import.meta.env.DEV)
-          console.debug(
-            "[DEV] loadPreview: /preview?promptId returned",
-            resp && resp.status
-          );
+        if (html && html.trim()) {
+          // Only return if we got actual content
+          if (import.meta.env.DEV)
+            console.debug(
+              "[DEV] loadPreview: /preview?promptId returned HTML length=",
+              html.length
+            );
+          return html;
+        }
       }
+      Logger.debug("Failed to load preview by promptId, will try next method", {
+        status: resp?.status,
+        promptId: content.promptId,
+      });
     }
 
     // Fallback: if /preview by id didn't work, try loading JSON content via
