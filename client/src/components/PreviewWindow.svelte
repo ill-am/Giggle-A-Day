@@ -13,6 +13,31 @@
           console.debug('[DIAG] PreviewWindow mounted. global store ids:', (_win.__CHRONOS_STORES__ && _win.__CHRONOS_STORES__.__STORE_IDS__) || null);
           console.debug('[DIAG] PreviewWindow mounted. imported previewStore id:', (previewStore && previewStore.__chronos_id) || null);
         } catch (e) {}
+
+        // Dev-only instrumentation: subscribe to the previewStore and write what
+        // the mounted PreviewWindow actually observes to a global for probes.
+        try {
+          const unsub = previewStore.subscribe(value => {
+            try {
+              const observedId = (previewStore && previewStore.__chronos_id) || null;
+              const valStr = typeof value === 'string' ? value : String(value || '');
+              const snippet = valStr.substring(0, 200);
+              const len = valStr.length;
+              _win.__PREVIEW_WINDOW_LAST__ = {
+                observedStoreId: observedId,
+                observedValueLength: len,
+                observedSnippet: snippet,
+                ts: Date.now(),
+                source: 'PreviewWindow'
+              };
+            } catch (e) {}
+          });
+
+          // Return cleanup so Svelte can unsubscribe when component is destroyed.
+          return () => {
+            try { unsub(); } catch (e) {}
+          };
+        } catch (e) {}
       }
     } catch (e) {}
   });
