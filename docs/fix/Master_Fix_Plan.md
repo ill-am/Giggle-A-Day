@@ -65,7 +65,7 @@ The process for each solution is:
   export const { previewStore, uiStateStore } = getStores();
   ```
 
-  ## Session update (SAT 28 SEP 2025) — branch: AE-devolve/01-skip-puppeteer-preview-solution1
+  #### Session update (SAT 28 SEP 2025) — branch: AE-devolve/01-skip-puppeteer-preview-solution1
 
   Summary of edits applied in this session (keeps the Master Fix Plan current):
 
@@ -123,6 +123,45 @@ The process for each solution is:
   Current branch status:
 
   - All updated files for the HMR-proof store work and the dev instrumentation were committed to branch `AE-devolve/01-skip-puppeteer-preview-solution1` and pushed upstream.
+
+
+#### ADDENDUM: MON 29 SEP 2025 — The Rogue Subscriber Hunt: Next Steps
+
+**Discovery & Status Update:**
+
+Following the implementation of the HMR-proof singleton (Solution #1), the core issue persisted. The `PreviewWindow.svelte` component was not updating, indicating it was subscribed to a stale, "rogue" store instance.
+
+The first hypothesis—a desynchronized Vite cache—was tested by stopping the dev server and deleting the `client/node_modules/.vite` directory. **This action did not resolve the issue.** Upon restarting the server, the preview remained disconnected.
+
+This outcome rules out a simple cache corruption and suggests a more deterministic and persistent cause for the module resolution conflict. The investigation now proceeds to the next hypotheses.
+
+**Pending Investigation & Fixes:**
+
+The following steps will be taken to isolate the source of the rogue store instance.
+
+**1. Implement Direct Module Identity Inspection (Hypothesis 1, Part B)**
+
+- **Goal:** To get undeniable proof within the running application that `PreviewWindow.svelte` is importing a different module instance than the rest of the app.
+- **Actionables:**
+  - **Tag Canonical Stores:** In `client/src/stores/index.js`, a unique property (e.g., `__is_canonical = true;`) will be added to the store objects created within the canonical `createStores` function.
+  - **Add Runtime Check:** In `client/src/components/PreviewWindow.svelte`, a dev-only check will be added immediately after the store import. This check will test for the presence of the `__is_canonical` tag. If the tag is missing, a detailed error will be logged to the browser console, confirming a rogue import and providing an immediate diagnostic signal.
+
+**2. Investigate Component Lifecycle & Render Path (Hypothesis 2)**
+
+- **Goal:** To determine if the Svelte component lifecycle or its specific render path is causing its module script to be evaluated in a separate context from the main application.
+- **Actionables:**
+  - **Audit `onMount`:** Re-verify that no store subscriptions or access occur at the top-level of the `<script>` block in `PreviewWindow.svelte`. All browser-dependent logic must be strictly confined to `onMount` or later.
+  - **Analyze Render Tree:** Examine how `PreviewWindow.svelte` is rendered within its parent components (e.g., `App.svelte`). Look for asynchronous rendering patterns (`{#await}` blocks, dynamic imports) that could create unusual module evaluation timing.
+
+**3. Audit Build Tooling Configuration (Hypothesis 3)**
+
+- **Goal:** To rule out any misconfiguration in the build tools that could be causing incorrect module resolution.
+- **Actionables:**
+  - **Review `vite.config.js`:** Scrutinize `resolve.alias`, custom plugins, and `optimizeDeps` for any rules that might uniquely affect the `$lib/stores` path or modules under `src/components`.
+  - **Check for Duplicate Dependencies:** Run `npm --prefix client ls svelte` to ensure only one version of the `svelte` package is resolved in the dependency tree, preventing a split-context scenario.
+
+This structured approach will systematically test each remaining hypothesis, with the direct module identity inspection expected to provide the most definitive clue to guide the final fix.
+
 
 - [ ] **3. Verification:**
   - [ ] **Client Tests:** Run the full Vitest suite for the client.
@@ -185,3 +224,5 @@ The process for each solution is:
   - [ ] Add an assertion to verify the HTML **does** contain a characteristic of successfully generated content (e.g., a specific class, or simply being non-empty and different from the prompt).
 - [ ] **3. Verification:** Run the E2E test and confirm that it passes with the new, stricter assertions.
 - [ ] **4. Assessment:** The E2E test is now a more reliable indicator of true success.
+
+---
