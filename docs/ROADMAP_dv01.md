@@ -15,14 +15,28 @@ Branch: feature/anew
 
 ## Core Philosophy
 
-1. **Thin but Real Implementation**
+1. **Always-Working Frontend First**
+
+   - Frontend must maintain a consistent, working state at all times
+   - All components must be independently testable
+   - Clear separation between display and logic layers
+   - Predictable data flow and state management
+
+2. **"Dumb" Preview Component**
+
+   - Preview component's sole responsibility is to display $previewStore contents
+   - No internal fetch/update logic in the preview component
+   - All preview updates must flow through the store
+   - Clear separation from business logic and API calls
+
+3. **Thin but Real Implementation**
 
    - Every feature must be a genuine implementation
    - No mocks except where absolutely necessary (e.g., auth)
    - Real data flow throughout the system
    - Simplified but production-grade patterns
 
-2. **Progressive Enhancement Path**
+4. **Progressive Enhancement Path**
    - Start with minimal working features
    - Each addition must preserve existing functionality
    - Clear upgrade path to full feature set

@@ -1,66 +1,35 @@
-# AetherPress - AI-Powered eBook Creation
+# AetherPress Prototype - Welcome
 
-Document Version: dv01
-Datetime: 2025-09-29 17:00 UTC
-Branch: feature/anew
+The goal is a quick-build prototype involving a Node.js backend (for Puppeteer compatibility and potentially Express/FastAPI) and a modern frontend SPA (Svelte). This project demonstrates the foundational architecture for a quick-build prototype of AetherPress, focusing on the core loop: Prompt -> AI Processing -> Preview -> Basic Override -> PDF Export.
 
-AetherPress is an AI-powered eBook creation platform focused on delivering a streamlined experience from concept to publication. The project follows a prototype-first approach, starting with V0.1 to establish core functionality before expanding to V1.0.
-
-The initial prototype (V0.1) demonstrates the foundational workflow:
-Prompt → AI Processing → Preview → Basic Override → PDF Export
-
-Current focus: Building a robust proof-of-concept through an A4 eBook of public-domain summer poems — one poem per page with AI-generated decorative backgrounds that complement each poem's theme.
+Demo goal: produce an A4 eBook of public-domain summer poems — one poem per page with a poem-describing decorative background image (see `docs/DEMO_README.md`).
 
 ## Development Philosophy
 
-The project follows a prototype-first development strategy:
+We maintain stability through structured change management:
 
-1. Build a working V0.1 prototype focusing on core functionality
-2. Validate the core workflow and architectural decisions
-3. Gather feedback and insights from the prototype
-4. Evolve to V1.0 with production-ready features
+1. Discuss and understand the full context
+2. Document agreements and decisions
+3. Create actionable, phased plans
+4. Implement incrementally
 
-Development Guidelines:
+All contributors, human and AI, must:
 
-- Focus on implementing real, working features over mocks
-- Maintain clean, modular architecture from the start
-- Document decisions and changes thoroughly
-- Test core functionality early and often
+- Start with README.md
+- Respect project structure
+- Follow established patterns
+- Propose changes that align with architecture
 
-🚨 **All contributors must understand and follow this prototype-first approach** 🚨
+This approach prevents destabilizing changes and maintains our clean, component-based architecture.
+🚨 **All contributors must read and follow the Development Philosophy before making any changes.** 🚨
 
-## Core Architecture Principles
+## Vision
 
-1. **Always-Working Frontend First**
+To empower creators (writers, poets, educators, marketers) to effortlessly design and publish visually stunning, graphically rich eBooks, leveraging AI for enhanced creativity, efficiency, and personalization by:
 
-   - Frontend must maintain a consistent, working state at all times
-   - All components must be independently testable
-   - Clear separation between display and logic layers
-   - Predictable data flow and state management
-
-2. **"Dumb" Preview Component**
-   - Preview component's sole responsibility is to display $previewStore contents
-   - No internal fetch/update logic in the preview component
-   - All preview updates must flow through the store
-   - Clear separation from business logic and API calls
-
-These principles are fundamental to our architecture and must be maintained throughout both V0.1 and V1.0 development phases.
-
-## Project Vision
-
-AetherPress aims to revolutionize eBook creation by combining AI capabilities with user creativity:
-
-V0.1 Goals:
-
-- Demonstrate core AI-powered content and image generation
-- Establish fundamental user workflow and controls
-- Validate technical architecture and design decisions
-
-V1.0 Vision:
-
-- Empower creators to produce visually stunning eBooks effortlessly
-- Provide precise control over AI-generated content and layouts
-- Deliver production-quality results with minimal technical overhead
+- Delivering eye-catching, benchmark-quality drafts at lightning speed.
+- Empowering users with modular, precise control over every aspect of their eBook.
+- Acting as your creative partner—the AI handles the heavy lifting, leaving you free to perfect your vision.
 
 ## Unified Testing & Module System (Summary)
 
