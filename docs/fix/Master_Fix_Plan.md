@@ -279,3 +279,29 @@ This structured approach will systematically test each remaining hypothesis, wit
   - Repo-wide import audit and refactor: 30–120 minutes depending on findings.
 
 I will commit this update now and push it to the branch, then await your instruction whether to (A) increase the HMR stress test iteration count now, (B) add stack-trace instrumentation first, or (C) run the import-audit step next.
+
+## Next Actions (formalized) — pick one after lunch
+
+During the HMR stress test I proposed three pragmatic follow-ups. To keep the Master Fix Plan authoritative, I've promoted those options into the plan as formal actionable items. These are written so the team can pick one to run after a lunch break; each item includes a short description, acceptance criteria, and a time estimate.
+
+- [ ] A. Increase HMR stress test coverage (Priority: High)
+
+  - Description: Run an extended HMR stress test (recommended N=100) that touches multiple files in varying sequences (e.g., `client/src/lib/hmr-touch.js`, `client/src/components/PreviewWindow.svelte`, `client/src/lib/flows.js`, and `client/src/stores/index.js`) with randomized short delays. The goal is to raise the probability of reproducing the rogue-store import under more realistic dev editing patterns.
+  - Acceptance: either (1) the `Imported previewStore is NOT canonical` diagnostic is observed and captured, or (2) after 100 iterations no diagnostic appears and we can deprioritize intermittent HMR races in favor of deeper instrumentation.
+  - Time estimate: ~30–60 minutes (run time included).
+
+- [ ] B. Add stack-trace instrumentation at store creation (Priority: High — Recommended)
+
+  - Description: When a store is created (`getOrCreateStore`), capture a short stack trace (e.g., `new Error().stack`) and attach it to the store as `__creation_stack`. Re-run a shorter HMR stress test and, if a rogue instance appears, examine `store.__creation_stack` to identify the importer/module path responsible for creating that instance.
+  - Acceptance: when a non-canonical store is observed, we can identify the module path or call-site responsible via the saved stack trace. This yields a direct lead for fixing the import/path or timing issue.
+  - Time estimate: ~30–90 minutes (implementation + short stress-run).
+
+- [ ] C. Repo-wide import-audit & path standardization (Priority: Medium)
+  - Description: Search the `client/` tree for any relative imports of the stores (patterns like `../stores` or `../../stores`) and refactor them to the canonical alias (`$lib/stores`). Add a lightweight CI check or linter rule to ensure store imports use the alias going forward.
+  - Acceptance: no relative store import paths remain; dev server and tests still pass; re-run a short HMR stress test to see if the issue persists.
+  - Time estimate: ~30–120 minutes depending on number of occurrences and test/CI adjustments.
+
+Notes:
+
+- These items are now part of the Master Fix Plan and are tracked with checkboxes above. Pick one to run after lunch and I will execute it and record results back into this document.
+- Recommended next step: run B (stack-trace instrumentation) because it provides the clearest diagnostic signal and helps target a fix quickly.
