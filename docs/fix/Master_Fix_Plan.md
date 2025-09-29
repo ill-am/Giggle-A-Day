@@ -124,7 +124,6 @@ The process for each solution is:
 
   - All updated files for the HMR-proof store work and the dev instrumentation were committed to branch `AE-devolve/01-skip-puppeteer-preview-solution1` and pushed upstream.
 
-
 #### ADDENDUM: MON 29 SEP 2025 — The Rogue Subscriber Hunt: Next Steps
 
 **Discovery & Status Update:**
@@ -162,7 +161,6 @@ The following steps will be taken to isolate the source of the rogue store insta
 
 This structured approach will systematically test each remaining hypothesis, with the direct module identity inspection expected to provide the most definitive clue to guide the final fix.
 
-
 - [ ] **3. Verification:**
   - [ ] **Client Tests:** Run the full Vitest suite for the client.
   - [ ] **E2E Test:** Execute the `node client/tests/e2e/generate-and-verify.spec.mjs` script.
@@ -171,7 +169,7 @@ This structured approach will systematically test each remaining hypothesis, wit
     - Generate a preview.
     - Make a cosmetic change to a Svelte component (e.g., `PreviewWindow.svelte`) to trigger HMR.
     - Generate a second preview.
-- [ ] **4. Assessment:** Document whether the preview updates correctly after the HMR event.
+  - [ ] **4. Assessment:** Document whether the preview updates correctly after the HMR event.
 
 ---
 
@@ -189,7 +187,7 @@ This structured approach will systematically test each remaining hypothesis, wit
   - [ ] **Client Tests:** Run the full Vitest suite for the client.
   - [ ] **E2E Test:** Execute the `generate-and-verify.spec.mjs` script.
   - [ ] **Manual Walk-through:** Perform the same manual test as in Solution #1.
-- [ ] **4. Assessment:** Document if standardizing paths alone resolves the HMR issue.
+  - [ ] **4. Assessment:** Document if standardizing paths alone resolves the HMR issue.
 
 ---
 
@@ -207,7 +205,7 @@ This structured approach will systematically test each remaining hypothesis, wit
   - [ ] **Client Tests:** Update and run the client test suite to reflect the new API call.
   - [ ] **E2E Test:** Update and run the E2E test to use the new flow.
   - [ ] **Manual Walk-through:** Confirm the end-to-end functionality works as expected.
-- [ ] **6. Assessment:** Document the results of the architectural simplification.
+  - [ ] **6. Assessment:** Document the results of the architectural simplification.
 
 ---
 
@@ -226,3 +224,21 @@ This structured approach will systematically test each remaining hypothesis, wit
 - [ ] **4. Assessment:** The E2E test is now a more reliable indicator of true success.
 
 ---
+
+### STATUS UPDATE: Identity instrumentation and HMR stress test plan (29 SEP 2025)
+
+- Identity-check instrumentation (marker + runtime assertion) has been added to `client/src/stores/index.js` and `client/src/components/PreviewWindow.svelte`. The instrumentation runs only in development (`IS_DEV`) and writes diagnostic information to the console and to globals such as `window.__PREVIEW_WINDOW_LAST__` and `window.__STORE_WRITE_LOG__`.
+
+- E2E probe run after adding instrumentation (clean Playwright session) showed no rogue-store assertion (the `PreviewWindow` did not report a non-canonical import during the clean E2E run). This is consistent with prior observations: the bug reproduces under HMR cycles, not initial loads.
+
+- Next step: run an automated HMR stress test to try to reproduce the rogue-store situation in a repeatable way. The stress test will perform the following steps:
+
+  1. Ensure dev server is running.
+  2. Loop N times (recommended N=20):
+     - Touch (update mtime) a harmless client file that triggers HMR (e.g., `client/src/components/PreviewWindow.svelte` or a small `client/src/tmp/hmr-touch.js`).
+     - After each touch, wait for the dev server to finish HMR (monitor Vite websocket logs in `client/nohup.out` for update messages) and then run the Playwright E2E probe `node client/tests/e2e/generate-and-verify.spec.mjs` to exercise generate->preview and check whether the dev-only assertion logs a diagnostic.
+  3. If any iteration logs the diagnostic, capture `/workspaces/AetherPressDeux/test-artifacts/` and stop.
+
+- Time estimate for stress test run: ~15–30 minutes (20 iterations with short waits). If the rogue instance appears rarely, increase N or add randomized delays.
+
+- I will now commit this status update and run the HMR stress test (N=20). If the stress test reproduces the issue, I'll capture logs and update this plan with the discovery, including stack/module paths where possible. If it doesn't reproduce, I'll escalate to deeper instrumentation (stack traces on store creation) and proceed to audit `vite.config.js` and import paths.
