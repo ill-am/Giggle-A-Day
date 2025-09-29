@@ -5,6 +5,27 @@
 
   const _win = typeof window !== 'undefined' ? window : {};
 
+  // Dev-only assertion: if previewStore is not the canonical instance,
+  // log a detailed error to help diagnose rogue imports caused by HMR/module
+  // resolution divergence. This will not run in production.
+  try {
+    if (typeof window !== 'undefined' && window.IS_DEV) {
+      try {
+        const importedId = (previewStore && previewStore.__chronos_id) || null;
+        const isCanonical = !!(previewStore && previewStore.__is_canonical);
+        const globalId = (_win.__CHRONOS_STORES__ && _win.__CHRONOS_STORES__.__STORE_IDS__ && _win.__CHRONOS_STORES__.__STORE_IDS__.previewStore) || null;
+        if (!isCanonical) {
+          console.error('[DIAG][PreviewWindow] Imported previewStore is NOT canonical', {
+            importedId,
+            importedModuleUrl: (previewStore && previewStore.__module_url) || null,
+            globalId,
+            windowHasCanonical: !!(_win.__CHRONOS_STORES__ && _win.__CHRONOS_STORES__.previewStore),
+          });
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+
   onMount(() => {
     try {
       const verbose = _win.IS_DEV || false;

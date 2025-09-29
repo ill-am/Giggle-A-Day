@@ -284,6 +284,12 @@ function getOrCreateStore(name, initial) {
   // Save the store in the global container and keep a registry of ids
   try {
     if (typeof window !== "undefined") {
+      // Tag the store as canonical for runtime identity checks
+      try {
+        store.__is_canonical = true;
+        store.__module_url =
+          typeof import.meta !== "undefined" ? import.meta.url : null;
+      } catch (e) {}
       globalContainer[name] = store;
       try {
         if (!globalContainer.__STORE_IDS__) globalContainer.__STORE_IDS__ = {};
@@ -410,12 +416,23 @@ try {
           globalThis[CANONICAL_GLOBAL_KEY]["contentStore"] = contentStoreExport;
           globalThis[CANONICAL_GLOBAL_KEY]["previewStore"] = previewStoreExport;
           globalThis[CANONICAL_GLOBAL_KEY]["uiStateStore"] = uiStateStoreExport;
+          // Ensure mirrored canonical instances are tagged as canonical too
+          try {
+            if (globalThis[CANONICAL_GLOBAL_KEY].previewStore)
+              globalThis[
+                CANONICAL_GLOBAL_KEY
+              ].previewStore.__is_canonical = true;
+          } catch (e) {}
         }
         if (typeof window !== "undefined" && window[CANONICAL_GLOBAL_KEY]) {
           window[CANONICAL_GLOBAL_KEY]["promptStore"] = promptStoreExport;
           window[CANONICAL_GLOBAL_KEY]["contentStore"] = contentStoreExport;
           window[CANONICAL_GLOBAL_KEY]["previewStore"] = previewStoreExport;
           window[CANONICAL_GLOBAL_KEY]["uiStateStore"] = uiStateStoreExport;
+          try {
+            if (window[CANONICAL_GLOBAL_KEY].previewStore)
+              window[CANONICAL_GLOBAL_KEY].previewStore.__is_canonical = true;
+          } catch (e) {}
         }
       } catch (e) {}
     } catch (e) {}
