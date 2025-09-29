@@ -290,7 +290,7 @@ During the HMR stress test I proposed three pragmatic follow-ups. To keep the Ma
   - Acceptance: either (1) the `Imported previewStore is NOT canonical` diagnostic is observed and captured, or (2) after 100 iterations no diagnostic appears and we can deprioritize intermittent HMR races in favor of deeper instrumentation.
   - Time estimate: ~30–60 minutes (run time included).
 
-- [ ] B. Add stack-trace instrumentation at store creation (Priority: High — Recommended)
+- [ ] **B. Add stack-trace instrumentation at store creation** (Priority: High — Recommended)
 
   - Description: When a store is created (`getOrCreateStore`), capture a short stack trace (e.g., `new Error().stack`) and attach it to the store as `__creation_stack`. Re-run a shorter HMR stress test and, if a rogue instance appears, examine `store.__creation_stack` to identify the importer/module path responsible for creating that instance.
   - Acceptance: when a non-canonical store is observed, we can identify the module path or call-site responsible via the saved stack trace. This yields a direct lead for fixing the import/path or timing issue.
