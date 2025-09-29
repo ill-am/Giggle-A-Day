@@ -1,296 +1,163 @@
 # AetherPress Development Roadmap
 
-## Phase 0: Current Milestones
+## Core Principles
 
-### Core Infrastructure
+1. **Always-Working Frontend First**
 
-1. **Express Backend Setup** (In Progress ⏳)
-   Goal: Establish robust backend server infrastructure for handling API requests and business logic
-   Status:
-   - ✓ Server starts and handles requests reliably
-   - ✓ Basic API endpoint structure implemented
-   - ✓ Error handling with appropriate status codes
-   - ✓ Health check system implemented
-   - ✓ Startup reliability improvements
-   - ⏳ Advanced middleware chain in progress
-2. **Svelte Frontend Integration** (In Progress ⏳)
-   Goal: Provide responsive and intuitive user interface for content generation and management using Svelte SPA
-   Status:
+   - Frontend must maintain a consistent, working state at all times
+   - All components must be independently testable
+   - Clear separation between display and logic layers
+   - Predictable data flow and state management
 
-   - ✓ Frontend-backend communication established
-   - ✓ Basic components implemented
-   - ✓ Loading states and error handling
-   - ✓ Retry logic for reliability
-   - ✓ User feedback mechanisms
-   - ⏳ Advanced UI features in progress
+2. **"Dumb" Preview Component**
+   - Preview component's sole responsibility is to display $previewStore contents
+   - No internal fetch/update logic in the preview component
+   - All preview updates must flow through the store
+   - Clear separation from business logic and API calls
 
-3. **SQLite Database Implementation** (In Progress ⏳)
-   Goal: Reliable data persistence layer for storing user content and application state using SQLite (with future migration to PostgreSQL planned)
-   Status:
+## Phase 1: Foundation
 
-   - ✓ SQLite initialization and basic setup
-   - ✓ Basic CRUD operations implemented
-   - ✓ Migration system in place
-   - ✓ PostgreSQL migration plan documented
-   - ⏳ Advanced query optimization pending
-   - ⏳ Full schema implementation in progress
+### 1. Store-Centric Architecture (Priority ⭐⭐⭐)
 
-4. **API Architecture Enhancement** (Pending)
-   Goal: Complete and optimize API endpoint structure
-   Acceptance Criteria:
+1. **Core Store Implementation**
 
----
+   - Single source of truth for application state
+   - Predictable update patterns
+   - Clear subscription model
+   - Robust error handling
 
-## Future Feature: Centralized Error Code System
+2. **Store Interaction Layer**
 
-- Implement a database or mapping of error codes to human-readable messages for all endpoints and client error handling.
-- Error codes will be exchanged in API responses and logs; messages will be referenced via lookup for display and documentation.
-- Benefits: Consistent error handling, easier localization, improved maintainability, and robust automated testing.
+   - Centralized store update logic
+   - Clear separation from UI components
+   - Predictable state transitions
+   - Comprehensive error boundaries
 
----
+3. **Component Architecture**
+   - "Dumb" display components
+   - Clear props/events contracts
+   - Strict separation of concerns
+   - Independent testability
 
-- RESTful endpoint organization
-- Comprehensive route documentation
-- Standardized response formats
-- Security best practices implemented
+### 2. Preview System (Priority ⭐⭐⭐)
 
-5. **Project Structure Optimization** (Pending)
-   Goal: Establish maintainable and scalable project organization
-   Acceptance Criteria:
-   - Clear directory hierarchy
-   - Module separation
-   - Configuration management
-   - Development workflow optimization
+1. **Preview Store**
 
-### Base Features (MVP)
+   - Single source of truth for preview content
+   - Clear update lifecycle
+   - Predictable state transitions
+   - Robust error handling
 
-1. **Prompt Handling** (Pending)
-   Goal: Accept user input for AI processing and route it to the backend.
-   Acceptance Criteria:
-   - User can submit a prompt via the frontend.
-   - Backend receives and processes the prompt.
-   - System provides feedback on submission success or failure.
+2. **Preview Component**
 
-2. **AI Processing** (Pending)
-   Goal: Simulate AI content generation using a service abstraction layer.
-   Acceptance Criteria:
-   - Backend generates content using hardcoded logic or a mock AI service.
-   - Service abstraction layer is in place for future real AI integration.
-   - Errors in AI processing are handled gracefully.
+   - Pure display functionality
+   - Store subscription only
+   - No internal fetch/update logic
+   - Clear error states
 
-3. **Preview Generation** (Pending)
-   Goal: Provide a basic HTML preview of generated content.
-   Acceptance Criteria:
-   - User can preview generated content in the frontend.
-   - Preview updates in real time as content changes.
-   - Preview matches the structure of the final export.
+3. **Preview Update Service**
+   - Centralized update logic
+   - Clear retry strategies
+   - Proper error handling
+   - Predictable update flow
 
-4. **Basic Override** (Pending)
-   Goal: Allow minimal user edits to generated content before export.
-   Acceptance Criteria:
-   - User can edit content in the frontend.
-   - Edits are reflected in the preview.
-   - Edits are included in the exported PDF.
+### 3. API Integration (Priority ⭐⭐)
 
-5. **PDF Export (Prototype)** (Pending)
-   Goal: Generate PDFs using pdf-lib for prototype purposes.
-   Acceptance Criteria:
-   - User can export content as a PDF.
-   - Exported PDF matches the preview layout.
-   - PDF generation is reliable for basic content.
+1. **Service Layer**
 
-6. **Database Integration** (Pending)
-   Goal: Store and retrieve content using SQLite.
-   Acceptance Criteria:
-   - Content is saved to and loaded from the database.
-   - Database operations are reliable and performant.
-   - Test endpoint verifies database functionality.
+   - Clear separation from UI
+   - Robust error handling
+   - Retry strategies
+   - Response normalization
 
-## Upcoming Milestones
+2. **State Synchronization**
+   - Predictable update patterns
+   - Clear loading states
+   - Error recovery
+   - Optimistic updates
 
-### Phase 1: Core Enhancement
+## Phase 2: Features
 
-1. **AI Integration** (Planned)
-   Goal: Integrate real AI services for text and image generation.
-   Acceptance Criteria:
-   - System can connect to at least one external AI provider (e.g., OpenAI, Gemini).
-   - User can select between simulated and real AI processing.
-   - AI-generated content is distinguishable from simulated content.
-   - Error handling and fallback for AI service outages.
+### 1. Content Management
 
-2. **PDF Generation Upgrade** (Planned)
-   Goal: Migrate from pdf-lib to Puppeteer for advanced PDF export.
-   Acceptance Criteria:
-   - PDFs support advanced HTML/CSS layouts and images.
-   - Exported PDFs match the on-screen preview.
-   - Generation time is reasonable for complex documents.
-   - System can switch between pdf-lib and Puppeteer as needed.
+1. **Content Store**
 
-3. **Performance Optimization** (Planned)
-   Goal: Implement asynchronous processing and improve system responsiveness.
-   Acceptance Criteria:
-   - Backend supports async request handling for long-running tasks.
-   - UI remains responsive during heavy processing.
-   - System can queue and process multiple requests efficiently.
-   - Performance metrics are tracked and reported.
+   - Centralized content state
+   - Clear update patterns
+   - Version tracking
+   - Undo/redo support
 
-4. **UI/UX Enhancement** (Planned)
-   Goal: Improve the frontend for a more interactive and accessible user experience.
-   Acceptance Criteria:
-   - UI updates in real time as data changes.
-   - Accessibility standards (WCAG 2.1) are met.
-   - User feedback is collected and incorporated into design.
-   - Mobile and tablet layouts are supported.
+2. **Edit Interface**
+   - Clear separation from preview
+   - Independent validation
+   - Predictable update flow
+   - Robust error handling
 
-5. **User Authentication & Session Management** (Planned)
-   Goal: Add secure user authentication and session management.
-   Acceptance Criteria:
-   - Users can register, log in, and log out securely.
-   - Sessions persist across browser reloads.
-   - Role-based access control is implemented.
-   - Sensitive data is protected according to best practices.
+### 2. Export System
 
-6. **Database Migration to PostgreSQL** (Planned)
-   Goal: Transition from SQLite to PostgreSQL for production scalability and advanced features.
-   Acceptance Criteria:
-   - PostgreSQL is set up and integrated as the primary database.
-   - Data is migrated from SQLite to PostgreSQL with integrity.
-   - New features leverage PostgreSQL capabilities.
-   - Documentation is updated to reflect the migration.
+1. **Export Service**
 
-7. **Database Schema Expansion** (Planned)
-   Goal: Expand the database to support more complex workflows and data types.
-   Acceptance Criteria:
-   - New tables and relationships are added for advanced features.
-   - Migrations are automated and reversible.
-   - Data integrity is maintained during schema changes.
-   - Documentation is updated to reflect schema changes.
+   - Clear separation from UI
+   - Robust error handling
+   - Progress tracking
+   - Cancellation support
 
-### Phase 2: User Experience & Content Management
+2. **Export Interface**
+   - Progress visualization
+   - Clear error states
+   - Retry capabilities
+   - Format options
 
-1. **Enhanced UI/UX** (Planned)
-   - Goal: Deliver a highly interactive, accessible, and visually appealing user interface.
-   - Acceptance Criteria:
-     - UI is responsive across all major devices and browsers.
-     - Accessibility standards (WCAG 2.1) are met or exceeded.
-     - User feedback is regularly collected and incorporated.
-     - Visual design is consistent and modern.
+## Quality Assurance
 
-2. **User Management System** (Planned)
-   - Goal: Provide robust user authentication, authorization, and profile management.
-   - Acceptance Criteria:
-     - Users can register, log in, and manage their profiles.
-     - Role-based access control is enforced throughout the app.
-     - Passwords and sensitive data are securely stored and transmitted.
-     - Admins can manage users and permissions.
+### 1. Testing Strategy
 
-3. **Content Management & Organization** (Planned)
-   - Goal: Enable users to organize, version, and manage their content efficiently.
-   - Acceptance Criteria:
-     - Users can create, edit, and delete projects or documents.
-     - Version history and rollback are available for all content.
-     - Content can be organized into folders or categories.
-     - Bulk operations (delete, move, export) are supported.
+1. **Component Testing**
 
-4. **Template & Asset Management** (Planned)
-   - Goal: Allow users to manage templates and assets for content and export.
-   - Acceptance Criteria:
-     - Users can create, edit, and select templates for content and PDF export.
-     - Asset uploads (images, logos, etc.) are supported and managed.
-     - Templates and assets are reusable across projects.
-     - System validates and previews templates before use.
+   - Independent component tests
+   - Store integration tests
+   - Service mock testing
+   - E2E critical paths
 
-5. **Notifications & Feedback** (Planned)
-   - Goal: Keep users informed of important events and provide actionable feedback.
-   - Acceptance Criteria:
-     - Users receive notifications for key events (export complete, errors, etc.).
-     - Feedback is clear, actionable, and non-intrusive.
-     - Notification settings are user-configurable.
-     - System logs user actions for support and analytics.
+2. **Store Testing**
+   - State transition tests
+   - Error handling tests
+   - Race condition tests
+   - Integration tests
 
-### Phase 3: Advanced Features & Future Considerations
+### 2. Monitoring
 
-1. **Workflow Automation** (Planned)
-   - Goal: Allow users to automate and customize content generation and export workflows.
-   - Acceptance Criteria:
-     - Users can define multi-step workflows (e.g., generate, review, export).
-     - Conditional logic and scheduling are supported.
-     - Workflow progress and status are visible to users.
-     - Error handling and recovery are robust.
+1. **Frontend Monitoring**
 
-2. **Integration Framework** (Planned)
-   - Goal: Enable extensibility and integration with third-party services and tools.
-   - Acceptance Criteria:
-     - REST API is documented and supports all major operations.
-     - Webhook support for external event notifications.
-     - OAuth and API key management for integrations.
-     - Security and rate limiting are enforced.
+   - Store state tracking
+   - Performance metrics
+   - Error tracking
+   - User interaction flows
 
-3. **Analytics & Monitoring** (Planned)
-   - Goal: Provide actionable insights into usage, performance, and user behavior.
-   - Acceptance Criteria:
-     - Real-time dashboards for key metrics (usage, errors, performance).
-     - Custom report generation for admins and users.
-     - Alerts for critical issues or anomalies.
-     - Data export for further analysis.
+2. **Integration Monitoring**
+   - API call tracking
+   - State sync monitoring
+   - Error pattern detection
+   - Performance metrics
 
-4. **Enterprise & Community Features** (Planned)
-   - Goal: Support advanced deployment, collaboration, and extensibility needs.
-   - Acceptance Criteria:
-     - Multi-tenant and enterprise authentication support.
-     - Plugin and template marketplace for community contributions.
-     - Custom deployment and scaling options.
-     - SLA monitoring and support tools.
+## Success Criteria
 
-## Implementation Guidelines
+1. **Frontend Stability**
 
-### Development Priorities
+   - No unhandled errors
+   - Clear error states
+   - Predictable behavior
+   - Fast recovery
 
-1. Focus on stability and reliability
-2. Maintain clean architecture
-3. Regular security updates
-4. Performance optimization
-5. User-centric development
+2. **Preview Reliability**
 
-### Quality Assurance
+   - Consistent display
+   - Clear loading states
+   - Graceful error handling
+   - No race conditions
 
-- Comprehensive testing
-- Security audits
-- Performance benchmarking
-- User feedback integration
-
-### Documentation
-
-- API documentation
-- User guides
-- Developer documentation
-- Implementation examples
-
-## Short-term Actionable Checklist (Day4 / ISSUES_Recommended)
-
-Priority: follow ISSUES_Recommended first, then execute Day4 test matrix.
-
-Local (can run now in this workspace):
-
-- [x] Create `.env.example` and document required envs — already present.
-- [x] Install server dependencies (`cd server && npm ci`) and run server tests — done (Vitest passing).
-- [x] Install client dependencies (`cd client && npm ci`) and run client tests — done (Vitest passing).
-- [x] Puppeteer smoke export using `puppeteer-core` and `CHROME_PATH` — done locally; `samples/puppeteer_smoke_test.pdf` generated.
-
-Requires devcontainer/Docker (needs Docker on host or Codespace):
-
-- [ ] Start `db` service from `.devcontainer/docker-compose.yml` and verify DB readiness with `./scripts/devcontainer_smoke_health.sh`.
-- [ ] Confirm `postCreateCommand` completes inside devcontainer (dependency installs, global `concurrently`).
-- [ ] Run Puppeteer smoke export inside devcontainer to validate installed Chrome and `CHROME_PATH` integration.
-
-CI (requires GitHub Actions run):
-
-- [ ] Validate `ci-smoke-puppeteer.yml` runs successfully in GitHub Actions and uploads the PDF artifact.
-
-If Docker is unavailable locally, use a Codespace with Docker enabled or run the `db` service on a host and point `DATABASE_URL` to it for final verification.
-
-## Policy: Planning vs Implementation Flow
-
-- Planning authoritative flow: ROADMAP → MVP_CHECKLIST → NEXT_STEPS → ISSUES.
-- Implementation/status flow (when work is executed and checked off): ISSUES → NEXT_STEPS → MVP_CHECKLIST → ROADMAP.
-- Rule: Planning and priority decisions come from the ROADMAP. When an ISSUE is completed, update the NEXT_STEPS checkbox and the MVP_CHECKLIST status; if the completed work changes roadmap phase or scope, update `docs/ROADMAP.md` with a short note and link to the implementing PR.
+3. **User Experience**
+   - Immediate feedback
+   - Clear state indication
+   - Predictable behavior
+   - Graceful degradation
