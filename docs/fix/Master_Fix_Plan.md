@@ -242,3 +242,40 @@ This structured approach will systematically test each remaining hypothesis, wit
 - Time estimate for stress test run: ~15–30 minutes (20 iterations with short waits). If the rogue instance appears rarely, increase N or add randomized delays.
 
 - I will now commit this status update and run the HMR stress test (N=20). If the stress test reproduces the issue, I'll capture logs and update this plan with the discovery, including stack/module paths where possible. If it doesn't reproduce, I'll escalate to deeper instrumentation (stack traces on store creation) and proceed to audit `vite.config.js` and import paths.
+
+### HMR Stress Test: run 29 SEP 2025
+
+- Test plan: touched a tracked helper file (`client/src/lib/hmr-touch.js`) 20 times, after each touch running the E2E probe `node client/tests/e2e/generate-and-verify.spec.mjs` to exercise the generate->preview flow and capture any dev-only diagnostic logs from `PreviewWindow.svelte`.
+
+- Outcome summary:
+
+  - Iterations attempted: 20
+  - Rogue-store diagnostic (`Imported previewStore is NOT canonical`) was **not observed** in any of the iterations.
+  - The application successfully completed the generate->preview flow and saved the artifact multiple times during the stress test (several iterations recorded `E2E smoke completed successfully — preview saved to /workspaces/AetherPressDeux/test-artifacts/preview-fetched-from-e2e.html`).
+  - Intermittent issues observed during the run:
+    - Several E2E attempts encountered HTTP 429 (Too Many Requests) from `/prompt` during tight loops. This is a rate-limiting symptom caused by repeated automated requests in quick succession. Some attempts timed out waiting for preview as a result.
+    - Vite dev server printed occasional `WebSocket closed without opened` errors in the Playwright page logs. These did not prevent the E2E probe from completing successfully in many iterations.
+
+- Conclusion:
+
+  - This HMR stress test did not reproduce the rogue-store import in 20 iterations. That means the issue is either rarer than this test's sample size, dependent on a specific sequence of HMR events we didn't trigger, or connected to developer interactions (manual edits, route changes, or certain plugins) not simulated here.
+
+- Immediate next steps (recommended):
+
+  1. Increase stress-test coverage:
+     - Raise iteration count (e.g., N=100) and add randomized small delays between touches to broaden coverage.
+     - Include touching different modules (e.g., `client/src/components/PreviewWindow.svelte`, `client/src/lib/flows.js`, and `client/src/stores/index.js` itself) in varying sequences to better emulate real developer edits.
+  2. Add stack-trace instrumentation at store creation:
+     - When `getOrCreateStore` creates a new store instance, capture a short stack trace (e.g., new Error().stack) and store it in `store.__creation_stack` so we can later correlate which importer created the instance.
+  3. Audit and enforce import paths:
+     - Run a repo-wide search for any relative imports of the stores and refactor them to `$lib/stores` to reduce chances of duplicate module resolution.
+  4. Check for duplicate Svelte runtime versions:
+     - Run `npm --prefix client ls svelte` and address any duplicates by deduping or locking versions.
+  5. If a reproducible case appears, capture artifacts immediately (page console, `client/nohup.out`, `window.__STORE_WRITE_LOG__`, and `window.__PREVIEW_WINDOW_LAST__`) and attach to this plan for analysis.
+
+- Time estimate for next actions:
+  - Increase stress test to N=100 with randomized delays: 30–60 minutes (run time included).
+  - Add stack-trace instrumentation and re-run stress test: 30–90 minutes.
+  - Repo-wide import audit and refactor: 30–120 minutes depending on findings.
+
+I will commit this update now and push it to the branch, then await your instruction whether to (A) increase the HMR stress test iteration count now, (B) add stack-trace instrumentation first, or (C) run the import-audit step next.
