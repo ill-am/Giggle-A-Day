@@ -1,7 +1,7 @@
 # MVP Checklist
 
 Document Version: dv01
-Datetime: 2025-09-29 16:35 UTC
+Datetime: 2025-09-29 16:35 UTC  || 2025-09-29 18:15 UTC
 Branch: feature/anew
 
 ## Implementation Strategy
@@ -16,6 +16,7 @@ Branch: feature/anew
 ## Core Functionality
 
 ### V0.1 Preview Pipeline ⭐ (3-4 days)
+
 # Foundation for V1.0 preview system
 
 #### Basic Store
@@ -71,6 +72,28 @@ Branch: feature/anew
   - [ ] User feedback (2-3 hours)
   - [ ] Recovery options (2-3 hours)
 
+### AI Integration (2-3 days)
+
+#### Gemini Integration
+
+- [ ] Basic text generation (4-6 hours)
+- [ ] Image generation setup (4-6 hours)
+- [ ] Error handling & fallbacks (4-6 hours)
+
+#### Summer Poems POC
+
+- [ ] Poem processing pipeline (4-6 hours)
+- [ ] Theme-based image generation (4-6 hours)
+- [ ] Page layout templates (4-6 hours)
+
+### Data Management (1-2 days)
+
+#### PostgreSQL Integration
+
+- [ ] Basic schema setup (2-3 hours)
+- [ ] JSONB content storage (2-3 hours)
+- [ ] Basic query patterns (2-3 hours)
+
 ## Testing & Validation
 
 ### Basic Testing ⭐ (2-3 days)
@@ -88,6 +111,14 @@ Branch: feature/anew
   - [ ] Pipeline errors (2-3 hours)
   - [ ] Content errors (2-3 hours)
   - [ ] Export errors (2-3 hours)
+
+### Quality Gates (1-2 days)
+
+#### Smoke Tests
+
+- [ ] Preview pipeline verification (2-3 hours)
+- [ ] Export path validation (2-3 hours)
+- [ ] Integration test coverage (2-3 hours)
 
 ## Success Criteria ⭐
 
@@ -111,3 +142,51 @@ Total Estimated Time: 9-13 days
 Core Priority Items (⭐): 7-10 days
 
 Note: All implementations should be real (not mocked) but minimal. Focus is on getting a genuine working system, even if feature-light.
+
+## Implementation Order
+
+1. Basic Store → Preview Display → Backend Connection
+2. Content Management → AI Integration
+3. Export System → Quality Gates
+
+## Parallel Development Tracks
+
+Track A: Frontend (Preview Pipeline)
+Track B: Backend (AI & Data)
+Track C: Testing & Quality
+
+## Extended Success Criteria
+
+### Technical Foundation
+
+- [ ] Working AI integration with fallbacks
+- [ ] Stable PostgreSQL data flow
+- [ ] Reliable preview-to-PDF pipeline
+
+### POC Validation
+
+- [ ] Summer poems generation working
+- [ ] Theme-based backgrounds functional
+- [ ] Consistent PDF output quality
+
+## Timeline Overview
+
+Phase 1 (3-4 days):
+
+- Core store and preview setup
+- Basic backend integration
+- Initial data persistence
+
+Phase 2 (3-4 days):
+
+- AI integration
+- Content processing
+- Summer poems POC
+
+Phase 3 (3-5 days):
+
+- Export system
+- Quality assurance
+- Documentation & validation
+
+Total: 9-13 days (unchanged but better organized)
