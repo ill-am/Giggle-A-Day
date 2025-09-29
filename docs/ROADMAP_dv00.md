@@ -1,5 +1,8 @@
 # AetherPress Development Roadmap
 
+Document Version: dv00
+Datetime: 2025-09-29 16:00 UTC
+
 ## Core Principles
 
 1. **Always-Working Frontend First**

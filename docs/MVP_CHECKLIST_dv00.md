@@ -1,5 +1,8 @@
 # MVP Checklist
 
+Document Version: dv00
+Datetime: 2025-09-29 16:00 UTC
+
 ## Core Architecture
 
 ### Store-First Architecture ⭐ (4-5 days total)
