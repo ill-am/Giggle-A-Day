@@ -19,9 +19,9 @@ Overview & Total Estimate
 
 Phase 0 — Preparation (Estimate: 0.5 - 1 day) | In branch `aether-rewrite/client-phase0`
 
-- [ ] Create `client-v2/` skeleton (Vite + Svelte)
+- [x] Create `client-v2/` skeleton (Vite + Svelte)
   - Estimate: 2-3 hours
-  - Acceptance: `client-v2` dev server runs locally and serves default page. Verification: commit/PR `________`
+  - Acceptance: `client-v2` dev server runs locally and serves default page. Verification: commit/PR `2bce478`, `c23d43d`
 - [ ] Add feature-flag routing + single-route toggle
   - Estimate: 1-2 hours
   - Acceptance: toggle a specific route to `client-v2` locally. Verification: commit/PR `________`
@@ -43,6 +43,14 @@ Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) | In branc
 - [ ] Add visual snapshots (DOM or image) and integrate into PR checks
   - Estimate: 2-4 hours
   - Acceptance: snapshot tests run and diff is reviewed. Verification: PR `________`
+
+**Minimal verification checklist**
+[x] client-v2 dev server starts and serves a default preview page on port 5174. — Verified (commit `2bce478`, `c23d43d`)
+[x] One preview page in client-v2 with static content renders correctly and is screenshot-captured (manual visual check). — Verified (commit `2bce478`)
+[x] Devcontainer or local run instructions added to README (one-liner: how to run client-v2). — Verified (commit `2bce478`)
+[x] Branch created and pushed: `aether-rewrite/client-phase0`. — Verified (branch created & pushed, see commit `2bce478`)
+[ ] Server routing toggle routes /preview to client-v2 when flag enabled.
+[ ] npm run test in client-v2 passes (basic unit test).
 
 Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days) | In branch `aether-rewrite/client-phase2`
 
