@@ -1,7 +1,8 @@
 {
   "name": "client-v2",
-  "version": "0.0.0",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -9,10 +10,10 @@
     "test": "vitest"
   },
   "devDependencies": {
-    "vite": "^5.4.20",
-    "svelte": "^4.0.0",
-    "@sveltejs/vite-plugin-svelte": "^5.0.0",
-    "vitest": "^0.34.0",
-    "@testing-library/svelte": "^5.0.0"
+    "@sveltejs/vite-plugin-svelte": "^5.1.0",
+    "@testing-library/svelte": "^4.2.3",
+    "svelte": "^5.35.2",
+    "vite": "^6.2",
+    "vitest": "^3.2.4"
   }
 }
