@@ -1,5 +1,9 @@
 {
   "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "$lib/*": ["src/*"]
+    },
     "moduleResolution": "bundler",
     "target": "ESNext",
     "module": "ESNext",
@@ -28,5 +32,10 @@
    * Use global.d.ts instead of compilerOptions.types
    * to avoid limiting type declarations.
    */
-  "include": ["src/**/*.d.ts", "src/**/*.js", "src/**/*.svelte", "src/components/PromptInput copy_svelte.txt"]
+  "include": [
+    "src/**/*.d.ts",
+    "src/**/*.js",
+    "src/**/*.svelte",
+    "src/components/PromptInput copy_svelte.txt"
+  ]
 }

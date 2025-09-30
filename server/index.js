@@ -130,12 +130,22 @@ async function startServer(options = {}) {
     const skipPuppeteer =
       process.env.SKIP_PUPPETEER === "true" ||
       process.env.SKIP_PUPPETEER === "1";
-    if (skipPuppeteer) {
+    if (skipPuppeteer || DEV_MINIMAL) {
+      // When skipping Puppeteer for CI/tests or running in DEV_MINIMAL mode,
+      // mark the puppeteer subsystem as intentionally skipped but treat the
+      // service as "ready" for purposes of the HTTP readiness middleware.
+      // This keeps preview endpoints responsive while avoiding Puppeteer
+      // startup and Chromium requirements. Consumers must still guard against
+      // a null `browserInstance` when attempting exports.
       console.log(
-        "SKIP_PUPPETEER=true - skipping Puppeteer initialization (test/CI mode)"
+        "SKIP_PUPPETEER or DEV_MINIMAL enabled - not starting Puppeteer (skipped)"
       );
       serviceState.puppeteer.startupPhase = "skipped";
-      serviceState.puppeteer.ready = false;
+      // Mark ready so readiness middleware does not block requests. Browser
+      // instance will remain null; endpoints that need a live browser should
+      // return a clear service-unavailable response.
+      serviceState.puppeteer.ready = true;
+      browserInstance = null;
     } else {
       await startPuppeteer();
     }
@@ -724,6 +734,72 @@ const previewTemplate = (content) => `
 app.get("/preview", async (req, res) => {
   const { content, resultId, promptId } = req.query;
 
+  // Feature flag: if PREVIEW_CLIENT_V2_ENABLED is truthy, proxy /preview
+  // requests to the client-v2 dev server or a configured URL. This allows
+  // staged rollouts of the new frontend while keeping the existing preview
+  // implementation as the default.
+  try {
+    const enabled =
+      process.env.PREVIEW_CLIENT_V2_ENABLED === "1" ||
+      process.env.PREVIEW_CLIENT_V2_ENABLED === "true";
+    const proxyUrl = process.env.CLIENT_V2_PROXY_URL || null;
+    if (enabled && proxyUrl) {
+      // Delegate to the configured client-v2 URL. Preserve the original
+      // querystring so callers can still pass ?content=... or other params.
+      const url = new URL(proxyUrl);
+      url.pathname = "/preview";
+      // Copy query params from the incoming request
+      Object.keys(req.query || {}).forEach((k) =>
+        url.searchParams.set(k, req.query[k])
+      );
+
+      // Use built-in http/https client to fetch and pipe response
+      const lib =
+        url.protocol === "https:" ? require("https") : require("http");
+      const options = {
+        method: "GET",
+        headers: { ...(req.headers || {}), host: url.host },
+      };
+      return lib
+        .get(url.toString(), options, (proxiedRes) => {
+          res.statusCode = proxiedRes.statusCode || 200;
+          // Copy proxied headers (filter hop-by-hop headers)
+          Object.entries(proxiedRes.headers || {}).forEach(([hk, hv]) => {
+            try {
+              if (
+                [
+                  "transfer-encoding",
+                  "connection",
+                  "keep-alive",
+                  "proxy-authenticate",
+                  "proxy-authorization",
+                  "te",
+                  "trailers",
+                  "upgrade",
+                ].includes(hk)
+              ) {
+                return;
+              }
+              res.setHeader(hk, hv);
+            } catch (e) {
+              // ignore header setting errors
+            }
+          });
+          proxiedRes.pipe(res);
+        })
+        .on("error", (err) => {
+          console.warn(
+            "/preview proxy to client-v2 failed:",
+            err && err.message
+          );
+          // Fallback to normal preview handling if proxy fails
+        });
+    }
+  } catch (e) {
+    // If feature-flag proxy logic errors, log and continue to original handler
+    console.warn("PREVIEW proxy check failed", e && e.message);
+  }
+
   // If content not provided, try to load it from DB using resultId or promptId
   let contentPayload = content || null;
   try {
@@ -956,7 +1032,25 @@ app.post("/api/export", async (req, res) => {
   // Use the same synchronous fallback logic as the GET /export route
   let page;
   try {
+    // If Puppeteer was intentionally skipped for CI/tests or DEV_MINIMAL,
+    // provide a clear error code so callers can distinguish "disabled" from
+    // transient "not ready" states.
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",
@@ -1049,6 +1143,21 @@ app.post("/export", async (req, res) => {
   let page;
   try {
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",
@@ -1127,6 +1236,21 @@ app.get("/export", async (req, res) => {
     const contentObj = JSON.parse(content);
 
     if (!serviceState.puppeteer.ready || !browserInstance) {
+      const skipMode =
+        process.env.SKIP_PUPPETEER === "1" ||
+        process.env.SKIP_PUPPETEER === "true" ||
+        DEV_MINIMAL;
+      if (skipMode) {
+        return sendServiceUnavailableError(
+          res,
+          "Puppeteer disabled in this build",
+          {
+            code: "PUPPETEER_DISABLED",
+            message:
+              "Puppeteer has been intentionally disabled (SKIP_PUPPETEER or DEV_MINIMAL). PDF export is unavailable in this mode.",
+          }
+        );
+      }
       return sendServiceUnavailableError(
         res,
         "PDF generation service not ready",

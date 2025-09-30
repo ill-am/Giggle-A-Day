@@ -5,6 +5,9 @@ import {
   savePromptContent,
   updatePromptContent,
 } from "./api";
+
+const IS_DEV =
+  typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
 import genieServiceFE from "./genieServiceFE";
 import {
   contentStore,
@@ -14,7 +17,9 @@ import {
   setUiSuccess,
   setUiError,
   persistContent,
-} from "../stores";
+} from "$lib/stores";
+
+const _win = typeof window !== "undefined" ? window : {};
 
 const DEFAULT_TIMEOUT_MS = 10000; // 10s
 
@@ -39,14 +44,7 @@ export function cancelPreview() {
   }
 }
 
-function withTimeout(promise, ms = DEFAULT_TIMEOUT_MS) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Request timed out")), ms)
-    ),
-  ]);
-}
+import { withTimeout } from "./timeout";
 
 /**
  * Call the preview API for a piece of content and update stores/UI state.
@@ -75,8 +73,40 @@ export async function previewFromContent(
 
   try {
     const html = await withTimeout(loadPreview(content, { signal }), timeoutMs);
+
+    // Debug logging for preview chain
+    if (IS_DEV) {
+      console.debug("[DEV] Preview chain debug:", {
+        content: content,
+        previewHtml: html?.substring(0, 100) + "...",
+        htmlLength: html?.length,
+      });
+    }
+
     // Ensure previewStore is updated with the returned HTML
+    try {
+      if (IS_DEV) {
+        try {
+          console.debug(
+            "[DEV] previewStore.set (previewFromContent) storeId:",
+            previewStore && previewStore.__chronos_id,
+            "canonicalIds:",
+            (_win.__CHRONOS_STORES__ &&
+              _win.__CHRONOS_STORES__.__STORE_IDS__) ||
+              null
+          );
+        } catch (e) {}
+      }
+    } catch (e) {}
     previewStore.set(html);
+
+    if (IS_DEV) {
+      console.debug("[DEV] previewStore updated:", {
+        storeValue: get(previewStore)?.substring(0, 100) + "...",
+        valueLength: get(previewStore)?.length,
+      });
+    }
+
     uiStateStore.set({ status: "success", message: "Preview loaded" });
     // If this request is still the active controller, clear the global
     // reference so subsequent calls start fresh. If a newer request has
@@ -126,69 +156,65 @@ export async function generateAndPreview(
   setUiLoading("Generating content...");
 
   try {
-    // Prefer using the frontend genie service which may implement a dev/demo
-    // implementation or delegate to the server. Fall back to submitPrompt
-    // to preserve existing behaviour.
-    let response;
-    try {
-      response = await withTimeout(
-        genieServiceFE.generate(prompt, {}),
-        timeoutMs
-      );
-    } catch (e) {
-      // If the frontend service fails for some reason, fall back to the
-      // existing server API call to avoid breaking the flow.
-      response = await withTimeout(submitPrompt(prompt), timeoutMs);
-    }
+    // Step 1: Kick off the generation and get the server response. Wrap the
+    // submit step in a timeout so tests that simulate a never-resolving
+    // submission can be exercised deterministically.
+    const submitPromptWithTimeout = withTimeout(
+      submitPrompt(prompt),
+      timeoutMs
+    );
 
-    // genieServiceFE.generate returns { content, copies, meta } or submitPrompt
-    // returns the legacy shape { data: { content } } so normalize both.
+    // Await the timed-out promise
+    const response = await submitPromptWithTimeout;
+
+    // Extract the actual content from the response object.
+    // The server may wrap the content in `data.content`.
     const content =
-      (response && response.content) ||
       (response && response.data && response.data.content) ||
       response.content ||
-      null;
-    if (!content) {
-      throw new Error("Invalid response structure from server.");
+      response;
+
+    // Validate the extracted content.
+    if (!content || !content.title || !content.body) {
+      console.error("Invalid server response structure:", response);
+      throw new Error("Invalid content response from server.");
     }
 
-    // Immediately set the generated content locally so the UI can render a
-    // fallback preview without waiting for network persistence.
+    setUiLoading("Loading preview...");
+
+    // Step 2: Fetch the real preview HTML, passing the content.
+    const loadPreviewWithTimeout = withTimeout(loadPreview(content), timeoutMs);
+    const previewHtml = await loadPreviewWithTimeout;
+
+    // Step 3: Set the content in the store *before* persisting.
     contentStore.set(content);
 
-    // Persist content to server prompts API in background. If it succeeds,
-    // persistContent will update contentStore with server-provided fields
-    // (like promptId). If it fails, we surface a non-blocking warning but
-    // don't block the user from seeing the preview.
-    let persisted = content;
-    (async () => {
-      try {
-        const result = await persistContent(content);
-        persisted = result || content;
-        // After persistence, attempt to refresh the preview with persisted data
+    // Step 4: Set the authoritative preview content.
+    try {
+      if (IS_DEV) {
         try {
-          await previewFromContent(persisted, timeoutMs);
-        } catch (e) {
-          // ignore preview refresh errors here; previewFromContent already
-          // sets UI state appropriately
-        }
-      } catch (saveErr) {
-        console.warn(
-          "Failed to persist generated content to server",
-          saveErr && saveErr.message
-        );
-        // Surface a non-blocking UI warning
-        uiStateStore.set({
-          status: "error",
-          message: "Saved locally; failed to persist to server.",
-        });
+          console.debug(
+            "[DEV] previewStore.set (generateAndPreview) storeId:",
+            previewStore && previewStore.__chronos_id,
+            "canonicalIds:",
+            (_win.__CHRONOS_STORES__ &&
+              _win.__CHRONOS_STORES__.__STORE_IDS__) ||
+              null
+          );
+        } catch (e) {}
       }
-    })();
+    } catch (e) {}
+    previewStore.set(previewHtml);
 
-    // Trigger preview for the newly generated content (use local content so
-    // the user sees something immediately).
-    const html = await previewFromContent(content, timeoutMs);
-    return html;
+    // Step 5: Update the UI state to success.
+    setUiSuccess("Preview loaded");
+
+    // Step 6: Persist the final content in the background.
+    persistContent().catch((err) => {
+      console.warn("Background content persistence failed:", err);
+    });
+
+    return previewHtml;
   } catch (err) {
     setUiError(err.message || "Generation failed");
     throw err;

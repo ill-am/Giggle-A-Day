@@ -7,6 +7,12 @@ export default defineConfig({
   // Keep test discovery local to the client package and ensure setupFiles
   // and aliases resolve relative to the client root.
   root: path.resolve(__dirname),
+  resolve: {
+    alias: {
+      $lib: path.resolve(__dirname, "src"),
+      $stores: path.resolve(__dirname, "src/stores"),
+    },
+  },
   test: {
     environment: "jsdom",
     include: ["__tests__/**/*.{test,spec}.{js,ts,jsx,tsx}"],
@@ -19,4 +25,5 @@ export default defineConfig({
     testTimeout: 10000,
     exclude: ["**/node_modules/**", "**/dist/**", "../**"],
   },
+  // (aliases defined above)
 });

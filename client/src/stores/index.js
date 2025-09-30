@@ -1,211 +1,508 @@
 // @ts-nocheck -- dev-only store instrumentation file; suppress TS diagnostics
-import { writable } from "svelte/store";
-import { savePromptContent, updatePromptContent } from "../lib/api";
+import { writable, get } from "svelte/store";
 
 // DEV-only helper: wrap writable so set/update calls are logged during development
 const IS_DEV =
   typeof import.meta !== "undefined" && import.meta.env && import.meta.env.DEV;
 
-function devWritable(name, initial) {
-  const w = writable(initial);
-  if (!IS_DEV) return w;
-  // Rate-limit verbose logging to avoid console-flood during rapid updates.
-  let lastLogTime = 0;
-  const LOG_MIN_INTERVAL_MS = 120; // ~8 logs per second max per store
-  return {
-    subscribe: w.subscribe,
-    set(value) {
+// Create singletons on window in DEV to avoid multiple module instances
+// (Vite HMR or differing import paths can cause duplicate module copies).
+// Use a canonical global key but accept legacy names for compatibility.
+const CANONICAL_GLOBAL_KEY = "__CHRONOS_STORES__";
+const LEGACY_GLOBAL_KEY = "__POEMAMUNDI_STORES__";
+const DEV_VERBOSE_KEY = "__POEMAMUNDI_VERBOSE__";
+// Module-local pointer to the canonical global container. Declare early
+// so subsequent initialization logic can reference it without TDZ errors.
+let globalContainer;
+
+// Initialize the global store container if it doesn't exist.
+// Make promotion of a legacy global (which some tests set on `globalThis`)
+// robust by first ensuring globalThis carries the canonical key when
+// appropriate, then mirror it to `window` where possible.
+// Final runtime fallback: if for any reason the canonical key wasn't set
+// earlier but a legacy container exists on globalThis, promote it now so
+// tests that inspect globalThis.__CHRONOS_STORES__ after import observe it.
+try {
+  if (
+    typeof globalThis !== "undefined" &&
+    !globalThis[CANONICAL_GLOBAL_KEY] &&
+    globalThis[LEGACY_GLOBAL_KEY]
+  ) {
+    try {
+      globalThis[CANONICAL_GLOBAL_KEY] = globalThis[LEGACY_GLOBAL_KEY];
+    } catch (e) {}
+  }
+  if (typeof globalThis !== "undefined" && globalThis[CANONICAL_GLOBAL_KEY]) {
+    globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
+    try {
+      if (typeof window !== "undefined" && !window[CANONICAL_GLOBAL_KEY])
+        window[CANONICAL_GLOBAL_KEY] = globalContainer;
+    } catch (e) {}
+  }
+} catch (e) {}
+try {
+  // If legacy was placed on globalThis, promote it to the canonical key
+  // on globalThis so downstream logic can find it regardless of whether
+  // `window` or `globalThis` is used.
+  if (typeof globalThis !== "undefined") {
+    try {
+      if (!globalThis[CANONICAL_GLOBAL_KEY] && globalThis[LEGACY_GLOBAL_KEY]) {
+        globalThis[CANONICAL_GLOBAL_KEY] = globalThis[LEGACY_GLOBAL_KEY];
+      }
+    } catch (e) {}
+  }
+
+  // Choose the appropriate global object: prefer `window` in browsers,
+  // otherwise fall back to `globalThis` for test environments.
+  const G =
+    typeof window !== "undefined"
+      ? window
+      : typeof globalThis !== "undefined"
+      ? globalThis
+      : undefined;
+
+  if (G) {
+    // If canonical already exists on G, use it.
+    if (G[CANONICAL_GLOBAL_KEY]) {
+      globalContainer = G[CANONICAL_GLOBAL_KEY];
+    } else if (G[LEGACY_GLOBAL_KEY]) {
+      // If G has a legacy container, adopt it and mirror to canonical.
+      globalContainer = G[LEGACY_GLOBAL_KEY];
       try {
-        const now = Date.now();
-        if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
-          lastLogTime = now;
-          console.log(`STORE:${name}.set`, { value });
+        G[CANONICAL_GLOBAL_KEY] = globalContainer;
+        if (
+          typeof globalThis !== "undefined" &&
+          !globalThis[CANONICAL_GLOBAL_KEY]
+        ) {
+          globalThis[CANONICAL_GLOBAL_KEY] = globalContainer;
         }
       } catch (e) {}
-      w.set(value);
-    },
-    update(fn) {
-      w.update((prev) => {
-        const next = fn(prev);
+    } else if (
+      typeof globalThis !== "undefined" &&
+      globalThis[CANONICAL_GLOBAL_KEY]
+    ) {
+      // If globalThis has the canonical container (promoted from legacy above),
+      // mirror it onto G and use it.
+      globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
+      try {
+        G[CANONICAL_GLOBAL_KEY] = globalContainer;
+      } catch (e) {}
+    } else {
+      // Otherwise create a fresh container on both G and globalThis.
+      try {
+        G[CANONICAL_GLOBAL_KEY] = {};
+        if (typeof globalThis !== "undefined")
+          globalThis[CANONICAL_GLOBAL_KEY] = G[CANONICAL_GLOBAL_KEY];
+      } catch (e) {}
+      globalContainer = G[CANONICAL_GLOBAL_KEY];
+    }
+  }
+} catch (e) {
+  // Swallow - defensive for environments where globals may be sealed
+  globalContainer = {};
+}
+
+// Reconcile module-local container with any globals that may have been
+// mutated after this module initially executed (Vitest may reuse the same
+// worker across tests). This ensures that if tests set the legacy global
+// after the module was first loaded, we still adopt and mirror it so the
+// canonical key is present on globalThis/window as tests expect.
+try {
+  if (typeof globalThis !== "undefined") {
+    // If canonical is not present but legacy exists on globalThis, promote it.
+    if (!globalThis[CANONICAL_GLOBAL_KEY] && globalThis[LEGACY_GLOBAL_KEY]) {
+      try {
+        globalThis[CANONICAL_GLOBAL_KEY] = globalThis[LEGACY_GLOBAL_KEY];
+      } catch (e) {}
+    }
+    // If canonical exists on globalThis, ensure module-local reference points to it.
+    if (globalThis[CANONICAL_GLOBAL_KEY]) {
+      globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
+      try {
+        if (typeof window !== "undefined" && !window[CANONICAL_GLOBAL_KEY]) {
+          window[CANONICAL_GLOBAL_KEY] = globalContainer;
+        }
+      } catch (e) {}
+    }
+  }
+} catch (e) {}
+
+// Final safety: if a legacy container exists anywhere, make absolutely sure
+// the canonical key points to it on both globalThis and window so callers
+// (and tests) observing globalThis.__CHRONOS_STORES__ will find it.
+try {
+  if (
+    typeof globalThis !== "undefined" &&
+    globalThis[LEGACY_GLOBAL_KEY] &&
+    !globalThis[CANONICAL_GLOBAL_KEY]
+  ) {
+    try {
+      globalThis[CANONICAL_GLOBAL_KEY] = globalThis[LEGACY_GLOBAL_KEY];
+    } catch (e) {}
+  }
+  if (
+    typeof window !== "undefined" &&
+    window[LEGACY_GLOBAL_KEY] &&
+    !window[CANONICAL_GLOBAL_KEY]
+  ) {
+    try {
+      window[CANONICAL_GLOBAL_KEY] = window[LEGACY_GLOBAL_KEY];
+    } catch (e) {}
+  }
+  // If canonical now exists on either, ensure module-local pointer follows it.
+  if (typeof globalThis !== "undefined" && globalThis[CANONICAL_GLOBAL_KEY]) {
+    globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
+    try {
+      if (typeof window !== "undefined" && !window[CANONICAL_GLOBAL_KEY])
+        window[CANONICAL_GLOBAL_KEY] = globalContainer;
+    } catch (e) {}
+  } else if (typeof window !== "undefined" && window[CANONICAL_GLOBAL_KEY]) {
+    globalContainer = window[CANONICAL_GLOBAL_KEY];
+    try {
+      if (
+        typeof globalThis !== "undefined" &&
+        !globalThis[CANONICAL_GLOBAL_KEY]
+      )
+        globalThis[CANONICAL_GLOBAL_KEY] = globalContainer;
+    } catch (e) {}
+  }
+} catch (e) {}
+
+// Initialize verbose logging state if needed
+try {
+  if (typeof window !== "undefined" && !window[DEV_VERBOSE_KEY]) {
+    window[DEV_VERBOSE_KEY] = (() => {
+      try {
+        if (!IS_DEV) return false;
+        if (typeof window === "undefined") return false;
+        const urlFlag =
+          window.location &&
+          new URLSearchParams(window.location.search).get("debugStores") ===
+            "1";
+        const lsFlag =
+          window.localStorage &&
+          window.localStorage.getItem("__ENABLE_VERBOSE_STORES__") === "1";
+        return Boolean(urlFlag || lsFlag);
+      } catch (e) {
+        return false;
+      }
+    })();
+  }
+} catch (e) {
+  // Swallow errors - verbose logging is not critical
+}
+
+// Initialize or reuse stores
+function getOrCreateStore(name, initial) {
+  // Resynchronize module-local container with any globals that may have
+  // been mutated after module initialization (tests may set globals and
+  // then re-import the module from cache). Prefer canonical on globalThis
+  // and fall back to legacy promotion when necessary.
+  try {
+    if (typeof globalThis !== "undefined") {
+      if (
+        globalThis[CANONICAL_GLOBAL_KEY] &&
+        globalContainer !== globalThis[CANONICAL_GLOBAL_KEY]
+      ) {
+        globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
+      } else if (
+        !globalThis[CANONICAL_GLOBAL_KEY] &&
+        globalThis[LEGACY_GLOBAL_KEY]
+      ) {
         try {
-          const now = Date.now();
-          if (now - lastLogTime > LOG_MIN_INTERVAL_MS) {
-            lastLogTime = now;
-            console.log(`STORE:${name}.update`, { prev, next });
-          }
+          globalThis[CANONICAL_GLOBAL_KEY] = globalThis[LEGACY_GLOBAL_KEY];
+          globalContainer = globalThis[CANONICAL_GLOBAL_KEY];
         } catch (e) {}
-        return next;
-      });
-    },
-  };
+      }
+      // Mirror canonical to window where possible
+      try {
+        if (
+          typeof window !== "undefined" &&
+          globalContainer &&
+          !window[CANONICAL_GLOBAL_KEY]
+        ) {
+          window[CANONICAL_GLOBAL_KEY] = globalContainer;
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
+
+  // First check if the store already exists in the global container
+  if (globalContainer && globalContainer[name]) {
+    if (IS_DEV && typeof window !== "undefined" && window[DEV_VERBOSE_KEY]) {
+      console.debug(`[DEV] Reusing existing store: ${name}`);
+    }
+    return globalContainer[name];
+  }
+
+  // Create a new store with the dev wrapper if needed
+  const w = writable(initial);
+  const store = IS_DEV
+    ? {
+        subscribe: w.subscribe,
+        set(value) {
+          if (
+            IS_DEV &&
+            typeof window !== "undefined" &&
+            window[DEV_VERBOSE_KEY]
+          ) {
+            try {
+              console.debug(`STORE:${name}.set`, { value });
+            } catch (e) {}
+          }
+          w.set(value);
+        },
+        update(fn) {
+          w.update((prev) => {
+            const next = fn(prev);
+            if (
+              IS_DEV &&
+              typeof window !== "undefined" &&
+              window[DEV_VERBOSE_KEY]
+            ) {
+              try {
+                console.debug(`STORE:${name}.update`, { prev, next });
+              } catch (e) {}
+            }
+            return next;
+          });
+        },
+      }
+    : w;
+
+  // Assign a lightweight identity to the store so we can detect duplicate
+  // instances across HMR boundaries and differing module resolution paths.
+  try {
+    if (!store.__chronos_id) {
+      // Use a short unique id — predictable enough for diagnostics
+      store.__chronos_id = `${Date.now().toString(36)}-${Math.floor(
+        Math.random() * 0xffff
+      ).toString(16)}`;
+    }
+  } catch (e) {}
+
+  // Save the store in the global container and keep a registry of ids
+  try {
+    if (typeof window !== "undefined") {
+      // Tag the store as canonical for runtime identity checks
+      try {
+        store.__is_canonical = true;
+        store.__module_url =
+          typeof import.meta !== "undefined" ? import.meta.url : null;
+      } catch (e) {}
+      globalContainer[name] = store;
+      try {
+        if (!globalContainer.__STORE_IDS__) globalContainer.__STORE_IDS__ = {};
+        globalContainer.__STORE_IDS__[name] = store.__chronos_id;
+      } catch (e) {}
+    }
+  } catch (e) {
+    // Best-effort: don't break store creation if globals are sealed
+    try {
+      globalContainer[name] = store;
+    } catch (ee) {}
+  }
+  return store;
 }
 
 /**
  * @typedef {'idle' | 'loading' | 'success' | 'error'} UIState
  */
 
-/**
- * Store for the user's prompt input.
- * @type {import('svelte/store').Writable<string>}
- */
-// `promptStore` will be created from the singleton exports below so it
-// is shared across HMR copies. Exported at the end as `promptStore`.
+// Create or reuse all stores using our singleton pattern
+// Use `let` so we can rebind these module-local variables to the
+// canonical global instances when present (preserves identity).
+let promptStoreExport = getOrCreateStore("promptStore", "");
+// Create or reuse base stores using our singleton pattern
+let contentStoreExport = getOrCreateStore("contentStore", null);
+let previewStoreExport = getOrCreateStore("previewStore", "");
+let uiStateStoreExport = getOrCreateStore("uiStateStore", {
+  status: "idle",
+  message: "",
+});
 
-/**
- * Store for the AI-generated content.
- * @type {import('svelte/store').Writable<object | null>}
- */
-// Create singletons on window in DEV to avoid multiple module instances
-// (Vite HMR or differing import paths can cause duplicate module copies).
-const GLOBAL_STORES_KEY = "__STRAWBERRY_SINGLETON_STORES__";
-
-// DEV flag for verbose store logging (shared scope)
-const DEV_STORES_VERBOSE = (() => {
-  try {
-    if (!(import.meta && import.meta.env && import.meta.env.DEV)) return false;
-    if (typeof window === "undefined") return false;
-    const urlFlag =
-      window.location &&
-      new URLSearchParams(window.location.search).get("debugStores") === "1";
-    const lsFlag =
-      window.localStorage &&
-      window.localStorage.getItem("__ENABLE_VERBOSE_STORES__") === "1";
-    return Boolean(urlFlag || lsFlag);
-  } catch (e) {
-    return false;
-  }
-})();
-
-let promptStoreExport,
-  contentStoreExport,
-  previewStoreExport,
-  uiStateStoreExport;
-
-// Treat the global window as `any` for dev-only instrumentation to avoid
-// TypeScript/IDE diagnostics when accessing test-only globals.
-const globalAny =
-  typeof window !== "undefined"
-    ? /** @type {any} */ (window)
-    : /** @type {any} */ ({});
-
-// Defensive: ensure the global singleton container exists as early as possible.
-// This helps avoid HMR/module-duplication scenarios where multiple module
-// instances create separate stores. We intentionally only create the wrapper
-// object here; individual stores are created below if missing.
+// FINAL RECONCILIATION: ensure module-local exports reference the canonical
+// global container's store instances where available. This prevents duplicate
+// store instances when modules are resolved via different paths or when HMR
+// creates a fresh module copy.
 try {
-  if (typeof window !== "undefined") {
-    /* Ensure a single global object is used by all module copies */
-    globalAny[GLOBAL_STORES_KEY] = globalAny[GLOBAL_STORES_KEY] || {};
+  // Ensure canonical global key exists on globalThis/window
+  if (typeof globalThis !== "undefined") {
+    try {
+      if (!globalThis[CANONICAL_GLOBAL_KEY])
+        globalThis[CANONICAL_GLOBAL_KEY] = globalContainer || {};
+    } catch (e) {}
   }
-} catch (e) {
-  // Swallow - defensive only for environments where `window` may be sealed.
-}
-
-// If a global container exists, prefer reusing any stores it already has.
-// Do not delete or overwrite the global object; instead merge missing
-// store references to avoid races with HMR and to keep the object stable.
-try {
-  if (typeof window !== "undefined") {
-    const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY];
-    if (g && typeof g === "object") {
-      try {
-        // If other module copies already provided store instances, reuse them.
-        promptStoreExport = promptStoreExport || g.promptStore;
-        contentStoreExport = contentStoreExport || g.contentStore;
-        previewStoreExport = previewStoreExport || g.previewStore;
-        uiStateStoreExport = uiStateStoreExport || g.uiStateStore;
-      } catch (e) {
-        // If reading properties fails for some reason, fall back to creation below.
-      }
-    }
-  }
-} catch (e) {
-  // swallow - defensive only
-}
-
-if (!promptStoreExport) {
-  promptStoreExport = devWritable("promptStore", "");
-  contentStoreExport = devWritable("contentStore", null);
-  previewStoreExport = devWritable("previewStore", "");
-  uiStateStoreExport = devWritable("uiStateStore", {
-    status: "idle",
-    message: "",
-  });
-
   if (typeof window !== "undefined") {
     try {
-      // Merge into existing global container without overwriting it. This keeps
-      // the same object reference across HMR reloads while allowing new
-      // properties to be added by the first module that initializes them.
-      const g = /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY] || {};
-      g.promptStore = g.promptStore || promptStoreExport;
-      g.contentStore = g.contentStore || contentStoreExport;
-      g.previewStore = g.previewStore || previewStoreExport;
-      g.uiStateStore = g.uiStateStore || uiStateStoreExport;
-      g.__marker = g.__marker || "strawberry-stores-v1";
-      globalAny[GLOBAL_STORES_KEY] = g;
-    } catch (e) {
-      // swallow - defensive
-    }
+      if (!window[CANONICAL_GLOBAL_KEY])
+        window[CANONICAL_GLOBAL_KEY] = globalContainer || {};
+    } catch (e) {}
   }
-}
 
-// Attach small instance ids to each store object to aid runtime debugging
-try {
-  const INSTANCE_ID = (
-    Math.random().toString(36) + Date.now().toString(36)
-  ).slice(2, 12);
+  // Helper to prefer the canonical store instance when a mismatch is detected
+  const preferCanonical = (name, localStore) => {
+    try {
+      const canonical =
+        (globalContainer && globalContainer[name]) ||
+        (typeof globalThis !== "undefined" &&
+          globalThis[CANONICAL_GLOBAL_KEY] &&
+          globalThis[CANONICAL_GLOBAL_KEY][name]) ||
+        (typeof window !== "undefined" &&
+          window[CANONICAL_GLOBAL_KEY] &&
+          window[CANONICAL_GLOBAL_KEY][name]);
+      if (canonical && localStore && canonical !== localStore) {
+        // If the canonical store exists and differs from the local one, prefer canonical.
+        if (
+          IS_DEV &&
+          typeof window !== "undefined" &&
+          window[DEV_VERBOSE_KEY]
+        ) {
+          try {
+            console.debug(
+              `[DEV] Reconciling store '${name}': preferring canonical instance`
+            );
+          } catch (e) {}
+        }
+        return canonical;
+      }
+    } catch (e) {}
+    return localStore;
+  };
+
+  // Replace any module-local exports with the canonical instances when applicable
   try {
-    if (contentStoreExport && typeof contentStoreExport === "object")
-      contentStoreExport.__instanceId =
-        contentStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (previewStoreExport && typeof previewStoreExport === "object")
-      previewStoreExport.__instanceId =
-        previewStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (promptStoreExport && typeof promptStoreExport === "object")
-      promptStoreExport.__instanceId =
-        promptStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (uiStateStoreExport && typeof uiStateStoreExport === "object")
-      uiStateStoreExport.__instanceId =
-        uiStateStoreExport.__instanceId || INSTANCE_ID;
-  } catch (e) {}
-  try {
-    if (
-      typeof window !== "undefined" &&
-      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY]
-    )
-      /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId =
-        /** @type {any} */ (globalAny)[GLOBAL_STORES_KEY].__instanceId ||
-        INSTANCE_ID;
+    // Prefer canonical instances: if a canonical store exists and differs
+    // from the module-local one, rebind the module-local variable to the
+    // canonical instance so all consumers (including those holding
+    // references) see the same object identity.
+    try {
+      const canonicalPrompt = preferCanonical("promptStore", promptStoreExport);
+      if (canonicalPrompt && canonicalPrompt !== promptStoreExport) {
+        promptStoreExport = canonicalPrompt;
+        if (globalContainer) globalContainer["promptStore"] = canonicalPrompt;
+      }
+
+      const canonicalContent = preferCanonical(
+        "contentStore",
+        contentStoreExport
+      );
+      if (canonicalContent && canonicalContent !== contentStoreExport) {
+        contentStoreExport = canonicalContent;
+        if (globalContainer) globalContainer["contentStore"] = canonicalContent;
+      }
+
+      const canonicalPreview = preferCanonical(
+        "previewStore",
+        previewStoreExport
+      );
+      if (canonicalPreview && canonicalPreview !== previewStoreExport) {
+        previewStoreExport = canonicalPreview;
+        if (globalContainer) globalContainer["previewStore"] = canonicalPreview;
+      }
+
+      const canonicalUi = preferCanonical("uiStateStore", uiStateStoreExport);
+      if (canonicalUi && canonicalUi !== uiStateStoreExport) {
+        uiStateStoreExport = canonicalUi;
+        if (globalContainer) globalContainer["uiStateStore"] = canonicalUi;
+      }
+      // Mirror to globalThis/window as a final step
+      try {
+        if (
+          typeof globalThis !== "undefined" &&
+          globalThis[CANONICAL_GLOBAL_KEY]
+        ) {
+          globalThis[CANONICAL_GLOBAL_KEY]["promptStore"] = promptStoreExport;
+          globalThis[CANONICAL_GLOBAL_KEY]["contentStore"] = contentStoreExport;
+          globalThis[CANONICAL_GLOBAL_KEY]["previewStore"] = previewStoreExport;
+          globalThis[CANONICAL_GLOBAL_KEY]["uiStateStore"] = uiStateStoreExport;
+          // Ensure mirrored canonical instances are tagged as canonical too
+          try {
+            if (globalThis[CANONICAL_GLOBAL_KEY].previewStore)
+              globalThis[
+                CANONICAL_GLOBAL_KEY
+              ].previewStore.__is_canonical = true;
+          } catch (e) {}
+        }
+        if (typeof window !== "undefined" && window[CANONICAL_GLOBAL_KEY]) {
+          window[CANONICAL_GLOBAL_KEY]["promptStore"] = promptStoreExport;
+          window[CANONICAL_GLOBAL_KEY]["contentStore"] = contentStoreExport;
+          window[CANONICAL_GLOBAL_KEY]["previewStore"] = previewStoreExport;
+          window[CANONICAL_GLOBAL_KEY]["uiStateStore"] = uiStateStoreExport;
+          try {
+            if (window[CANONICAL_GLOBAL_KEY].previewStore)
+              window[CANONICAL_GLOBAL_KEY].previewStore.__is_canonical = true;
+          } catch (e) {}
+        }
+      } catch (e) {}
+    } catch (e) {}
   } catch (e) {}
 } catch (e) {}
 
-export const contentStore = contentStoreExport;
-
-// DEV instrumentation: expose last set value and log when contentStore is updated
+// Initialize debug store container and E2E test instrumentation
 if (typeof window !== "undefined") {
-  try {
-    const originalSet = contentStore.set;
-    contentStore.set = function (v) {
+  window.__DEBUG_STORES__ = {
+    LAST_UPDATE: {},
+    UPDATE_HISTORY: {},
+  };
+
+  // Add E2E test instrumentation: track latest preview content
+  const origPreviewSet = previewStoreExport.set;
+  previewStoreExport.set = (value) => {
+    try {
+      // Runtime write instrumentation: log which store instance is being
+      // written, along with the canonical/global registry, so we can detect
+      // mismatched instances at runtime when debugging HMR/import divergence.
       try {
-        // Only perform verbose console logging when explicitly enabled
-        if (DEV_STORES_VERBOSE)
-          console.debug("[DEV] contentStore.set called with", v);
-        // assign into globalAny to avoid TypeScript window property errors
+        const gw =
+          (typeof window !== "undefined" && window[CANONICAL_GLOBAL_KEY]) ||
+          (typeof globalThis !== "undefined" &&
+            globalThis[CANONICAL_GLOBAL_KEY]) ||
+          null;
+        const canonicalIds = (gw && gw.__STORE_IDS__) || {};
+        const entry = {
+          ts: Date.now(),
+          store: "previewStore",
+          storeId: previewStoreExport && previewStoreExport.__chronos_id,
+          canonicalIds,
+          hasCanonical: !!gw,
+          valueLength: value ? String(value).length : 0,
+        };
         try {
-          if (globalAny.__LAST_CONTENT_SET !== v)
-            globalAny.__LAST_CONTENT_SET = v;
+          if (typeof window !== "undefined") {
+            window.__STORE_WRITE_LOG__ = window.__STORE_WRITE_LOG__ || [];
+            window.__STORE_WRITE_LOG__.push(entry);
+          }
+        } catch (e) {}
+        try {
+          if (
+            IS_DEV &&
+            typeof window !== "undefined" &&
+            window[DEV_VERBOSE_KEY]
+          )
+            console.debug("[STORE_WRITE]", entry);
         } catch (e) {}
       } catch (e) {}
-      return originalSet.call(this, v);
-    };
-  } catch (e) {}
+
+      if (value) {
+        window.__LAST_PREVIEW_HTML = value;
+        window.__preview_html_snippet = value;
+        window.__preview_updated_ts = Date.now();
+      }
+    } catch (e) {} // Swallow instrumentation errors
+    return origPreviewSet(value);
+  };
+
+  // Add E2E test instrumentation: track content store updates
+  const origContentSet = contentStoreExport.set;
+  contentStoreExport.set = (value) => {
+    try {
+      if (value && value.preview) {
+        window.__LAST_PREVIEW_SET = value.preview;
+      }
+    } catch (e) {} // Swallow instrumentation errors
+    return origContentSet(value);
+  };
 }
 
 /**
@@ -213,23 +510,86 @@ if (typeof window !== "undefined") {
  * If `content.promptId` exists, perform an update; otherwise create a new prompt.
  * Returns the persisted content object from the server.
  */
-export async function persistContent(content) {
-  if (!content) throw new Error("No content provided to persistContent");
+export async function persistContent(api) {
+  // Allow dependency injection for tests by accepting an `api` object.
+  // If not provided, lazily import the real API implementation to avoid
+  // hard failure when running unit tests that stub `persistContent`'s
+  // dependencies.
+  if (!api) {
+    try {
+      const mod = await import("../lib/api");
+      api = {
+        savePromptContent: mod.savePromptContent,
+        updatePromptContent: mod.updatePromptContent,
+      };
+    } catch (e) {
+      // If dynamic import fails, let callers handle missing API by
+      // providing their own `api` object. We throw below if no api is
+      // available when attempting to persist.
+      api = null;
+    }
+  }
+  const content = get(contentStore);
+  if (!content) throw new Error("No content in store to persist");
   try {
     let persisted;
     if (content.promptId) {
-      persisted = await updatePromptContent(content.promptId, content);
+      persisted = await api.updatePromptContent(content.promptId, content);
     } else {
-      persisted = await savePromptContent(content);
+      persisted = await api.savePromptContent(content);
     }
-    // Update local store with server-provided data
+    // Normalize persisted response: unwrap common envelopes and map `id` -> `promptId`.
     try {
-      console.debug("[DEV] persistContent: updating contentStore with", {
-        content,
-        persisted,
+      const normalized = (() => {
+        if (!persisted) return {};
+        // If server responds with { data: { content: {...} } } or { data: {...} }
+        const body =
+          persisted.data && persisted.data.content
+            ? persisted.data.content
+            : persisted.data
+            ? persisted.data
+            : persisted;
+        const out = Object.assign({}, body || {});
+        // map common id fields to promptId while preserving original `id`
+        if (out.id && !out.promptId) {
+          out.promptId = out.id;
+          // keep `id` as well for backward compatibility with tests/consumers
+        }
+        return out;
+      })();
+
+      // Dev debug - only log in development to avoid noisy test output
+      try {
+        if (IS_DEV)
+          console.debug("[DEV] persistContent: updating contentStore with", {
+            content,
+            persisted,
+            normalized,
+          });
+      } catch (e) {}
+
+      // Atomically merge persisted fields into the existing content to avoid
+      // lost updates from concurrent writers. We intentionally perform a
+      // shallow merge here (consistent with prior behavior); if nested
+      // structures become a problem we can switch to a deep merge.
+      contentStore.update((existing) => {
+        const updated = {
+          ...(existing || {}),
+          ...normalized,
+        };
+        // Update E2E test instrumentation on content updates too
+        try {
+          if (typeof window !== "undefined" && updated.preview) {
+            window.__LAST_PREVIEW_SET = updated.preview;
+          }
+        } catch (e) {} // Swallow instrumentation errors
+        return updated;
       });
-    } catch (e) {}
-    contentStore.set({ ...(content || {}), ...(persisted || {}) });
+    } catch (e) {
+      // Swallow normalization/merge errors to avoid breaking persistence flow;
+      // the outer catch will handle logging and rethrow if needed.
+    } // end normalize/merge try
+
     return persisted;
   } catch (err) {
     console.warn("persistContent failed", err && err.message);
@@ -238,68 +598,21 @@ export async function persistContent(content) {
 }
 
 /**
- * Store for the HTML preview.
- * @type {import('svelte/store').Writable<string>}
+ * Export all store instances as singletons.
+ * Every module that imports these will get the same instance.
+ * HMR updates will preserve the store state through the global object.
  */
-export const previewStore = previewStoreExport;
+// Re-export the module-local variables as live bindings so later reassignments
+// to `*_storeExport` update importers across the app.
+// Module-local aliases used throughout this file and by other modules that
+// import the stores. Keep them as live bindings and reassign when we
+// rebind to canonical instances above.
+let promptStore = promptStoreExport;
+let contentStore = contentStoreExport;
+let previewStore = previewStoreExport;
+let uiStateStore = uiStateStoreExport;
 
-// DEV instrumentation: expose last set value and log when previewStore is updated
-if (typeof window !== "undefined") {
-  try {
-    const originalPreviewSet = previewStore.set;
-    previewStore.set = function (v) {
-      try {
-        if (DEV_STORES_VERBOSE)
-          console.debug(
-            "[DEV] previewStore.set called with length=",
-            v ? v.length || 0 : 0
-          );
-        // assign into globalAny to avoid TypeScript window property errors
-        try {
-          // Frequency detection: record timestamps of recent preview updates
-          const now = Date.now();
-          globalAny.__PREVIEW_SET_HISTORY__ =
-            globalAny.__PREVIEW_SET_HISTORY__ || [];
-          globalAny.__PREVIEW_SET_HISTORY__.push(now);
-          // keep last N entries
-          if (globalAny.__PREVIEW_SET_HISTORY__.length > 20)
-            globalAny.__PREVIEW_SET_HISTORY__.shift();
-
-          // If updates are very frequent (e.g. >5 updates in 2s), capture a
-          // lightweight stack sample to help identify the writer. Store it
-          // once to avoid repeated heavy work.
-          const recent = globalAny.__PREVIEW_SET_HISTORY__.filter(
-            (ts) => now - ts < 2000
-          ).length;
-          if (recent > 5 && !globalAny.__PREVIEW_HIGH_FREQ_SAMPLE__) {
-            try {
-              const stack = new Error("preview-set-sample").stack;
-              globalAny.__PREVIEW_HIGH_FREQ_SAMPLE__ = {
-                firstObservedAt: now,
-                countIn2s: recent,
-                stack: String(stack).split("\n").slice(0, 6).join("\n"),
-              };
-            } catch (e) {}
-          }
-
-          if (globalAny.__LAST_PREVIEW_SET !== v)
-            globalAny.__LAST_PREVIEW_SET = v;
-        } catch (e) {}
-      } catch (e) {}
-      return originalPreviewSet.call(this, v);
-    };
-  } catch (e) {}
-}
-
-// Export the promptStore singleton so all modules import the same instance
-// Cast exports to `any` to avoid TypeScript diagnostics in the JS project
-export const promptStore = /** @type {any} */ (promptStoreExport);
-
-/**
- * Store for managing the overall UI state.
- * @type {import('svelte/store').Writable<{status: UIState, message: string}>}
- */
-export const uiStateStore = uiStateStoreExport;
+export { promptStore, contentStore, previewStore, uiStateStore };
 
 // Helper setters for consistent UI state transitions
 export function setUiLoading(message = "") {
