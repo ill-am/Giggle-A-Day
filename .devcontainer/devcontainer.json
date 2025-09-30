@@ -23,7 +23,8 @@
   "postCreateCommand": "cd client && npm install && npx playwright install --with-deps || true && cd ../server && PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=1 npm install && cd .. && npm install -g concurrently",
 
   "postAttachCommand": {
-    "client + server": "concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'"
+    "server only": "cd ./server && npm run dev"
+    //- "client + server": "concurrently 'cd ./client && npm run dev' 'cd ./server && npm run dev'"
     //x "client + server": "bash ./start-app.sh"
   },
 
@@ -75,10 +76,13 @@
   },
 
   // --- PORT FORWARDING ---
-  "forwardPorts": [5173, 3000, 5432],
+  "forwardPorts": [5173, 5174, 3000, 5432],
   "portsAttributes": {
     "5173": {
-      "label": "client (Vite/Svelte)",
+      "label": "client (Vite/Svelte)"
+    },
+    "5174": {
+      "label": "client-v2 (Vite/Svelte)",
       "onAutoForward": "openPreview"
     },
     "3000": { "label": "server (Express/Node.js)" },
