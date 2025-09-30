@@ -41,7 +41,6 @@
         "github.copilot-chat",
         "github.vscode-github-actions",
         "ms-azuretools.vscode-docker",
-        "dsznajder.es7-react-js-snippets",
         "bradlc.vscode-tailwindcss",
         "prisma.prisma",
         "ms-azuretools.vscode-postgresql",
@@ -51,6 +50,9 @@
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
         "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "[svelte]": {
+          "editor.defaultFormatter": "svelte.svelte-vscode"
+        },
         "[javascript]": {
           "editor.defaultFormatter": "esbenp.prettier-vscode"
         },
