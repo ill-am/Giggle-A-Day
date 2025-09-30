@@ -17,7 +17,7 @@ Overview & Total Estimate
 - Prep + Phases 1–5 + Cleanup: Estimated 10–14 days (conservative)
 - Detailed breakdown below includes per-phase estimates and subtask timeboxes.
 
-Phase 0 — Preparation (Estimate: 0.5 - 1 day)
+Phase 0 — Preparation (Estimate: 0.5 - 1 day) | In branch `aether-rewrite/client-phase0`
 
 - [ ] Create `client-v2/` skeleton (Vite + Svelte)
   - Estimate: 2-3 hours
@@ -29,7 +29,7 @@ Phase 0 — Preparation (Estimate: 0.5 - 1 day)
   - Estimate: 1-3 hours (only if necessary)
   - Acceptance: devcontainer builds and forwarding works. Verification: commit/PR `________`
 
-Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days)
+Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) | In branch `aether-rewrite/client-phase1`
 
 - [ ] Implement store adapter / shared types in `client-v2`
   - Estimate: 4-8 hours
@@ -44,7 +44,7 @@ Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days)
   - Estimate: 2-4 hours
   - Acceptance: snapshot tests run and diff is reviewed. Verification: PR `________`
 
-Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days)
+Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days) | In branch `aether-rewrite/client-phase2`
 
 - [ ] Migrate content input UI (form & validation)
   - Estimate: 4-6 hours
@@ -56,7 +56,7 @@ Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days)
   - Estimate: 3-6 hours
   - Acceptance: snapshots cover at least 3 representative poems. Verification: PR `________`
 
-Phase 3 — Export & PDF Quality (Estimate: 2 - 3 days)
+Phase 3 — Export & PDF Quality (Estimate: 2 - 3 days) | In branch `aether-rewrite/client-phase3`
 
 - [ ] Migrate Export controls & UX to `client-v2`
   - Estimate: 3-6 hours
@@ -68,7 +68,7 @@ Phase 3 — Export & PDF Quality (Estimate: 2 - 3 days)
   - Estimate: 2-4 hours
   - Acceptance: generated test PDF passes non-fatal validation and contains expected sample text. Verification: commit/PR `________`
 
-Phase 4 — Progressive Migration & Cutover (Estimate: 2 - 4 days)
+Phase 4 — Progressive Migration & Cutover (Estimate: 2 - 4 days) | In branch `aether-rewrite/client-phase4`
 
 - [ ] Migrate dashboard and secondary pages incrementally
   - Per-page estimate: 4-8 hours (unit tests + visual checks)
@@ -81,7 +81,7 @@ Phase 4 — Progressive Migration & Cutover (Estimate: 2 - 4 days)
   - Estimate: 2-6 hours (coord with ops/CI)
   - Acceptance: default routing serves `client-v2`, legacy client archived. Verification: commit/PR `________`
 
-Phase 5 — Cleanup & Optimization (Estimate: 1 - 2 days)
+Phase 5 — Cleanup & Optimization (Estimate: 1 - 2 days) | In branch `aether-rewrite/client-phase5`
 
 - [ ] Remove legacy dependencies and unused assets
   - Estimate: 2-6 hours

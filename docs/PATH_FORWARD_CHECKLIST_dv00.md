@@ -1,6 +1,6 @@
 # PATH_FORWARD Checklist — client rewrite
 
-Document Version: dv01
+Document Version: dv00
 Datetime: 2025-09-30 10:15 UTC
 Branch: aether-rewrite/client
 
@@ -100,4 +100,4 @@ Notes
 - Keep `USE_REAL_AI=false` as default in CI. Real AI smoke jobs should be gated and run manually or on a schedule.
 - Enforce snapshot review in PRs to catch visual regressions early.
 
-End of checklist
+End of PATH_FORWARD_CHECKLIST dv00
