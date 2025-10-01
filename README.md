@@ -153,6 +153,18 @@ See the `docs/` directory for devcontainer setup, dependency management, and arc
    ```
    (This runs the Svelte app on Vite.)
 
+### Client-v2 quick start (dev + server proxy)
+
+If you have the `client-v2` dev server available locally, use these two commands to run the client and start the server so /preview is proxied to the local client-v2 dev server:
+
+```bash
+# start client-v2 dev server (from repo root)
+npm --prefix client-v2 run dev
+
+# start server with preview proxy enabled (from repo root)
+PREVIEW_CLIENT_V2_ENABLED=1 CLIENT_V2_PROXY_URL=http://127.0.0.1:5174 node server/index.js
+```
+
 ### Access the Application
 
 - **Frontend**: [http://localhost:5173](http://localhost:5173)
