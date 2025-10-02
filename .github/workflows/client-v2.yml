@@ -24,8 +24,22 @@ jobs:
           cache: "npm"
           cache-dependency-path: "client-v2/package-lock.json"
 
-      - name: "Install dependencies"
-        run: npm --prefix client-v2 ci
+      - name: "Debug info"
+        run: |
+          echo "=== ENV ==="
+          node -v
+          npm -v
+          echo "=== WORKDIR ==="
+          pwd
+          echo "=== LIST client-v2 ==="
+          ls -la client-v2 || true
+          echo "=== package.json ==="
+          cat client-v2/package.json || true
+          echo "=== package-lock (head) ==="
+          head -n 200 client-v2/package-lock.json || true
 
-      - name: "Run tests"
-        run: npm --prefix client-v2 test -- --run
+      - name: "Install dependencies (verbose)"
+        run: npm --prefix client-v2 ci --loglevel verbose
+
+      - name: "Run tests (verbose)"
+        run: npm --prefix client-v2 test -- --run --reporter verbose
