@@ -1,0 +1,31 @@
+# .github/workflows/client-v2.yml
+
+name: "Client-v2 CI"
+
+on:
+  pull_request:
+    branches:
+      - "aether-dev"
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  test-client-v2:
+    name: "Test client-v2"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v3
+
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: "client-v2/package-lock.json"
+
+      - name: "Install dependencies"
+        run: npm --prefix client-v2 ci
+
+      - name: "Run tests"
+        run: npm --prefix client-v2 test
