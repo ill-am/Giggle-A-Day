@@ -28,4 +28,4 @@ jobs:
         run: npm --prefix client-v2 ci
 
       - name: "Run tests"
-        run: npm --prefix client-v2 test
+        run: npm --prefix client-v2 test -- --run
