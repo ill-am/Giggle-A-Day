@@ -1,0 +1,3 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`PreviewWindow snapshot > matches DOM snapshot with sample content 1`] = `"<div class="preview-container svelte-1xfprg0"><!----><div class="preview-content svelte-1xfprg0" data-testid="preview-content"><h2>Snapshot Poem</h2><p>Snapshot line</p><!----></div><!----></div> <!---->"`;

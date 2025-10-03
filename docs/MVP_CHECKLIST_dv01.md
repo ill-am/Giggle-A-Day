@@ -1,8 +1,15 @@
 # MVP Checklist
 
 Document Version: dv01
-Datetime: 2025-09-29 16:35 UTC  || 2025-09-29 18:15 UTC
-Branch: feature/anew
+Last Updated: 2025-10-03
+Initial Datetime: 2025-09-29 16:35 UTC
+Branch: aether-rewrite/client-phase1
+
+## Current Status
+
+- Phase 0: ✅ Completed (commits: 2bce478, c23d43d, 015fcfe)
+- Phase 1: 🟩 In Progress
+- Current Branch: aether-rewrite/client-phase1
 
 ## Implementation Strategy
 
@@ -21,14 +28,20 @@ Branch: feature/anew
 
 #### Basic Store
 
-- [ ] Real store implementation (1 day)
+- [x] Infrastructure setup (Phase 0 - Completed)
+  - [x] Client-v2 skeleton with Vite + Svelte (commit: 2bce478)
+  - [x] Development environment configuration (commit: c23d43d)
+- [ ] Real store implementation (Phase 1 - In Progress)
   - [ ] Actual state container (2-3 hours)
   - [ ] Basic subscription system (2-3 hours)
   - [ ] Simple error handling (2-3 hours)
 
 #### Preview Display
 
-- [ ] Essential preview component (1-2 days)
+- [x] Infrastructure setup (Phase 0 - Completed)
+  - [x] Dev server setup on port 5174
+  - [x] Basic routing and feature flag system (PR #2)
+- [ ] Essential preview component (Phase 1 - In Progress)
   - [ ] Real HTML rendering (4-6 hours)
   - [ ] Store subscription (2-3 hours)
   - [ ] Basic error states (2-3 hours)
@@ -96,14 +109,27 @@ Branch: feature/anew
 
 ## Testing & Validation
 
-### Basic Testing ⭐ (2-3 days)
+### Testing Infrastructure & Strategy ⭐ (2-3 days)
 
 #### Core Tests
 
-- [ ] Essential test suite (1-2 days)
+- [x] Basic CI Setup (Phase 0 - Completed)
+  - [x] Client-v2 unit test workflow
+  - [x] Branch protection rules
+- [ ] Essential test suite (Phase 1 - In Progress)
   - [ ] Preview pipeline tests (4-6 hours)
   - [ ] Content flow tests (4-6 hours)
   - [ ] Export tests (4-6 hours)
+
+#### Visual Testing Strategy
+
+- [x] Development environment setup (Phase 0)
+  - [x] Port 5174 configuration
+  - [x] Feature flag mechanism (commit: 015fcfe)
+- [ ] Snapshot Testing (Phase 1 - In Progress)
+  - [ ] DOM snapshots
+  - [ ] Visual regression tests
+- Note: Playwright E2E tests temporarily gated for prototype work
 
 #### Error Testing
 

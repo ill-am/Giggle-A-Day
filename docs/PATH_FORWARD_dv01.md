@@ -1,8 +1,19 @@
 # Incremental Rewrite /PATH FORWARD
 
 Document Version: dv01
-Datetime: 2025-09-30 10:15 UTC
-Branch: feature/anew
+Last Updated: 2025-10-03
+Initial Datetime: 2025-09-30 10:15 UTC
+Branch: aether-rewrite/client-phase1
+
+Current Status:
+
+- Phase 0 (Preparation): ✅ Completed
+  - Client-v2 skeleton created (commits: 2bce478, c23d43d)
+  - Feature flag routing implemented (commit: 015fcfe, PR #2)
+  - Devcontainer configured with port 5174
+- Phase 1 (Preview Pipeline): 🟩 In Progress
+  - Store implementation and preview components under development
+  - Visual testing infrastructure being established
 
 Guiding Principle
 
@@ -219,16 +230,18 @@ Acceptance Criteria summary (one-line per phase)
 - Phase 3: Export from `client-v2` produces reproducible PDFs and `server/pdfQuality.mjs` reports no fatal errors.
 - Phase 4: All critical flows migrated and canary run meets reliability thresholds.
 
-Minimal timeline (conservative)
+Refined Timeline (with QA buffer)
 
-- Prep: 1 day
-- Phase 1: 2–3 days
-- Phase 2: 3 days
+- Phase 0 (Prep): 0.5-1 day ✅ Completed
+- Phase 1: 2–3 days 🟩 In Progress
+- Phase 2: 2.5–3.5 days
 - Phase 3: 2–3 days
 - Phase 4: 2–4 days
-- Cleanup: 1–2 days
+- Phase 5: 1–2 days
 
-Total: ~10–14 days (add buffer for unplanned fixes)
+Total: ~10–17.5 days (includes QA gates and testing buffer)
+
+Note: Timeline adjusted based on Phase 0 completion experience and additional testing requirements
 
 Next steps (suggested immediate actions)
 
