@@ -17,7 +17,9 @@ Overview & Total Estimate
 - Prep + Phases 1–5 + Cleanup: Estimated 10–14 days (conservative)
 - Detailed breakdown below includes per-phase estimates and subtask timeboxes.
 
-## Phase 0 — Preparation (Estimate: 0.5 - 1 day) | In branch `aether-rewrite/client-phase0`
+## Phase 0 — Preparation (Estimate: 0.5 - 1 day) ✅ Done
+
+**↦** In branch `aether-rewrite/client-phase0`
 
 Core Tasks:
 
@@ -52,10 +54,12 @@ Remaining Phase 0 Tasks:
    - ✓ Port forwarding configured (port 5174)
    - ✓ Manual port forwarding method set for deterministic behavior
 2. CI Integration:
-   - Add workflow to run client-v2 tests on PRs
-   - Configure branch protection
+   - ✓ Add workflow to run client-v2 tests on PRs
+   - ✓ Configure branch protection
 
-## Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) | In branch `aether-rewrite/client-phase1`
+## Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) 🟩 In-process
+
+**↦** In branch `aether-rewrite/client-phase1`
 
 - [ ] Implement store adapter / shared types in `client-v2`
   - Estimate: 4-8 hours
@@ -69,6 +73,7 @@ Remaining Phase 0 Tasks:
 - [ ] Add visual snapshots (DOM or image) and integrate into PR checks
   - Estimate: 2-4 hours
   - Acceptance: snapshot tests run and diff is reviewed. Verification: PR `________`
+  - Note: Playwright-based smoke tests for end-to-end/visual regression are intentionally disabled for the `aether-dev` prototype branch (Phase 0). When the team reaches the phase where Playwright is installed and used (see CI notes below), re-activate the Playwright smoke jobs and ensure the Playwright runner is available in CI (or gate by label). Verification: workflow run `________`
 
 ## Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days) | In branch `aether-rewrite/client-phase2`
 
@@ -131,11 +136,69 @@ Test & QA Gates (time per gate included in phase estimates)
   - `integration:smoke-export` — run server in CI, trigger in-process export, archive artifacts
   - `visual:snapshots` (optional) — image snaps comparison
 - PR checklist (always required in PR body):
+
   - Unit tests pass
   - Snapshot updated/approved
   - Integration smoke run passes locally
   - Manual visual verification attached (screenshot)
   - Export artifacts validated if export affected
+
+  Playwright note:
+
+  - The repository contains Playwright smoke workflows that run heavier browser tests. These have been temporarily gated/disabled for prototype work on `aether-dev` to keep feedback fast and avoid flaky infra. When you reach the phase that requires E2E/browser smoke tests (for example: late Phase 1 validation of preview, Phase 3 export verification, or as part of canary runs), re-activate the Playwright jobs by either:
+
+    - removing the `if` condition that skips runs targeting `aether-dev` in the workflow file(s), or
+    - changing the trigger to run only when a PR has a specific label (e.g. `run-playwright`) and applying that label when you want the smoke job to run, or
+    - moving Playwright smoke runs to a separate scheduled workflow (nightly) if continuous runs are not required.
+
+    Add a one-line verification note (workflow run link / commit) when you re-enable Playwright.
+
+### Modus Operandi: Systematic Migration & Quality Assurance
+
+Key principles for implementation:
+
+1. **Incremental Migration with Continuous Testing**
+
+   - Review each component before migration
+   - Document current limitations and planned improvements
+   - Maintain continuous visual verification
+   - Test at multiple levels (unit, visual, integration)
+   - Address technical debt systematically
+
+2. **Strategic Code Reuse & Analysis**
+
+   - Leverage existing `shared/` directory components
+   - Evaluate current implementation pain points
+   - Document architectural decisions and improvements
+   - Maintain stable server API interface
+   - Reuse proven business logic and visual templates
+
+3. **Quality-First Development Process**
+
+   - Review and document each component before rewriting
+   - Note problematic areas in current implementation
+   - Document rationale for architectural changes
+   - Consider maintenance implications
+   - Create parallel implementations for easy comparison
+
+4. **Implementation Checklist Per Component**
+
+   - [ ] Review current implementation
+   - [ ] Document known issues/limitations
+   - [ ] Identify reusable elements
+   - [ ] Plan improvements while maintaining functionality
+   - [ ] Implement with comprehensive tests
+   - [ ] Validate visual parity
+   - [ ] Document architectural decisions
+
+5. **Verification Strategy**
+   - Use feature flags for A/B testing
+   - Maintain parallel running capability
+   - Enable quick rollbacks if needed
+   - Document visual and functional differences
+   - Validate improvements with metrics
+
+Remember: Slower initial progress in favor of quality and maintainability is acceptable. Each change should be well-tested, well-documented, and contribute to overall system improvement.
 
 ### Timing summary (conservative estimate)
 
