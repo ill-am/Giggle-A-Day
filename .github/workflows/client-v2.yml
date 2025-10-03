@@ -51,11 +51,22 @@ jobs:
           name: client-v2-snapshots
           path: client-v2/__tests__/__snapshots__/**
 
+      - name: "Post CI note on PR about snapshots"
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const pr = context.payload.pull_request;
+            if (!pr) return;
+            const body = `Client-v2 snapshots uploaded as artifact **client-v2-snapshots** in workflow run ${{ github.run_number }}. You can download them from the Actions run artifacts.`;
+            await github.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, body });
+
   image-snapshots:
     name: "Optional: Image snapshots (Playwright)"
     runs-on: ubuntu-latest
-    needs: test-client-v2
-    if: github.event_name == 'workflow_dispatch'
+    needs: [test-client-v2, check-pr-label]
+    if: needs.check-pr-label.outputs.run_playwright == 'true'
 
     steps:
       - name: "Checkout repository"
@@ -76,3 +87,30 @@ jobs:
           # This job is intentionally gated and requires Playwright to be configured in client-v2
           # It should run heavier browser-based image snaps. If Playwright isn't installed, this will fail.
           npm --prefix client-v2 run test:playwright || echo "Playwright job skipped or failed"
+
+  check-pr-label:
+    name: "Check PR label for Playwright"
+    runs-on: ubuntu-latest
+    outputs:
+      run_playwright: ${{ steps.set.outputs.run_playwright }}
+    steps:
+      - name: "Determine if Playwright should run"
+        id: set
+        run: |
+          echo "run_playwright=false" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_playwright=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            labels=$(jq -r '.pull_request.labels[].name' < $GITHUB_EVENT_PATH || true)
+            echo "found labels: $labels"
+            for l in $labels; do
+              if [ "$l" = "run-playwright" ]; then
+                echo "run_playwright=true" >> $GITHUB_OUTPUT
+                exit 0
+              fi
+            done
+          fi
+
+      # ... check-pr-label only sets outputs used by image-snapshots
