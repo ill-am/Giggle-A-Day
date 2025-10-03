@@ -45,6 +45,7 @@
         "ms-azuretools.vscode-docker",
         "bradlc.vscode-tailwindcss",
         "prisma.prisma",
+        "ms-playwright.playwright",
         "ms-azuretools.vscode-postgresql",
         "vscode-icons-team.vscode-icons"
       ],

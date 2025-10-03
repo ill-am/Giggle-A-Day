@@ -73,7 +73,7 @@ Remaining Phase 0 Tasks:
 - [x] Add visual snapshots (DOM or image) and integrate into PR checks (baseline added)
   - Estimate: 2-4 hours
   - Acceptance: snapshot tests run and diff is reviewed. Verification: commit `2d1cb78`
-  - Note: Playwright-based smoke tests for end-to-end/visual regression are intentionally disabled for the `aether-dev` prototype branch (Phase 0). When the team reaches the phase where Playwright is installed and used (see CI notes below), re-activate the Playwright smoke jobs and ensure the Playwright runner is available in CI (or gate by label). Verification: workflow run `________`
+  - Note: Playwright-based smoke tests for end-to-end/visual regression were intentionally gated for the `aether-dev` prototype branch (Phase 0). Playwright has now been installed in `client-v2` and local smoke tests run successfully. Re-activate or trigger the Playwright smoke jobs in CI as needed (see CI notes below). Verification: local smoke run passed (preview screenshot generated: `client-v2/preview-chromium.png`) — verified 2025-10-03 on branch `aether-rewrite/client-phase1`; CI run pending (use `workflow_dispatch` or add PR label `run-playwright` to execute image-snapshots job)
 
 ## Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days) | In branch `aether-rewrite/client-phase2`
 
