@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 5174",
-    "test": "vitest --environment jsdom"
+    "test": "vitest --environment jsdom --run --reporter verbose __tests__",
+    "test:playwright": "playwright test --config=playwright.config.mjs --workers=1",
+    "playwright:install": "playwright install --with-deps"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.1.0",
@@ -15,6 +17,7 @@
     "jsdom": "^26.1.0",
     "svelte": "^5.35.2",
     "vite": "^6.2",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@playwright/test": "^1.39.0"
   }
 }

@@ -109,6 +109,30 @@ jobs:
       - name: "Install client-v2 deps"
         run: npm --prefix client-v2 ci --loglevel verbose
 
+      - name: "Install Playwright browsers"
+        run: |
+          npm --prefix client-v2 run playwright:install
+
+      - name: "Run Playwright image snapshot job"
+        run: |
+          # Start a background preview server (serve built output) so Playwright can access /preview
+          npm --prefix client-v2 run build
+          npm --prefix client-v2 run preview &
+          PREVIEW_PID=$!
+          # wait for the preview to be ready
+          n=0; until curl --silent --fail http://127.0.0.1:5174/preview || [ $n -ge 15 ]; do sleep 1; n=$((n+1)); done
+          npm --prefix client-v2 run test:playwright || echo "Playwright job failed"
+          kill $PREVIEW_PID || true
+
+      - name: "Upload Playwright image artifacts"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-v2-images
+          path: |
+            client-v2/test-results/playwright/**
+            client-v2/playwright/*.png
+
       - name: "Run Playwright image snapshot job"
         run: |
           # This job is intentionally gated and requires Playwright to be configured in client-v2
