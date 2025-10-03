@@ -132,9 +132,3 @@ jobs:
           path: |
             client-v2/test-results/playwright/**
             client-v2/playwright/*.png
-
-      - name: "Run Playwright image snapshot job"
-        run: |
-          # This job is intentionally gated and requires Playwright to be configured in client-v2
-          # It should run heavier browser-based image snaps. If Playwright isn't installed, this will fail.
-          npm --prefix client-v2 run test:playwright || echo "Playwright job skipped or failed"
