@@ -57,22 +57,22 @@ Remaining Phase 0 Tasks:
    - ✓ Add workflow to run client-v2 tests on PRs
    - ✓ Configure branch protection
 
-## Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) 🟩 In-process
+## Phase 1 — Preview Pipeline (store + preview) (Estimate: 2 - 3 days) 🟩 In-progress
 
 **↦** In branch `aether-rewrite/client-phase1`
 
-- [ ] Implement store adapter / shared types in `client-v2`
+- [x] Implement store adapter / shared types in `client-v2` (partial)
   - Estimate: 4-8 hours
-  - Acceptance: unit tests for adapter pass. Verification: commit/PR `________`
-- [ ] Recreate Preview page UI using canonical template
+  - Acceptance: unit tests for adapter pass. Verification: commit `2d1cb78`
+- [x] Recreate Preview page UI using canonical template (skeleton)
   - Estimate: 6-12 hours
-  - Acceptance: preview renders same content given sample payload. Visual snapshot created. Verification: commit/PR `________`
-- [ ] Add Vitest unit tests for store & preview logic
+  - Acceptance: preview renders same content given sample payload. Visual snapshot created. Verification: commit `2d1cb78`
+- [x] Add Vitest unit tests for store & preview logic
   - Estimate: 2-4 hours
-  - Acceptance: `npm --prefix client-v2 test` passes locally. Verification: commit/PR `________`
-- [ ] Add visual snapshots (DOM or image) and integrate into PR checks
+  - Acceptance: `npm --prefix client-v2 test` passes locally. Verification: commit `2d1cb78`
+- [x] Add visual snapshots (DOM or image) and integrate into PR checks (baseline added)
   - Estimate: 2-4 hours
-  - Acceptance: snapshot tests run and diff is reviewed. Verification: PR `________`
+  - Acceptance: snapshot tests run and diff is reviewed. Verification: commit `2d1cb78`
   - Note: Playwright-based smoke tests for end-to-end/visual regression are intentionally disabled for the `aether-dev` prototype branch (Phase 0). When the team reaches the phase where Playwright is installed and used (see CI notes below), re-activate the Playwright smoke jobs and ensure the Playwright runner is available in CI (or gate by label). Verification: workflow run `________`
 
 ## Phase 2 — Content Input & AI Integration (Estimate: 2.5 - 3.5 days) | In branch `aether-rewrite/client-phase2`
@@ -133,6 +133,7 @@ Test & QA Gates (time per gate included in phase estimates)
 - Keep `USE_REAL_AI=false` in CI by default. Real-AI smoke jobs are gated and run optionally.
 - Add CI jobs (textual plan):
   - `client-v2:unit` — run unit tests and snapshots
+    - Verification: `.github/workflows/client-v2.yml` updated to upload snapshot artifacts and provide optional image snapshot job (workflow changes committed)
   - `integration:smoke-export` — run server in CI, trigger in-process export, archive artifacts
   - `visual:snapshots` (optional) — image snaps comparison
 - PR checklist (always required in PR body):
