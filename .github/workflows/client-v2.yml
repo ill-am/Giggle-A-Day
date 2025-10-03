@@ -62,32 +62,6 @@ jobs:
             const body = `Client-v2 snapshots uploaded as artifact **client-v2-snapshots** in workflow run ${{ github.run_number }}. You can download them from the Actions run artifacts.`;
             await github.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: pr.number, body });
 
-  image-snapshots:
-    name: "Optional: Image snapshots (Playwright)"
-    runs-on: ubuntu-latest
-    needs: [test-client-v2, check-pr-label]
-    if: needs.check-pr-label.outputs.run_playwright == 'true'
-
-    steps:
-      - name: "Checkout repository"
-        uses: actions/checkout@v3
-
-      - name: "Setup Node.js"
-        uses: actions/setup-node@v3
-        with:
-          node-version: "18"
-          cache: "npm"
-          cache-dependency-path: "client-v2/package-lock.json"
-
-      - name: "Install client-v2 deps"
-        run: npm --prefix client-v2 ci --loglevel verbose
-
-      - name: "Run Playwright image snapshot job"
-        run: |
-          # This job is intentionally gated and requires Playwright to be configured in client-v2
-          # It should run heavier browser-based image snaps. If Playwright isn't installed, this will fail.
-          npm --prefix client-v2 run test:playwright || echo "Playwright job skipped or failed"
-
   check-pr-label:
     name: "Check PR label for Playwright"
     runs-on: ubuntu-latest
@@ -114,3 +88,29 @@ jobs:
           fi
 
       # ... check-pr-label only sets outputs used by image-snapshots
+
+  image-snapshots:
+    name: "Optional: Image snapshots (Playwright)"
+    runs-on: ubuntu-latest
+    needs: [test-client-v2, check-pr-label]
+    if: needs.check-pr-label.outputs.run_playwright == 'true'
+
+    steps:
+      - name: "Checkout repository"
+        uses: actions/checkout@v3
+
+      - name: "Setup Node.js"
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+          cache-dependency-path: "client-v2/package-lock.json"
+
+      - name: "Install client-v2 deps"
+        run: npm --prefix client-v2 ci --loglevel verbose
+
+      - name: "Run Playwright image snapshot job"
+        run: |
+          # This job is intentionally gated and requires Playwright to be configured in client-v2
+          # It should run heavier browser-based image snaps. If Playwright isn't installed, this will fail.
+          npm --prefix client-v2 run test:playwright || echo "Playwright job skipped or failed"
