@@ -88,16 +88,32 @@
 
 <style>
   .preview-container {
+    position: relative;
+    height: 100%;
+    width: 100%;
     border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    padding: 8px;
-    min-height: 160px;
+    border-radius: 8px;
+    background-color: #f9f9f9;
+    overflow-y: auto;
+    min-height: 240px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
   }
   .loading-overlay {
-    color: #666;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: #888;
   }
   .preview-content {
-    padding: 8px;
+    padding: 1.5rem;
+    text-align: left;
+    width: 100%;
+    height: 100%;
   }
   .skeleton {
     display: flex;
@@ -124,5 +140,22 @@
     border-radius: 6px;
     z-index: 9999;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  }
+  /* Print-safe rules: avoid breaking preview content across pages */
+  @media print {
+    .preview-content {
+      page-break-inside: avoid;
+    }
+    .preview-container {
+      border: none;
+      background: #fff;
+    }
+  }
+
+  /* Use a readable serif/sans stack similar to canonical client */
+  .preview-content,
+  .preview-container {
+    font-family: Georgia, "Times New Roman", Times, serif;
+    color: #111;
   }
 </style>
