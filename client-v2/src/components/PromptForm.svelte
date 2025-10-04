@@ -1,32 +1,63 @@
 <script>
   import { createEventDispatcher } from "svelte";
+  import { tick } from "svelte";
+
   let prompt = "";
   let loading = false;
+  let errorMsg = "";
   const dispatch = createEventDispatcher();
 
+  function extractHtmlFromResponse(json) {
+    // Common shapes returned by server: { success:true, data: { content: { body, title } } }
+    // legacy shapes: { content: { body } } or { html }
+    if (!json) return null;
+    if (json.data && json.data.content) {
+      const c = json.data.content;
+      return c.body || c.html || JSON.stringify(c);
+    }
+    if (json.content) {
+      const c = json.content;
+      return c.body || c.html || JSON.stringify(c);
+    }
+    if (json.html) return json.html;
+    if (json.preview) return json.preview;
+    return JSON.stringify(json);
+  }
+
   async function submitPrompt() {
-    if (!prompt || prompt.trim().length === 0) return;
+    errorMsg = "";
+    if (!prompt || prompt.trim().length === 0) {
+      errorMsg = "Please enter a prompt";
+      return;
+    }
     loading = true;
     dispatch("loading", { loading: true });
     try {
-      const res = await fetch("/prompt", {
+      // Use the dev query param so the server's deterministic handler will run in dev
+      const res = await fetch("/prompt?dev=true", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, dev: true }),
+        body: JSON.stringify({ prompt }),
       });
       const json = await res.json();
-      // Attempt to extract preview HTML from server response
-      const html =
-        json?.content?.body ||
-        json?.html ||
-        json?.preview ||
-        JSON.stringify(json);
+      const html = extractHtmlFromResponse(json);
+      if (!html) throw new Error("Invalid response from server");
       dispatch("result", { html });
     } catch (e) {
-      dispatch("error", { error: e.message || String(e) });
+      const msg = e && e.message ? e.message : String(e);
+      errorMsg = msg;
+      dispatch("error", { error: msg });
     } finally {
       loading = false;
       dispatch("loading", { loading: false });
+      await tick();
+    }
+  }
+
+  function onKeydown(e) {
+    // Ctrl+Enter or Cmd+Enter submits
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      submitPrompt();
     }
   }
 </script>
