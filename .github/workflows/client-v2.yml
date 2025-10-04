@@ -6,6 +6,7 @@ on:
   pull_request:
     branches:
       - "aether-dev"
+      - "client-v2-staging"
   workflow_dispatch: # Allows manual triggering
 
 jobs:
@@ -72,11 +73,22 @@ jobs:
         id: set
         run: |
           echo "run_playwright=false" >> $GITHUB_OUTPUT
+          # Always allow manual dispatch
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "run_playwright=true" >> $GITHUB_OUTPUT
             exit 0
           fi
+          # Auto-enable for allowlisted base branches (hybrid approach)
           if [ -n "${{ github.event.pull_request.number }}" ]; then
+            base_ref="${{ github.event.pull_request.base.ref }}"
+            echo "PR base ref: $base_ref"
+            case "$base_ref" in
+              "aether-rewrite/client-phase1"|"main"|"client-v2-staging")
+                echo "run_playwright=true" >> $GITHUB_OUTPUT
+                exit 0
+                ;;
+            esac
+            # Otherwise respect explicit PR label
             labels=$(jq -r '.pull_request.labels[].name' < $GITHUB_EVENT_PATH || true)
             echo "found labels: $labels"
             for l in $labels; do

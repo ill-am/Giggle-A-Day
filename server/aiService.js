@@ -9,6 +9,27 @@ class MockAIService {
       throw new Error("simulated-ai-failure");
     }
 
+    // If a stub provider exists, use that for deterministic responses
+    try {
+      // require lazily to avoid adding overhead in non-stub flows
+      const mockProvider = require("./mockAiProvider");
+      const stub = mockProvider.getTextStub(prompt);
+      if (stub && stub.response) {
+        const title = (
+          String(stub.response).split("\n")[0] || "Mock Title"
+        ).slice(0, 200);
+        const body = String(stub.response);
+        const layout = "poem-single-column";
+        const metadata = {
+          model: stub.model || "mock-text-1",
+          status: stub.status || 200,
+        };
+        return { content: { title, body, layout }, metadata };
+      }
+    } catch (e) {
+      // fallthrough to simple deterministic mock
+    }
+
     const title =
       typeof prompt === "string" && prompt.length > 0
         ? `Mock: ${prompt.split(" ").slice(0, 5).join(" ")}`
