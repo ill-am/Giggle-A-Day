@@ -72,6 +72,99 @@
     />
     <button on:click={submitPrompt} disabled={loading}>Generate</button>
   </div>
+
+  <!-- Minimal markup for Phase A: content-type, media-type, and pages (no wiring) -->
+  <div class="prompt-controls" style="margin-top:12px">
+    <!-- Content Type: radio group + More dropdown -->
+    <fieldset class="radio-group" aria-label="Content type">
+      <legend class="visually-hidden">Content type</legend>
+      <label
+        ><input type="radio" name="contentType" value="Poem" checked /> Poem</label
+      >
+      <label
+        ><input type="radio" name="contentType" value="Story" /> Story</label
+      >
+      <label
+        ><input type="radio" name="contentType" value="Essay" /> Essay</label
+      >
+      <label
+        ><input type="radio" name="contentType" value="Haiku" /> Haiku</label
+      >
+    </fieldset>
+
+    <div style="margin-top:8px">
+      <label
+        for="more-content-types"
+        style="display:block;font-size:13px;margin-bottom:4px"
+        >More content types</label
+      >
+      <select id="more-content-types" name="moreContentType">
+        <option value="">Choose…</option>
+        <option value="Poem">Poem</option>
+        <option value="Story">Story</option>
+        <option value="Essay">Essay</option>
+        <option value="Haiku">Haiku</option>
+        <option value="Joke">Joke</option>
+      </select>
+    </div>
+
+    <!-- Media Type: radio group + More dropdown -->
+    <fieldset
+      class="radio-group"
+      aria-label="Media type"
+      style="margin-top:12px"
+    >
+      <legend class="visually-hidden">Media type</legend>
+      <label
+        ><input type="radio" name="mediaType" value="eBook" checked /> eBook</label
+      >
+      <label
+        ><input type="radio" name="mediaType" value="Wall Art" /> Wall Art</label
+      >
+      <label
+        ><input type="radio" name="mediaType" value="Calendar" /> Calendar</label
+      >
+      <label
+        ><input type="radio" name="mediaType" value="Wallpaper" /> Wallpaper</label
+      >
+    </fieldset>
+
+    <div style="margin-top:8px">
+      <label
+        for="more-media-types"
+        style="display:block;font-size:13px;margin-bottom:4px"
+        >More media types</label
+      >
+      <select id="more-media-types" name="moreMediaType">
+        <option value="">Choose…</option>
+        <option value="eBook">eBook</option>
+        <option value="Wall Art">Wall Art</option>
+        <option value="Calendar">Calendar</option>
+        <option value="Wallpaper">Wallpaper</option>
+        <option value="Poster">Poster</option>
+      </select>
+    </div>
+
+    <!-- Pages input + preset buttons -->
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+      <label for="pages" style="font-size:13px">Pages</label>
+      <input
+        id="pages"
+        name="pages"
+        type="number"
+        min="1"
+        max="20"
+        value="1"
+        style="width:72px;padding:6px"
+      />
+      <div class="presets">
+        <button type="button" data-preset="1">1</button>
+        <button type="button" data-preset="2">2</button>
+        <button type="button" data-preset="5">5</button>
+      </div>
+      <div style="font-size:12px;color:#666">(min 1, max 20)</div>
+    </div>
+  </div>
   {#if loading}
     <div class="loading">Generating…</div>
   {/if}
@@ -91,5 +184,13 @@
   .loading {
     color: #666;
     font-size: 13px;
+  }
+  .visually-hidden {
+    position: absolute !important;
+    height: 1px;
+    width: 1px;
+    overflow: hidden;
+    clip: rect(1px, 1px, 1px, 1px);
+    white-space: nowrap; /* added line */
   }
 </style>
