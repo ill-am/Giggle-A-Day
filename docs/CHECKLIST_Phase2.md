@@ -1,8 +1,8 @@
 # CHECKLIST_Phase2 — Content Input Section Implementation
 
-Document Version: p2v02
+Document Version: p2v00
 Datetime: 2025-10-05
-Branch: aether-rewrite/client-phase2-test
+Branch: aether-rewrite/client-phase2
 
 ## Implementation Priority Order
 
