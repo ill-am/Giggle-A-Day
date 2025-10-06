@@ -1,15 +1,14 @@
 <script>
-  // Phase A: show wired UI for manual verification
+  // Phase A: Basic Visual composition for manual verification
   import PromptForm from "./components/PromptForm.svelte";
   import PreviewWindow from "./components/PreviewWindow.svelte";
   import { promptStore } from "./lib/promptStore.js";
 
-  $: uiState = {
-    status: $promptStore.loading ? "loading" : "idle",
-    message: $promptStore.error,
-  };
+  // uiState mirrors promptStore for PreviewWindow props
+  $: uiState = { status: $promptStore.loading ? "loading" : "idle", message: $promptStore.error };
 
   function handleSubmit(e) {
+    // forward submission to promptStore business logic
     promptStore.submitPrompt(e.detail.prompt);
   }
 </script>
@@ -17,12 +16,7 @@
 <main style="padding:24px;height:100vh">
   <h1>client-v2 — Preview (Phase A)</h1>
   <div style="margin-top:12px">
-    <PromptForm
-      prompt={$promptStore.prompt}
-      loading={$promptStore.loading}
-      errorMsg={$promptStore.error}
-      on:submit={handleSubmit}
-    />
+    <PromptForm prompt={$promptStore.prompt} loading={$promptStore.loading} errorMsg={$promptStore.error} on:submit={handleSubmit} />
   </div>
   <div style="height:70%;margin-top:12px">
     <PreviewWindow {uiState} />
@@ -30,10 +24,5 @@
 </main>
 
 <style>
-  h1 {
-    font-family:
-      system-ui,
-      -apple-system,
-      sans-serif;
-  }
+  h1 { font-family: system-ui, -apple-system, sans-serif; }
 </style>
