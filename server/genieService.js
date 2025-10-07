@@ -1,3 +1,62 @@
+// genieService.js
+// Orchestrator that accepts payloads from plumbing, calls application services
+// (like sampleService), resolves generator intents (stubbed here), sanitizes
+// content via a sanitizer module, and returns persistInstructions for the
+// persistence executor to run.
+
+const { generateFromPrompt } = require("./sampleService");
+const { sanitizeHtml } = require("./sanitizer");
+const crypto = require("crypto");
+
+function makeRequestId() {
+  if (crypto && crypto.randomUUID) return crypto.randomUUID();
+  return "req-" + Date.now() + "-" + Math.floor(Math.random() * 10000);
+}
+
+async function generate(payload = {}, opts = {}) {
+  const requestId = makeRequestId();
+
+  // Call application service to produce intents and content
+  const svcRes = await generateFromPrompt(payload);
+  if (!svcRes || !svcRes.success) {
+    return { success: false, error: "application-service-failed", requestId };
+  }
+
+  const { content, metadata, persistIntents } = svcRes.data;
+
+  // Basic sanitization on content fields (defensive)
+  const safeContent = {
+    ...content,
+    title: sanitizeHtml(String(content.title || "")),
+    body: sanitizeHtml(String(content.body || "")),
+  };
+
+  // Convert persistIntents into persistInstructions (without final paths)
+  // Persistence executor will resolve safe final paths and write them.
+  const persistInstructions = (persistIntents || []).map((intent, idx) => {
+    return {
+      purpose: intent.purpose,
+      filenameHint: intent.filenameHint || `artifact-${requestId}-${idx}`,
+      folderHint: intent.folderHint || "exports",
+      content: intent.content || "",
+      encoding: intent.encoding || "utf8",
+      // keep original intent for traceability
+      originalIntent: intent,
+    };
+  });
+
+  return {
+    success: true,
+    data: {
+      content: safeContent,
+      metadata: { ...metadata, requestId },
+      persistInstructions,
+      requestId,
+    },
+  };
+}
+
+module.exports = { generate };
 const sampleService = require("./sampleService");
 
 /**

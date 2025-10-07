@@ -1,3 +1,75 @@
+// sampleService.js
+// A deterministic example application service (intent producer).
+// It should NOT perform IO. Instead it returns domain content and persistIntents
+// describing what should be persisted or generated.
+
+/**
+ * Example intent schema (returned in persistIntents):
+ * {
+ *   purpose: 'promptFile' | 'previewHtml' | 'asset',
+ *   filenameHint?: string,
+ *   folderHint?: string,
+ *   content?: string, // optional raw content to be persisted
+ *   encoding?: 'utf8' | 'base64',
+ *   generatorIntent?: { id, type: 'text'|'image', prompt, options }
+ * }
+ */
+
+async function generateFromPrompt(payload = {}) {
+  const prompt = (payload.prompt || "").trim() || "A short poem about autumn.";
+  const title = payload.title || "Sample: Autumn Poem";
+
+  // As an example this service requests two persisting actions:
+  // 1) Save a raw prompt file
+  // 2) Save a preview HTML built from generated text (we include the text here
+  //    for simplicity; in a more-declarative flow this could be a generatorIntent).
+
+  const generatedText = `Poem: ${prompt}`; // placeholder deterministic text
+
+  const content = {
+    title,
+    body: generatedText,
+  };
+
+  const persistIntents = [
+    {
+      purpose: "promptFile",
+      filenameHint: "latest_prompt.txt",
+      content: prompt,
+      encoding: "utf8",
+    },
+    {
+      purpose: "previewHtml",
+      filenameHint: "preview.html",
+      // In this simple scaffold we return ready-to-write HTML fragment;
+      // the orchestrator may re-sanitize or transform as required.
+      content: `<h1>${escapeHtml(title)}</h1>\n<div>${escapeHtml(
+        generatedText
+      )}</div>`,
+      encoding: "utf8",
+    },
+  ];
+
+  return {
+    success: true,
+    data: {
+      content,
+      metadata: { source: "sampleService", version: 1 },
+      persistIntents,
+    },
+  };
+}
+
+function escapeHtml(str = "") {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+module.exports = { generateFromPrompt };
 const fs = require("fs");
 const path = require("path");
 

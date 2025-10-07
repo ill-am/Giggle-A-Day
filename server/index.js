@@ -29,6 +29,7 @@ const fs = require("fs");
 const path = require("path");
 const { v4: uuidv4 } = require("uuid");
 const imageRewrite = require("./utils/imageRewrite");
+const persistence = require("./persistence");
 const EXPORT_USE_LOCAL_IMAGES =
   process.env.EXPORT_USE_LOCAL_IMAGES === "1" ||
   process.env.EXPORT_USE_LOCAL_IMAGES === "true";
@@ -671,6 +672,21 @@ app.post("/prompt", async (req, res, next) => {
 
     // Ensure we have a data envelope to return
     const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
+
+    // If the orchestrator produced persistInstructions, execute them via
+    // the persistence executor so files are written to disk atomically.
+    try {
+      if (data.persistInstructions && Array.isArray(data.persistInstructions)) {
+        const persistResults = await persistence.execute(
+          data.persistInstructions
+        );
+        data.persisted = persistResults;
+      }
+    } catch (pe) {
+      console.warn("/prompt: persistence.execute failed", pe && pe.message);
+      // non-fatal: continue returning the generated data
+      data.persisted = null;
+    }
 
     // Attempt to persist prompt and ai result to DB for compatibility with
     // downstream flows. Failures to persist should not block the demo response.
