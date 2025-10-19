@@ -1,6 +1,8 @@
 <script>
   // Basic App component for AetherPress Svelte frontend
   import { appState } from './stores/appState.js';
+  import { modeStore } from './stores/modeStore.js';
+  import ModeIndicator from './components/ModeIndicator.svelte';
 
   // Fetch backend health status on mount
   let health = null;
@@ -56,6 +58,12 @@
 
   <section style="margin-top:2rem; width:100%; max-width:500px;">
     <h2>AI-Powered eBook Creation</h2>
+    <ModeIndicator 
+      mode={$modeStore.current}
+      label={$modeStore.current === 'default' ? 'Basic Prompt → Book' : ''}
+      isActive={true}
+      canRevert={$modeStore.current !== 'default'}
+    />
     <form on:submit|preventDefault={submitPrompt}>
       <label for="prompt">Enter your creative prompt:</label>
       <textarea id="prompt" bind:value={prompt} rows="4" style="width:100%;margin-top:0.5rem;"></textarea>
