@@ -5,7 +5,7 @@ Branch: aetherV0/min_client_flow_06-prev_patch
 
 ## Bug ID: FE-001
 
-**Status:** Open  
+**Status:** Closed  
 **Priority:** High  
 **Component:** Frontend API Integration  
 **Reported Date:** 2025-10-19
@@ -116,3 +116,16 @@ After implementing fix:
 - The backend health endpoint is functioning correctly based on server tests
 - The issue is isolated to development environment proxy configuration
 - No production impact expected as production build uses different routing
+
+## Fix applied
+
+- The `/health` route was added to the Vite dev-server proxy in `client/vite.config.js` and pushed to branch `aetherV0/min_client_flow_06-prev_patch`.
+- Commit: chore(client): add /health proxy to Vite config and update client README; move old bug reports into docs/design and add FE-001 health check report (pushed to remote)
+
+## Verification
+
+1. Restarted frontend dev server (after adding proxy) and reloaded the app.
+2. Observed `/health` returned JSON (200) and the frontend no longer threw the JSON parse error.
+3. Confirmed no API error shows in the UI and network response `Content-Type: application/json` for `/health`.
+
+Status: Closed — fix applied and verified in development.
