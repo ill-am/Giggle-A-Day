@@ -47,10 +47,12 @@
 </script>
 
 <main>
-  <h1>AetherPress Svelte Frontend</h1>
-  <p>Welcome! This is the starting point for your Svelte SPA.</p>
-  <p>Current user: {$appState.user ? $appState.user : 'None'}</p>
-  <p>Backend health: {health ? health : 'Checking...'}</p>
+  <div class="header-info">
+    <p class="title">AetherPress (V0.1)</p>
+    <p class="motto">From Imagination to Publication (It's a snap!)</p>
+    <p>Current user: {$appState.user ? $appState.user : 'None'}</p>
+    <p>Backend health: {health ? health : 'Checking...'}</p>
+  </div>
 
   <section style="margin-top:2rem; width:100%; max-width:500px;">
     <h2>AI-Powered eBook Creation</h2>
@@ -82,9 +84,24 @@
     margin-top: 4rem;
     font-family: system-ui, sans-serif;
   }
-  h1 {
-    color: #ff3e00;
+  .header-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
     margin-bottom: 1rem;
+  }
+  .header-info p {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .title {
+    color: #ff3e00;
+    font-weight: 500;
+  }
+  .motto {
+    color: #444;
+    font-style: italic;
   }
   p {
     color: #444;
