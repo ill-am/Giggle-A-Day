@@ -1,5 +1,21 @@
 # GUI Default Mode - Technical Specification
 
+## Component Architecture
+
+### Structure Overview
+
+```
+ModeSelector/            # Mode selection menu component
+├── ModeOption.svelte    # Individual mode option
+└── ModeMenu.svelte      # Container for mode options
+
+ModeContent/             # Content area component
+├── DefaultMode/         # Default mode implementation
+│   ├── PromptInput.svelte
+│   └── GenerateButton.svelte
+└── future modes...      # Placeholder for future implementations
+```
+
 ## Mode Management Infrastructure
 
 ### State Management

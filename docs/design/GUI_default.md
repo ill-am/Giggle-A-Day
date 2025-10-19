@@ -55,24 +55,28 @@
 
 ### Visual Design
 
-1. Location
+1. Mode Selection Menu
 
    - Positioned directly below "AI-Powered eBook Creation"
-   - Before the prompt input area
-   - Integrated with existing card layout
+   - Light gray background (#f5f5f5)
+   - Currently shows only "Default" (future: Demo, Official)
+   - Single row height with comfortable padding
+   - Full width with subtle borders
+   - Prepared for additional mode options
 
-2. Appearance
+2. Content Area
 
-   - Light gray background (subtle, non-intrusive)
-   - Slightly inset or bordered for definition
-   - Single line height with comfortable padding
-   - Matches section width
-   - Clear visual separation from title and form
+   - Contains the main interaction elements
+   - Light gray background when in default mode
+   - Includes prompt input and generate button
+   - Clear visual separation from menu
+   - Padding matches existing layout
 
-3. Content
-   - Text: "Default: Basic Prompt → Book"
-   - Indicates current processing flow
-   - Simple, informative labeling
+3. Visual Hierarchy
+   - Menu acts as mode indicator/selector
+   - Content area reflects active mode
+   - Default mode shows standard prompt interface
+   - Future modes will modify content area appearance
 
 ### User Experience
 
@@ -105,19 +109,19 @@
 ├──────────────────────────────────────┤
 │     AI-Powered eBook Creation        │
 ├──────────────────────────────────────┤
-│ ┌────────────────────────────────┐   │
-│ │  Default: Basic Prompt → Book  │   │
-│ └────────────────────────────────┘   │
-├──────────────────────────────────────┤
+│ ╔══════════════════════════════════╗ │  Mode Selection Menu
+│ ║ [Default]                        ║ │  (light gray)
+│ ╚══════════════════════════════════╝ │
 │                                      │
-│ Enter your creative prompt:          │
-│ ┌────────────────────────────────┐   │
-│ │                                │   │
-│ │     [Prompt textarea here]     │   │
-│ │                                │   │
-│ └────────────────────────────────┘   │
-│                                      │
-│         [Generate button]            │
+│ ┌──────────────────────────────────┐ │  Content Area
+│ │                                  │ │  (light gray for
+│ │ Enter your creative prompt:      │ │   default mode)
+│ │ ┌────────────────────────────┐   │ │
+│ │ │    [Prompt textarea]       │   │ │
+│ │ └────────────────────────────┘   │ │
+│ │                                  │ │
+│ │        [Generate button]         │ │
+│ └──────────────────────────────────┘ │
 └──────────────────────────────────────┘
 ```
 
