@@ -14,7 +14,7 @@ const genieService = {
 
     // Synchronous demo service - wrap in Promise to keep async contract
     try {
-      const result = sampleService.generateFromPrompt(prompt);
+      const result = await sampleService.generateFromPrompt(prompt);
       return {
         success: true,
         data: {

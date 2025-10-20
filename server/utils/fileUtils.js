@@ -1,15 +1,18 @@
 const fs = require("fs");
+const fsp = fs.promises;
 const path = require("path");
 
-// Atomically write to disk: write to a temp file then rename.
-function safeWriteFileSync(filePath, contents) {
+// Atomically write to disk using async fs.promises: write to a temp file then rename.
+async function safeWriteFileAtomic(filePath, contents) {
   const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+  try {
+    await fsp.mkdir(dir, { recursive: true });
+  } catch (e) {
+    // ignore mkdir errors and let write fail if necessary
   }
   const tmp = `${filePath}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, String(contents), { encoding: "utf8" });
-  fs.renameSync(tmp, filePath);
+  await fsp.writeFile(tmp, String(contents), { encoding: "utf8" });
+  await fsp.rename(tmp, filePath);
 }
 
 function getTimestamp() {
@@ -23,14 +26,15 @@ function getTimestamp() {
   return `${year}${month}${day}-${hours}${minutes}${seconds}`;
 }
 
-function saveContentToFile(content) {
+// Async save - non-blocking for the Node event loop
+async function saveContentToFile(content) {
   const envPath = process.env.PROMPT_LOG_PATH;
   const outputDir = envPath
     ? path.resolve(envPath)
     : path.resolve(__dirname, "..", "data");
   const filename = `prompt-${getTimestamp()}.txt`;
   const fullPath = path.join(outputDir, filename);
-  safeWriteFileSync(fullPath, content);
+  await safeWriteFileAtomic(fullPath, content);
   return fullPath;
 }
 
@@ -43,11 +47,9 @@ function readLatest() {
   try {
     if (!fs.existsSync(outputDir)) return null;
     const files = fs.readdirSync(outputDir);
-    // Filter for prompt files
     const promptFiles = files.filter((f) => /^prompt-.*\.txt$/.test(f));
     if (!promptFiles || promptFiles.length === 0) return null;
 
-    // Find newest by mtime
     let latest = null;
     let latestMtime = 0;
     for (const f of promptFiles) {
@@ -73,6 +75,6 @@ function readLatest() {
 
 module.exports = {
   saveContentToFile,
-  safeWriteFileSync,
+  safeWriteFileAtomic,
   readLatest,
 };

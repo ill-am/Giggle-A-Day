@@ -15,11 +15,13 @@ function makeCopies(content, n = 3) {
   return Array.from({ length: n }, () => content);
 }
 
-function generateFromPrompt(prompt) {
+async function generateFromPrompt(prompt) {
   // Business logic: request that the prompt be saved, but do not fail
   // generation if the save fails (non-fatal persistence).
   try {
-    saveContentToFile(prompt);
+    // saveContentToFile may be async; await it if it returns a Promise
+    const res = saveContentToFile(prompt);
+    if (res && typeof res.then === "function") await res;
   } catch (e) {
     // Non-fatal: log and continue
     // eslint-disable-next-line no-console
