@@ -1,326 +1,246 @@
-# Backend Logic Flow: /prompt to genieService
+# Backend Logic Flow: /prompt to genieService — Consolidated (2025-10-20 19:55:27)
 
-This document outlines the backend logic for handling a user's prompt, from the initial API request to the final mock data generation. This flow is designed as a placeholder for a future AI implementation.
+This document captures the current, actual implementation (as of 2025-10-20) for the `/prompt` -> generation flow in the server. It summarizes the runtime wiring and the concrete modules in the codebase.
 
-## High-Level Diagram
+## High-level summary
 
-```
-Client Request
-      │
-      ▼
-┌───────────────────┐
-│ POST /prompt      │  (in server/index.js)
-│ (Controller)      │
-└───────────────────┘
-      │
-      ▼
-┌───────────────────┐
-│ genieService      │  (in server/genieService.js)
-│ (Adapter/Service) │
-└───────────────────┘
-      │
-      ▼
-┌───────────────────┐
-│ sampleService     │  (in server/sampleService.js)
-│ (Mock Logic)      │
-└───────────────────┘
-```
+- Controller: `POST /prompt` in `server/index.js` — validates input, delegates to `genieService.generate(prompt)`, attempts non-fatal DB persistence via `crud`, and returns a `{ success: true, data }` JSON payload.
+- Service/Adapter: `server/genieService.js` — exposes `async generate(prompt)`, delegates to `sampleService.generateFromPrompt(prompt)` (awaits it), wraps result into `{ success: true, data: {...} }`, and provides helpers for file persistence (`saveContentToFile` is now provided by `server/utils/fileUtils.js`).
+- Business/Mock: `server/sampleService.js` — mock implementation; `async generateFromPrompt(prompt)` builds content (title/body), requests prompt save via `fileUtils.saveContentToFile(prompt)` (non-fatal), and returns `{ content, copies }`.
+- Utilities: `server/utils/fileUtils.js` — async `saveContentToFile(content)` implemented with `fs.promises` and an atomic temp-write/rename helper; `readLatest()` remains available (sync) to load the latest saved prompt for legacy routes.
 
----
+## Priority: Succinct plan (apply immediately)
 
-## Step-by-Step Breakdown
+Succinct plan
 
-### 1. The `/prompt` Endpoint (Controller/Orchestrator)
+- Contract
 
-- **Location:** `server/index.js`
+  - `genieService.generate(prompt)` — normalize prompt, return cached result if present, otherwise call the generation service and return the generated content wrapped as `{ success: true, data }`.
+  - Generation services (e.g. `sampleService`, later `aetherService`) only produce `{ content, copies }` and do not write to the DB.
 
-The lifecycle of a request begins at this Express route handler. Its primary responsibilities are orchestration and control, not business logic.
+- Minimal implementation steps
 
-- **Receives Request:** It handles the `POST /prompt` request from the frontend.
-- **Validates Input:** It performs a basic check to ensure the `prompt` from the request body is a non-empty string.
-- **Delegates to Service Layer:** It calls `await genieService.generate(prompt)`. This is the crucial hand-off. The controller does not know or care _how_ the content is generated; it only knows that `genieService` is responsible for it.
-- **Handles Persistence (Optional):** After getting a result from `genieService`, it attempts to save the prompt and the result to the database via the `crud` module. This step is treated as non-fatal to ensure the user gets a response even if the database write fails.
-- **Sends Response:** It takes the data returned by `genieService`, wraps it in a final JSON structure, and sends it back to the client with a `201 Created` status.
+  1.  In `genieService.generate`: normalize prompt and lookup DB for an existing prompt record.
+  2.  If DB hit: load and return the latest AI result (include `promptId` and `resultId`).
+  3.  If DB miss: call the generation service, receive `{ content, copies }`, then persist prompt and AI result from `genieService` (non-fatal) and return the envelope.
+  4.  Remove DB writes from the `/prompt` controller — `genieService` owns persistence.
+  5.  Keep `fileUtils.saveContentToFile()` as an optional, non-fatal disk log called by services.
 
-### 2. `genieService` (Service Layer/Adapter)
+- Concurrency (brief)
 
-- **Location:** `server/genieService.js`
+  - Do DB-first serial processing: if DB has a match, return immediately; only on miss proceed to generation.
+  - For duplicate concurrent misses, prefer DB unique constraint + upsert as the baseline; optionally add in-process request coalescing to avoid duplicate AI calls.
 
-This module acts as an adapter or a middleman. It decouples the controller from the concrete implementation of the generation logic.
+- Non-fatal persistence
 
-- **Provides a Stable Interface:** It exposes an `async generate(prompt)` function. This `async` contract is important, as it allows the underlying implementation to be either synchronous (like the current `sampleService`) or truly asynchronous (like a future real AI service) without requiring changes to the controller.
-- **Delegates to Mock Logic:** It directly calls `sampleService.generateFromPrompt(prompt)` to get the "generated" content.
-- **Wraps the Result:** It takes the raw output from `sampleService` and wraps it in a standardized `{ success: true, data: {...} }` object, providing a consistent return structure for the controller.
+  - Persist failures (DB or disk) must be logged and not block returning generated content.
 
-### 3. `sampleService` (Mock Implementation)
+- Acceptance criteria
+  - Repeated prompt → immediate DB return, no generation call.
+  - New prompt → generation service called once, genieService stores prompt+result, response includes `promptId`/`resultId` when available.
 
-- **Location:** `server/sampleService.js`
+Implementation schedule
 
-This is where the "work" is currently done. It is a mock service that **does not connect to any AI**. Its purpose is to simulate a response for development and testing.
-
-- **Saves the Prompt:** It writes the user's prompt to a local file (`samples/latest_prompt.txt`).
-- **"Generates" Content:** It creates a trivial response by taking the first few words of the prompt as a "title" and using the full prompt as the "body".
-- **Returns Mock Data:** It returns a simple object containing the filename, the generated content, and several copies of that content.
-
----
-
-## The Return Path
-
-The data flows back up the chain in reverse:
-
-1.  `sampleService` returns its raw, mock data object.
-2.  `genieService` receives this object, wraps it in its standard `data` envelope, and returns it as a Promise.
-3.  The `/prompt` handler `await`s the result from `genieService`, performs the optional database write, and sends the final, polished JSON payload to the frontend client.
-
-This architecture successfully isolates concerns, making it straightforward to replace the `sampleService` with a real AI implementation in the future by only modifying `genieService`.
-
----
-
-## Example Walkthrough
-
-Let's trace a request through the system with a concrete example.
-
-**Frontend Prompt:** `A noir detective story set in a city of robots.`
-
-1.  **`POST /prompt` (Controller):**
-
-    - The controller receives the request with `req.body.prompt` containing the sentence above.
-    - It validates that the prompt is a non-empty string.
-    - It calls `await genieService.generate("A noir detective story set in a city of robots.")`.
-
-2.  **`genieService` (Adapter):**
-
-    - The `generate` function receives the prompt string.
-    - It passes the prompt directly to `sampleService.generateFromPrompt(...)`.
-
-3.  **`sampleService` (Mock Logic):**
-
-    - `savePrompt` is called, writing the full prompt to `/workspaces/vanilla/samples/latest_prompt.txt`.
-    - `buildContent` is called. It splits the prompt into words and takes the first 6 to create a title: `"Prompt: A noir detective story set in"`. The body is the full, original prompt.
-    - `makeCopies` creates an array of 3 identical copies of the `content` object.
-    - It returns the following object to `genieService`:
-      ```json
-      {
-        "filename": "/workspaces/vanilla/samples/latest_prompt.txt",
-        "content": {
-          "title": "Prompt: A noir detective story set in",
-          "body": "A noir detective story set in a city of robots."
-        },
-        "copies": [ ...3 copies... ]
-      }
-      ```
-
-4.  **`genieService` (Return Path):**
-
-    - It receives the object from `sampleService`.
-    - It wraps this object inside a `data` property and adds `success: true`.
-    - It returns the following to the `/prompt` controller:
-      ```json
-      {
-        "success": true,
-        "data": {
-          "filename": "...",
-          "content": { ... },
-          "copies": [ ... ]
-        }
-      }
-      ```
-
-5.  **`/prompt` (Return Path):**
-    - The controller `await`s and receives the result from `genieService`.
-    - It calls `crud.createPrompt(...)`, which saves the prompt to the database and returns a new record, e.g., `{ id: 28 }`.
-    - It calls `crud.createAIResult(...)`, which saves the generated content and returns a new record, e.g., `{ id: 18 }`.
-    - It adds these new IDs (`promptId: 28`, `resultId: 18`) to the `data` object it received from `genieService`.
-    - Finally, it sends the complete, aggregated JSON object to the frontend.
-
-**Final Frontend Preview:**
-
-```json
-{
-  "success": true,
-  "data": {
-    "content": {
-      "title": "Prompt: A noir detective story set in",
-      "body": "A noir detective story set in a city of robots."
-    },
-    "copies": [
-      {
-        "title": "Prompt: A noir detective story set in",
-        "body": "A noir detective story set in a city of robots."
-      },
-      {
-        "title": "Prompt: A noir detective story set in",
-        "body": "A noir detective story set in a city of robots."
-      },
-      {
-        "title": "Prompt: A noir detective story set in",
-        "body": "A noir detective story set in a city of robots."
-      }
-    ],
-    "filename": "/workspaces/vanilla/samples/latest_prompt.txt",
-    "promptId": 28,
-    "resultId": 18
-  }
-}
-```
-
----
-
-## Revised Flow: Correcting Responsibilities
-
-The initial design mixes concerns, with `sampleService` handling file I/O. The following revised flow establishes a cleaner separation of responsibilities, where `sampleService` owns the business logic and `genieService` provides the necessary tools.
-
-### Revised High-Level Diagram
+This work will be implemented incrementally whenever time permits. Each Phase in the "Implementation plan — phased" section will be delivered on its own feature branch, gated by the `GENIE_PERSISTENCE_ENABLED` feature flag where applicable, and accompanied by tests and a short rollout/rollback note. Changes will be non-breaking by default and verified in staging before enabling in production.
 
 ```
 Client Request
-      │
-      ▼
-┌───────────────────┐
-│ POST /prompt      │
-│ (Controller)      │
-└───────────────────┘
-      │
-      ▼
-┌───────────────────┐
-│ genieService      │
-│ (Service Layer)   │
-└───────────────────┘
-      │         ▲
-      │         │
-      ▼         │ (calls utility)
-┌───────────────────┐
-│ sampleService     │
-│ (Business Logic)  │
-└───────────────────┘
+   │
+   ▼
+┌────────────────────────────┐
+│ POST /prompt               │
+│ (Controller in server/)    │
+└────────────────────────────┘
+   │
+   ▼
+┌────────────────────────────┐        (optional, non-fatal)
+│ genieService               │◀────────────────────────────────┐
+│ (Service / Adapter)        │                                 │
+└────────────────────────────┘                                 │
+   │                                                           │
+   │ calls/awaits                                              │
+   ▼                                                           │
+┌────────────────────────────┐                                 │
+│ sampleService              │                                 │
+│ (Business logic - async)   │── calls ──▶ fileUtils.saveContentToFile()
+└────────────────────────────┘                                 │
+   │                                                           │
+   ▼                                                           │
+┌────────────────────────────┐                                 │
+│ server/utils/fileUtils.js  │                                 │
+│ (saveContentToFile / readLatest)                             |
+└────────────────────────────┘                                 │
+   │                                                           │
+   ▼                                                           │
+  (writes prompt files to server/data/)                        │
+                                                               │
+Controller (after receiving data)
+  │
+  └─ NO DB WRITES: controller is cut off from persistence. Persistence logic has been copied to `server/utils/dbUtils.js` and will be owned and invoked by `genieService` in a later phase. The controller MUST only forward the result returned by `genieService` and must not perform DB writes.
+
+Legacy preview route: `/genie` or `/preview`
+  │
+  └─ calls fileUtils.readLatest() to display the most recent prompt
+
 ```
 
-### Revised Step-by-Step Breakdown
+1. Client sends `POST /prompt` with JSON body `{ prompt: "..." }`.
+2. `server/index.js` validates `prompt` and calls `await genieService.generate(prompt)`.
+3. `server/genieService.generate(prompt)`:
+   - Validates prompt (it already arrived validated by the controller).
+   - Calls `await sampleService.generateFromPrompt(prompt)`.
+   - Receives `{ content, copies }` and returns `{ success: true, data: { content, copies } }` to the controller.
+4. `server/sampleService.generateFromPrompt(prompt)` (async):
+   - Calls `fileUtils.saveContentToFile(prompt)` inside a `try/catch` to persist the prompt. Failures are logged but do not prevent returning the generated content.
+   - Builds `content` (title: first N words; body: full prompt) and `copies` array.
+   - Returns `{ content, copies }`.
+5. Controller optionally writes DB records via `crud.createPrompt` and `crud.createAIResult` (non-fatal if DB writes fail) and sends HTTP 201 response with the data envelope.
 
-1.  **`/prompt` (Controller):** No change. It receives the request and calls `genieService.generate(prompt)`.
+### Key implementation notes
 
-2.  **`genieService` (Service Layer):**
+- `sampleService.generateFromPrompt` is `async` to allow direct awaiting of future async operations (file I/O, network/AI calls) without changing the controller or adapter layers.
+- File writes moved to `server/utils/fileUtils.js` and are implemented with `fs.promises` and an atomic tmp-write+rename pattern for safety.
+- `readLatest()` remains synchronous in `fileUtils` to serve legacy preview routes (`/genie`, `/preview`) without introducing async changes there.
+- `server/data/` is ignored in `.gitignore` to avoid committing generated prompt files.
 
-    - Its `generate` function is called by the controller.
-    - It immediately calls `sampleService.generateFromPrompt(prompt, this)`, passing a reference to itself so that `sampleService` can access its utilities.
+### Files of interest (paths)
 
-3.  **`sampleService` (Business Logic):**
+- `server/index.js` — HTTP routes and controller orchestration
+- `server/genieService.js` — adapter/service layer (awaits sampleService)
+- `server/sampleService.js` — business/mock logic (async)
+- `server/utils/fileUtils.js` — `saveContentToFile` (async) and `readLatest` (sync)
+- `server/crud.js` — persistence helpers (DB)
 
-    - Its `generateFromPrompt` function now accepts the `genieService` instance as an argument.
-    - **Business Logic Rule #1: Save the prompt.** It fulfills this by calling `genieService.saveContentToFile(prompt)`. It decides _that_ the save must happen and delegates the _how_ to the service layer.
-    - **Business Logic Rule #2: Generate content.** It proceeds to build the title, body, and copies as before.
-    - It returns the generated content object (without any filename) back to `genieService`.
+### Acceptance criteria (runtime)
 
-4.  **Return Path:**
-    - `genieService` receives the content object from `sampleService`.
-    - It wraps the result in the standard `{ success: true, data: {...} }` envelope.
-    - It returns the final object to the `/prompt` controller, which continues the flow as before.
+- `POST /prompt` returns 201 with `{ success: true, data: { content, copies, promptId?, resultId? } }`.
+- Prompt persistence is non-fatal: failures to save to disk or DB do not prevent returning generated content.
+- `genieService.generate` remains a stable `async` entrypoint for replacing the mock with real AI services in future.
 
-This revised architecture correctly positions `sampleService` as the owner of the business process and `genieService` as a provider of services and utilities.
+### Next steps (recommended)
 
----
-
-## Implementation Plan
-
-Here is a proposed plan to implement the revised flow.
-
-### 1. Refactor `genieService` to Provide a Utility
-
-- **Create a `saveContentToFile` utility function** inside `genieService.js`. This function will:
-  - Accept a `content` string as an argument.
-  - Define the output directory (e.g., `server/data/`).
-  - Generate a unique filename using a timestamp (e.g., `prompt-20251020-153000.txt`).
-  - Use the existing `safeWriteFileSync` logic to save the file.
-  - Return the full path of the newly created file.
-- **Export the utility function** alongside the main `generate` function.
-
-### 2. Update `genieService`'s `generate` Function
-
-- Modify the `generate` function to pass a reference to itself when it calls `sampleService`.
-  ```javascript
-  // server/genieService.js
-  async generate(prompt) {
-    // ...
-    const result = sampleService.generateFromPrompt(prompt, this);
-    // ...
-  }
-  ```
-
-### 3. Refactor `sampleService` to Use the Utility
-
-- **Remove file-handling logic:** Delete the `savePrompt` and `safeWriteFileSync` functions from `sampleService.js`. Also remove the `DEFAULT_SAMPLES_PATH` constant.
-- **Update `generateFromPrompt`:**
-  - Modify its signature to accept `genieService` as the second argument.
-  - The first thing it should do is call `genieService.saveContentToFile(prompt)`.
-  - It should no longer return a `filename` in its result object.
-
-### 4. Dependency Injection
-
-- To make the relationship explicit, `genieService.js` will need to be updated to pass its own module exports to `sampleService`. This can be done by modifying how `sampleService` is required or by passing `module.exports` directly in the `generate` function call. The latter is simpler for this case.
-
-This plan will successfully refactor the code to achieve the desired separation of concerns.
+- Add unit tests for async generation and non-fatal save failures.
+- Consider converting `readLatest()` to async if legacy routes are updated.
+- Keep `PROMPT_LOG_PATH` config documented for deployment.
 
 ---
 
-## Refactoring Summary
+(Consolidated by automation on 2025-10-20 19:55:27)
 
-The refactoring was successfully accomplished. The `sampleService` now correctly delegates file-writing operations to a utility function within `genieService`, cleaning up the separation of concerns.
+## Implementation plan — phased
 
----
+Below is a safe, incremental rollout plan to implement the Succinct plan while minimizing risk.
 
-## Future Implementation Plan
+**Phase 0** — Prep & safety (0.5–1 day)
 
-This section captures the remaining architectural improvements and feature deletions that were identified.
+- Add feature flag: `GENIE_PERSISTENCE_ENABLED=false` by default.
+- Add `server/utils/normalizePrompt.js` (trim + collapse whitespace). Default: do NOT lowercase.
+- Scaffold unit test stubs and CI checks.
+- Sanity: no change to runtime behavior when flag is false.
+  Acceptance: repo builds and tests run; server starts with flag=false.
 
-### A. Final To-Do Items (Architectural Improvements)
+**Phase 1** — Read-only DB lookup in `genieService` (1–2 days)
 
-1.  **Resolve Circular Dependency** (0.75 - 1.5 hours)
+- Implement normalized, read-only DB lookup in `genieService.generate(prompt)`.
+- If found, return cached result; otherwise fall through to generation.
+- Add unit and integration tests for hit/miss paths.
+  Acceptance: DB hits return existing content; no DB writes performed.
 
-    - **Action:** Create a new `server/utils/fileUtils.js` module. Move the `saveContentToFile` and `safeWriteFileSync` functions into it. Update `genieService` and `sampleService` to import and use this new utility module, removing the need to pass `this`.
-    - **Estimate:** 45 - 90 minutes.
+**Phase 2** — Persistence in `genieService` behind flag (1–2 days)
 
-2.  **Implement Robust Error Handling** (0.25 - 0.5 hours)
+- On miss, call generation service, then persist prompt/result from `genieService` using `crud.createPrompt` and `crud.createAIResult` inside try/catch blocks.
+- Do not remove controller writes yet; keep both paths during rollout for safety and testing.
+  Acceptance: when flag=true in staging, new prompts persist; failures are logged and do not crash.
 
-    - **Action:** In `sampleService.js`, wrap the call to the file-saving utility in a `try...catch` block. On failure, log the error to the console but allow the function to continue generating and returning content.
-    - **Estimate:** 15 - 30 minutes.
+**Phase 3** — Remove controller DB writes (0.5–1 day)
 
-3.  **Add Configuration for Output Path** (0.25 - 0.5 hours)
-    - **Action:** In the new `fileUtils.js` module, modify the `saveContentToFile` function to read the output directory from `process.env.PROMPT_LOG_PATH`, falling back to `server/data/` if the environment variable is not set.
-    - **Estimate:** 15 - 30 minutes.
+- After validating Phase 2 in staging, remove DB writes from `/prompt` controller.
+- Update tests and ensure end-to-end behavior unchanged.
+  Acceptance: controller no longer writes; genieService owns persistence.
 
-### B. Feature Deletion: Remove `readLatest()`
+**Phase 4** — DB dedupe (migration + upsert) (1–2 days)
 
-1.  **Remove `readLatest` Functionality** (0.25 - 0.75 hours)
-    - **Action:** The `readLatest()` function is now a dangling reference. The plan is to remove it completely. This involves:
-      1.  Searching the codebase for any calls to `genieService.readLatest()`.
-      2.  Removing the calling code or replacing it with a new implementation if the functionality is still needed elsewhere.
-      3.  Deleting the `readLatest()` function from `genieService.js`.
-    - **Estimate:** 15 - 45 minutes, depending on how many places use the function.
+- Add DB migration: unique index on normalized prompt text.
+- Implement upsert behavior in `crud.createPrompt` to return existing record on conflict.
+  Acceptance: duplicates are deduped at DB level.
 
----
+Phase 5 — Optional in-process coalescing (0.5–1 day)
 
-## Final To-Do: Address Architectural Considerations
+- Implement a per-prompt Promise map in `genieService` so concurrent misses for the same prompt await the same generation Promise.
+- Use DB unique constraint as safety net.
+  Acceptance: concurrent identical requests coalesce in-process.
 
-After the basic refactoring is complete, a final pass must be made to address the following architectural points:
+Phase 6 — Docs, monitoring, cleanup (0.5–1 day)
 
-1.  **Circular Dependency:** The pragmatic solution of passing `this` creates a circular dependency (`genieService` -> `sampleService` -> `genieService`). This should be resolved by introducing a dedicated, independent `utils` module for common functions like `saveContentToFile`. Both services can then depend on `utils` without depending on each other.
-2.  **Error Handling:** Implement robust error handling in `sampleService`. If the call to `genieService.saveContentToFile()` fails, the failure should be logged, but the service should still proceed to generate and return the content, preserving the system's non-fatal persistence pattern.
-3.  **Configuration:** The output path (`server/data/`) is currently hardcoded. This should be moved to an environment variable (e.g., `PROMPT_LOG_PATH`) to make the application more configurable.
+- Update design docs, archived doc, and README with the final flow, feature flags, and migration steps.
+- Add structured logs and basic metrics (hits/misses/persistence errors).
+  Acceptance: docs updated; monitoring in place.
 
----
+Risk mitigations & rollback
 
-### ADDENDUM — Implementation Actionables
+- Default flag=false. Rollout to staging first, enable flag in production only after smoke tests.
+- Keep persistence attempts non-fatal (try/catch). Server must never crash from persistence errors.
+- Rollback: set flag=false to stop persistence; revert PR if code bug requires it.
 
-This concise checklist captures the concrete code changes required to make `sampleService.generateFromPrompt` async, align callers, and modernize the file utilities. Insert these as direct next steps for the implementation team.
+Questions & decisions needed
 
-- Make `sampleService.generateFromPrompt` async and `await` any file-save operation; preserve non-fatal persistence (try/catch around save).
-- Update `genieService.generate` to `await sampleService.generateFromPrompt(prompt)` so the adapter correctly handles the async contract.
-- Search for any direct callers of `sampleService.generateFromPrompt` and update them to `await` the Promise (most callers already go through `genieService`).
-- Convert `server/utils/fileUtils.js` save/write functions to use `fs.promises` (async) for non-blocking I/O; keep `readLatest` available synchronously for backward compatibility with existing routes.
-- Add unit tests for async generation and non-fatal save failures; run lint/tests and update documentation.
+- Confirm normalization: trim + collapse whitespace, do NOT lowercase by default. OK?
+- Confirm rollout strategy: staging-first, then production. OK?
 
-Acceptance criteria (brief):
+## Decision: Standardize to PostgreSQL + Prisma (chosen)
 
-- `sampleService.generateFromPrompt` returns a Promise that resolves to the same `{ content, copies }` object.
-- `genieService.generate` remains async and returns the same `{ success: true, data: {...} }` envelope.
-- The `/genie` GET route still functions (reads latest saved prompt) and non-fatal behavior preserved when file writes fail.
+After reviewing the repository and devcontainer configuration, we are standardizing on PostgreSQL with Prisma as the canonical database stack for this project. Rationale and concrete next steps are recorded here so this decision remains in-project (not ephemeral).
+
+Findings that drove this choice
+
+- `server/prisma/schema.prisma` exists and declares `provider = "postgresql"`.
+- The devcontainer (`.devcontainer/docker-compose.yml` and `devcontainer.json`) provisions a `db` service using `postgres:16` and exposes port 5432. `DATABASE_URL` is configured to point at this service for the dev container.
+- `@prisma/client` and `prisma` are present in `server/package.json`.
+- Project health checks report `Prisma: OK` and `Schema: VALID` when running `./server/scripts/db-health.sh --check=all`.
+- The runtime currently uses a legacy SQLite implementation (`server/db.js` + `server/crud.js`) which is functional but diverges from the declared Prisma/Postgres intent.
+
+Decision summary
+
+- Adopt PostgreSQL + Prisma as the canonical DB for the project.
+- Migrate runtime code to use Prisma client (stepwise) and deprecate `server/db.js` + `server/crud.js` once parity is achieved and tests pass.
+
+Actionable migration checklist
+
+1. Replace `server/db.js`/`server/crud.js` raw-sql paths with Prisma client calls, or create `server/utils/dbUtils.js` that maps the existing `crud` API to Prisma client under the hood. Keep the `crud` shim around as an adapter for a short transition window if helpful for safer rollouts.
+2. Migrate or seed any required SQLite data into Postgres if preserving historical data is necessary. If historical data can be discarded for the rollout, document that and proceed without a data migration.
+3. Update tests and dev workflows to use Docker Postgres in CI and the devcontainer. Add a CI job that runs Prisma migrations and runs the test matrix against Postgres.
+4. Add Prisma migration scripts (use `prisma migrate`), keep the `schema.prisma` in source, and document the migration/release steps.
+
+Implementation guardrails
+
+- Make changes behind the `GENIE_PERSISTENCE_ENABLED` feature flag where possible during the phased rollout.
+- Keep persistence operations non-fatal (try/catch + logging) during early phases.
+- Provide adapter shims (`server/utils/dbUtils.js` or `crud` wrappers) so we can incrementally replace call sites and test in staging without big-bang replacements.
+
+If you agree with this decision I will create a feature branch and begin a small, focused PR to add `server/utils/dbUtils.js` implemented with Prisma client (not wired into runtime), plus unit tests and CI adjustments. This will make reviewing the Prisma runtime code easy and low-risk.
+
+### Status update (2025-10-20)
+
+Some work has already been implemented to make the migration reviewable and low-risk. Summary:
+
+- Implemented `server/utils/dbUtils.js` — a Prisma-backed shim of the persistence API (exports: `createPrompt`, `createAIResult`, `getAIResultById`, `getPrompts`). Implementation notes:
+
+  - Lazy-requires `@prisma/client` inside the getter so imports don't immediately instantiate a DB connection.
+  - Exposes test helpers `_setPrisma(prismaInstance)` and `_resetPrisma()` so unit tests can inject a mock Prisma client without needing `prisma generate` or a running Postgres instance.
+
+- Added unit tests: `server/__tests__/dbUtils.test.mjs` — uses an injected mock Prisma and verifies the wrapper shapes and return values. Tests are written as ESM test modules to work with Vitest and the existing server module system.
+
+- Test run status:
+
+  - I ran the server test suite (command: `npm --prefix server run test:run`). The new `dbUtils` tests pass.
+  - There remain two unrelated server tests failing (pre-existing): one in `aiService` and one in `failure-modes` — these are unrelated to the Prisma shim and will be addressed separately.
+
+- Wiring/runtime: the `dbUtils` module is not wired into runtime yet. The server still runs on the legacy SQLite path (`server/db.js` + `server/crud.js`). This was intentional: the Prisma shim was added as a non-invasive, reviewable artifact and will be wired behind the feature flag in a follow-up PR.
+
+Next short actionable items
+
+1. Create branch `feature/prisma-dbutils` and open a PR that contains `server/utils/dbUtils.js` and its tests. Keep the feature flag OFF and do not change runtime wiring in that PR.
+2. Add a CI job (optional follow-up) that runs Prisma migrations and server tests against the devcontainer Postgres for integration confidence.
+3. When the PR is approved, proceed to Phase 1: implement read-only lookups in `genieService` using `dbUtils` behind `GENIE_PERSISTENCE_ENABLED=false` and add integration tests.
+
+If you want I can open the branch and PR now (it contains only the shim and tests). Otherwise I'll wait for your go-ahead before creating the branch.
