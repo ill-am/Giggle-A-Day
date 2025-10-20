@@ -262,6 +262,43 @@ This plan will successfully refactor the code to achieve the desired separation 
 
 ---
 
+## Refactoring Summary
+
+The refactoring was successfully accomplished. The `sampleService` now correctly delegates file-writing operations to a utility function within `genieService`, cleaning up the separation of concerns.
+
+---
+
+## Future Implementation Plan
+
+This section captures the remaining architectural improvements and feature deletions that were identified.
+
+### A. Final To-Do Items (Architectural Improvements)
+
+1.  **Resolve Circular Dependency** (0.75 - 1.5 hours)
+
+    - **Action:** Create a new `server/utils/fileUtils.js` module. Move the `saveContentToFile` and `safeWriteFileSync` functions into it. Update `genieService` and `sampleService` to import and use this new utility module, removing the need to pass `this`.
+    - **Estimate:** 45 - 90 minutes.
+
+2.  **Implement Robust Error Handling** (0.25 - 0.5 hours)
+
+    - **Action:** In `sampleService.js`, wrap the call to the file-saving utility in a `try...catch` block. On failure, log the error to the console but allow the function to continue generating and returning content.
+    - **Estimate:** 15 - 30 minutes.
+
+3.  **Add Configuration for Output Path** (0.25 - 0.5 hours)
+    - **Action:** In the new `fileUtils.js` module, modify the `saveContentToFile` function to read the output directory from `process.env.PROMPT_LOG_PATH`, falling back to `server/data/` if the environment variable is not set.
+    - **Estimate:** 15 - 30 minutes.
+
+### B. Feature Deletion: Remove `readLatest()`
+
+1.  **Remove `readLatest` Functionality** (0.25 - 0.75 hours)
+    - **Action:** The `readLatest()` function is now a dangling reference. The plan is to remove it completely. This involves:
+      1.  Searching the codebase for any calls to `genieService.readLatest()`.
+      2.  Removing the calling code or replacing it with a new implementation if the functionality is still needed elsewhere.
+      3.  Deleting the `readLatest()` function from `genieService.js`.
+    - **Estimate:** 15 - 45 minutes, depending on how many places use the function.
+
+---
+
 ## Final To-Do: Address Architectural Considerations
 
 After the basic refactoring is complete, a final pass must be made to address the following architectural points:
@@ -269,26 +306,3 @@ After the basic refactoring is complete, a final pass must be made to address th
 1.  **Circular Dependency:** The pragmatic solution of passing `this` creates a circular dependency (`genieService` -> `sampleService` -> `genieService`). This should be resolved by introducing a dedicated, independent `utils` module for common functions like `saveContentToFile`. Both services can then depend on `utils` without depending on each other.
 2.  **Error Handling:** Implement robust error handling in `sampleService`. If the call to `genieService.saveContentToFile()` fails, the failure should be logged, but the service should still proceed to generate and return the content, preserving the system's non-fatal persistence pattern.
 3.  **Configuration:** The output path (`server/data/`) is currently hardcoded. This should be moved to an environment variable (e.g., `PROMPT_LOG_PATH`) to make the application more configurable.
-
----
-
-## Feature: Remove `readLatest()` (delegatable)
-
-Purpose: In the revised design we are moving to timestamped, write-only prompt files. The previous `readLatest()` API (which returned a single canonical `samples/latest_prompt.txt`) is no longer required for normal operation. This feature documents the safe way to remove/read-delegate that capability.
-
-Acceptance criteria:
-
-- All runtime references to `readLatest()` are removed or redirected.
-- No tests or endpoints depend on the old `samples/latest_prompt.txt` file.
-- If any admin/debug endpoints require a "latest" view, implement a small `utils/readLatestFromDir(dir)` helper that returns the most recent file (optional, for compatibility).
-
-Steps to remove:
-
-1. Search the codebase for `readLatest()` usages and decide whether to remove or update each call.
-2. Remove `readLatest()` from `sampleService` and from `genieService` if present.
-3. If desired, implement `utils/readLatestFromDir(dir)` and use it only where strictly needed (admin/debug).
-4. Run tests and update documentation to note that prompts are stored as timestamped files in `PROMPT_LOG_PATH`.
-
-Notes:
-
-- This is a safe, optional cleanup and can be implemented after the main refactor. It should be tracked as a delegated feature to ensure no accidental regressions.
