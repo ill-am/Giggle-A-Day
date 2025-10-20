@@ -306,3 +306,21 @@ After the basic refactoring is complete, a final pass must be made to address th
 1.  **Circular Dependency:** The pragmatic solution of passing `this` creates a circular dependency (`genieService` -> `sampleService` -> `genieService`). This should be resolved by introducing a dedicated, independent `utils` module for common functions like `saveContentToFile`. Both services can then depend on `utils` without depending on each other.
 2.  **Error Handling:** Implement robust error handling in `sampleService`. If the call to `genieService.saveContentToFile()` fails, the failure should be logged, but the service should still proceed to generate and return the content, preserving the system's non-fatal persistence pattern.
 3.  **Configuration:** The output path (`server/data/`) is currently hardcoded. This should be moved to an environment variable (e.g., `PROMPT_LOG_PATH`) to make the application more configurable.
+
+---
+
+### ADDENDUM — Implementation Actionables
+
+This concise checklist captures the concrete code changes required to make `sampleService.generateFromPrompt` async, align callers, and modernize the file utilities. Insert these as direct next steps for the implementation team.
+
+- Make `sampleService.generateFromPrompt` async and `await` any file-save operation; preserve non-fatal persistence (try/catch around save).
+- Update `genieService.generate` to `await sampleService.generateFromPrompt(prompt)` so the adapter correctly handles the async contract.
+- Search for any direct callers of `sampleService.generateFromPrompt` and update them to `await` the Promise (most callers already go through `genieService`).
+- Convert `server/utils/fileUtils.js` save/write functions to use `fs.promises` (async) for non-blocking I/O; keep `readLatest` available synchronously for backward compatibility with existing routes.
+- Add unit tests for async generation and non-fatal save failures; run lint/tests and update documentation.
+
+Acceptance criteria (brief):
+
+- `sampleService.generateFromPrompt` returns a Promise that resolves to the same `{ content, copies }` object.
+- `genieService.generate` remains async and returns the same `{ success: true, data: {...} }` envelope.
+- The `/genie` GET route still functions (reads latest saved prompt) and non-fatal behavior preserved when file writes fail.
