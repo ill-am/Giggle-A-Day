@@ -1,3 +1,5 @@
+const { saveContentToFile } = require("./utils/fileUtils");
+
 function buildContent(prompt, opts = {}) {
   const maxWords = opts.titleWords || 6;
   const words = String(prompt || "")
@@ -13,9 +15,19 @@ function makeCopies(content, n = 3) {
   return Array.from({ length: n }, () => content);
 }
 
-function generateFromPrompt(prompt, genieService) {
-  // Business logic: save the prompt to a file using the provided utility
-  genieService.saveContentToFile(prompt);
+function generateFromPrompt(prompt) {
+  // Business logic: request that the prompt be saved, but do not fail
+  // generation if the save fails (non-fatal persistence).
+  try {
+    saveContentToFile(prompt);
+  } catch (e) {
+    // Non-fatal: log and continue
+    // eslint-disable-next-line no-console
+    console.warn(
+      "sampleService: failed to save prompt to file:",
+      e && e.message
+    );
+  }
 
   const content = buildContent(prompt);
   const copies = makeCopies(content, 3);

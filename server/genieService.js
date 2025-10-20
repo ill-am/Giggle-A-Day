@@ -1,28 +1,5 @@
 const sampleService = require("./sampleService");
-const fs = require("fs");
-const path = require("path");
-
-// Atomically write to disk: write to a temp file then rename.
-function safeWriteFileSync(filePath, contents) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const tmp = `${filePath}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmp, String(contents), { encoding: "utf8" });
-  fs.renameSync(tmp, filePath);
-}
-
-function getTimestamp() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  const hours = String(now.getHours()).padStart(2, "0");
-  const minutes = String(now.getMinutes()).padStart(2, "0");
-  const seconds = String(now.getSeconds()).padStart(2, "0");
-  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
-}
+const { saveContentToFile } = require("./utils/fileUtils");
 
 const genieService = {
   // For the demo, generate delegates to sampleService. In future this can
@@ -37,7 +14,7 @@ const genieService = {
 
     // Synchronous demo service - wrap in Promise to keep async contract
     try {
-      const result = sampleService.generateFromPrompt(prompt, this);
+      const result = sampleService.generateFromPrompt(prompt);
       return {
         success: true,
         data: {
@@ -54,15 +31,17 @@ const genieService = {
   },
 
   readLatest() {
-    return sampleService.readLatest();
+    try {
+      const { readLatest } = require("./utils/fileUtils");
+      return readLatest();
+    } catch (e) {
+      return null;
+    }
   },
 
+  // Backwards-compatible wrapper that delegates to utils/fileUtils
   saveContentToFile(content) {
-    const outputDir = path.resolve(__dirname, "data");
-    const filename = `prompt-${getTimestamp()}.txt`;
-    const fullPath = path.join(outputDir, filename);
-    safeWriteFileSync(fullPath, content);
-    return fullPath;
+    return saveContentToFile(content);
   },
 };
 
