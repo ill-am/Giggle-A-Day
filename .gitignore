@@ -55,3 +55,6 @@ server/tmp-e2e-exports/
 client/.vite/
 # Ignore generated Prisma client in dev environment
 server/prisma/prisma-client.js
+
+# Ignore server-generated prompt files and data directory
+server/data/
