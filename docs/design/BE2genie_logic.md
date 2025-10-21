@@ -244,3 +244,40 @@ Next short actionable items
 3. When the PR is approved, proceed to Phase 1: implement read-only lookups in `genieService` using `dbUtils` behind `GENIE_PERSISTENCE_ENABLED=false` and add integration tests.
 
 If you want I can open the branch and PR now (it contains only the shim and tests). Otherwise I'll wait for your go-ahead before creating the branch.
+
+## Implementation note: Task A / Task B (performed)
+
+Short log of small-scope work performed to bootstrap Phase 1 (current snapshot):
+
+- Task A (branch `aetherV0/genie-taskA`): added `server/utils/normalizePrompt.js` and unit tests. This provides a deterministic normalize function used for prompt dedupe/lookups. Tests: `server/__tests__/normalizePrompt.test.mjs` (passing).
+
+- Task B (branch `aetherV0/genie-taskB-clean`): implemented the Phase-1 persistence behavior in `server/genieService.js` with two parts:
+
+  - Read-first lookup: when `GENIE_PERSISTENCE_ENABLED` is enabled, the service performs a read-only lookup using `server/utils/dbUtils.js` to find a matching normalized prompt and returns a cached AI result if found. This path is non-fatal and falls back to generation on any error.
+  - Persist-on-miss (best-effort async): after generation, the service performs an asynchronous, non-blocking persistence step that creates a prompt record and then an AI result record (via `dbUtils.createPrompt` and `dbUtils.createAIResult`). This persistence step is best-effort and will not block or fail the API response. When the background persistence completes successfully, `promptId` and `resultId` are attached to the in-memory returned data envelope (for demo/test visibility).
+
+  - Test helpers: `server/genieService.js` exposes `_setDbUtils`, `_resetDbUtils`, `_setSampleService`, `_resetSampleService` so unit tests can inject mocks without CJS/ESM interop pain.
+  - Smoke script: `server/scripts/smoke_genie_persist_test.js` demonstrates injection and shows persistence logs (e.g., `dbUtils.createPrompt called with:`). Example output from smoke run:
+
+```
+dbUtils.createPrompt called with: Hello persistence test
+dbUtils.createAIResult called with: 123 T: Hello persistence test
+generate returned: { success: true, data: { content: { title: 'T: Hello persistence test', body: 'Hello persistence test' }, copies: [], promptId: 123 } }
+```
+
+Notes and recommendations
+
+- Production contract: keep persistence non-blocking. If consumers need synchronous persistence guarantees, add an explicit API or a test-only mode to await persistence.
+- Tests: For deterministic CI, add a unit test that injects a synchronous `dbUtils` mock and awaits persistence completion via a test-only hook or by making the module expose a promise the test can await.
+
+Branch and PR guidance
+
+- Current working branch with these changes: `aetherV0/genie-taskB-clean`.
+- Requested PR target base branch: `aetherV0/anew-default-basic`.
+
+Status: a PR will be opened from `aetherV0/genie-taskB-clean` into `aetherV0/anew-default-basic` which includes:
+
+- Task A: `server/utils/normalizePrompt.js` and passing unit tests.
+- Task B: `server/genieService.js` changes (read-first lookup behind `GENIE_PERSISTENCE_ENABLED`, and async persist-on-miss), test helpers, and the smoke script at `server/scripts/smoke_genie_persist_test.js`.
+
+Implementation note: persistence is non-blocking by default. The smoke script demonstrates that when `GENIE_PERSISTENCE_ENABLED=1` and a mock `dbUtils` is injected, the background persistence runs and attaches `promptId`/`resultId` to the in-memory returned envelope for visibility during testing. Production behaviour retains the non-blocking contract unless a test-only or opt-in synchronous mode is added.
