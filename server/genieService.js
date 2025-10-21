@@ -1,4 +1,4 @@
-const sampleService = require("./sampleService");
+let sampleService = require("./sampleService");
 const { saveContentToFile } = require("./utils/fileUtils");
 const normalizePrompt = require("./utils/normalizePrompt");
 // dbUtils is a Prisma-backed shim present in the repo. Lazy-require inside
@@ -22,7 +22,10 @@ const genieService = {
     // If persistence/lookup is enabled, attempt a read-only DB lookup first.
     if (ENABLE_PERSISTENCE) {
       try {
-        const dbUtils = require("./utils/dbUtils");
+        const dbUtils =
+          typeof _injectedDbUtils !== "undefined"
+            ? _injectedDbUtils
+            : require("./utils/dbUtils");
         const norm = normalizePrompt(prompt);
         // Try to find a prompt with matching normalized text. dbUtils.getPrompts
         // returns recent prompts; keep this read-only and non-fatal.
@@ -40,9 +43,6 @@ const genieService = {
         if (match && match.id) {
           // Load latest AI result for this prompt id.
           try {
-            const results = (await dbUtils.getPrompts)
-              ? await dbUtils.getPrompts()
-              : [];
             // Prefer direct AI result lookup when available
             const aiRow = await dbUtils
               .getAIResultById(match.id)
@@ -75,14 +75,70 @@ const genieService = {
 
     // Synchronous demo service - wrap in Promise to keep async contract
     try {
-      const result = await sampleService.generateFromPrompt(prompt);
-      return {
+      const svc =
+        typeof _injectedSampleService !== "undefined"
+          ? _injectedSampleService
+          : sampleService;
+      const result = await svc.generateFromPrompt(prompt);
+
+      const out = {
         success: true,
         data: {
           content: result.content,
           copies: result.copies,
         },
       };
+
+      // If persistence is enabled, attempt to persist the prompt and AI result.
+      // This is best-effort and must not block or fail the generation response.
+      if (ENABLE_PERSISTENCE) {
+        (async () => {
+          try {
+            const dbUtils =
+              typeof _injectedDbUtils !== "undefined"
+                ? _injectedDbUtils
+                : require("./utils/dbUtils");
+
+            // Create prompt record
+            try {
+              const p = await dbUtils.createPrompt(String(prompt));
+              if (p && p.id) out.data.promptId = p.id;
+
+              // Create AI result record linked to the prompt
+              try {
+                const ai = await dbUtils.createAIResult(out.data.promptId, {
+                  content: out.data.content,
+                  copies: out.data.copies,
+                });
+                if (ai && ai.id) out.data.resultId = ai.id;
+              } catch (e) {
+                // non-fatal: log and continue
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "genieService: failed to create AI result",
+                  e && e.message
+                );
+              }
+            } catch (e) {
+              // non-fatal: log and continue
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService: failed to create prompt",
+                e && e.message
+              );
+            }
+          } catch (e) {
+            // Non-fatal: log and ignore persistence failures
+            // eslint-disable-next-line no-console
+            console.warn(
+              "genieService: persistence step failed",
+              e && e.message
+            );
+          }
+        })();
+      }
+
+      return out;
     } catch (err) {
       const e = new Error("Generation failed: " + (err && err.message));
       // @ts-ignore
@@ -107,3 +163,19 @@ const genieService = {
 };
 
 module.exports = genieService;
+
+// Test helpers: allow injecting a mock dbUtils or sample service for unit tests
+let _injectedDbUtils;
+let _injectedSampleService;
+module.exports._setDbUtils = (m) => {
+  _injectedDbUtils = m;
+};
+module.exports._resetDbUtils = () => {
+  _injectedDbUtils = undefined;
+};
+module.exports._setSampleService = (m) => {
+  _injectedSampleService = m;
+};
+module.exports._resetSampleService = () => {
+  _injectedSampleService = undefined;
+};

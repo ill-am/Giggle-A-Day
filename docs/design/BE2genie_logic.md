@@ -274,3 +274,10 @@ Branch and PR guidance
 
 - Current working branch with these changes: `aetherV0/genie-taskB-clean`.
 - Requested PR target base branch: `aetherV0/anew-default-basic`.
+
+Status: a PR will be opened from `aetherV0/genie-taskB-clean` into `aetherV0/anew-default-basic` which includes:
+
+- Task A: `server/utils/normalizePrompt.js` and passing unit tests.
+- Task B: `server/genieService.js` changes (read-first lookup behind `GENIE_PERSISTENCE_ENABLED`, and async persist-on-miss), test helpers, and the smoke script at `server/scripts/smoke_genie_persist_test.js`.
+
+Implementation note: persistence is non-blocking by default. The smoke script demonstrates that when `GENIE_PERSISTENCE_ENABLED=1` and a mock `dbUtils` is injected, the background persistence runs and attaches `promptId`/`resultId` to the in-memory returned envelope for visibility during testing. Production behaviour retains the non-blocking contract unless a test-only or opt-in synchronous mode is added.
