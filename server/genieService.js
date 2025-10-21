@@ -8,6 +8,10 @@ const ENABLE_PERSISTENCE =
   process.env.GENIE_PERSISTENCE_ENABLED === "1" ||
   process.env.GENIE_PERSISTENCE_ENABLED === "true";
 
+const AWAIT_PERSISTENCE =
+  process.env.GENIE_PERSISTENCE_AWAIT === "1" ||
+  process.env.GENIE_PERSISTENCE_AWAIT === "true";
+
 const genieService = {
   // For the demo, generate delegates to sampleService. In future this can
   // orchestrate real AI/image jobs via aetherService.
@@ -92,16 +96,66 @@ const genieService = {
       // If persistence is enabled, attempt to persist the prompt and AI result.
       // This is best-effort and must not block or fail the generation response.
       if (ENABLE_PERSISTENCE) {
-        (async () => {
+        // Provide a Promise hook that tests can await to know when the
+        // persistence attempt completes. This hook is optional and only used
+        // by tests that set GENIE_PERSISTENCE_AWAIT=1.
+        let persistenceResolver;
+        let persistenceRejecter;
+        const persistencePromise = new Promise((res, rej) => {
+          persistenceResolver = res;
+          persistenceRejecter = rej;
+        });
+        // Expose test hook
+        genieService._lastPersistencePromise = persistencePromise;
+
+        const runPersistence = async () => {
           try {
             const dbUtils =
               typeof _injectedDbUtils !== "undefined"
                 ? _injectedDbUtils
                 : require("./utils/dbUtils");
-
-            // Create prompt record
+            // Create prompt record with dedupe-on-create handling.
             try {
-              const p = await dbUtils.createPrompt(String(prompt));
+              let p;
+              try {
+                p = await dbUtils.createPrompt(String(prompt));
+              } catch (createErr) {
+                // If create failed due to a uniqueness/constraint error,
+                // attempt to recover by searching for an existing prompt
+                // that matches the normalized text. This avoids throwing
+                // when concurrent requests race to create the same prompt.
+                // Normalize and search recent prompts for a match.
+                try {
+                  const norm = normalizePrompt(prompt);
+                  const recent = await dbUtils.getPrompts(200);
+                  const found = (recent || []).find((r) => {
+                    try {
+                      return (
+                        typeof r.prompt === "string" &&
+                        normalizePrompt(r.prompt) === norm
+                      );
+                    } catch (e) {
+                      return false;
+                    }
+                  });
+                  if (found && found.id) {
+                    p = { id: found.id };
+                  } else {
+                    // Re-throw original create error if we couldn't recover
+                    throw createErr;
+                  }
+                } catch (recoverErr) {
+                  // Log recovery failure and rethrow original create error
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "genieService: createPrompt failed and recovery failed",
+                    createErr && createErr.message,
+                    recoverErr && recoverErr.message
+                  );
+                  throw createErr;
+                }
+              }
+
               if (p && p.id) out.data.promptId = p.id;
 
               // Create AI result record linked to the prompt
@@ -127,6 +181,7 @@ const genieService = {
                 e && e.message
               );
             }
+            persistenceResolver();
           } catch (e) {
             // Non-fatal: log and ignore persistence failures
             // eslint-disable-next-line no-console
@@ -134,8 +189,24 @@ const genieService = {
               "genieService: persistence step failed",
               e && e.message
             );
+            persistenceRejecter(e);
+          } finally {
+            // Clear the last persistence promise after it's settled
+            setImmediate(() => {
+              genieService._lastPersistencePromise = undefined;
+            });
           }
-        })();
+        };
+
+        if (AWAIT_PERSISTENCE) {
+          // Await persistence synchronously (test-only mode)
+          await runPersistence();
+        } else {
+          // Fire-and-forget for normal operation
+          (async () => {
+            await runPersistence();
+          })();
+        }
       }
 
       return out;

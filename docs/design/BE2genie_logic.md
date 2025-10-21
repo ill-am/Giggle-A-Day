@@ -123,6 +123,16 @@ Legacy preview route: `/genie` or `/preview`
 - Consider converting `readLatest()` to async if legacy routes are updated.
 - Keep `PROMPT_LOG_PATH` config documented for deployment.
 
+### Upcoming implementation (Phase 2)
+
+Planned immediate work (Phase 2) — implementation will be delivered incrementally on its own feature branches, each with deterministic tests and PRs that will be merged into `aetherV0/anew-default-basic` when green.
+
+- `aetherV0/genie-phase2-await` — Add a test-only synchronous persistence mode. When `GENIE_PERSISTENCE_ENABLED=1` and `GENIE_PERSISTENCE_AWAIT=1`, `genieService.generate()` will await `dbUtils.createPrompt` and `dbUtils.createAIResult` before returning so tests can assert `promptId`/`resultId`. Production default remains non-blocking.
+
+- `aetherV0/genie-phase2-dedupe` — Add constraint-safe dedupe handling: if `createPrompt` errors due to a duplicate/unique constraint, the service will query existing prompts and reuse the existing `promptId` instead of failing.
+
+Both branches will include deterministic Vitest tests that inject sync mocks via `genieService`'s injection helpers and will be merged after successful CI runs. Logs and doc updates will be included in each PR.
+
 ---
 
 (Consolidated by automation on 2025-10-20 19:55:27)
@@ -131,7 +141,7 @@ Legacy preview route: `/genie` or `/preview`
 
 Below is a safe, incremental rollout plan to implement the Succinct plan while minimizing risk.
 
-**Phase 0** — Prep & safety (0.5–1 day)
+**Phase 0** — Prep & safety (0.5–1 day) | ✅ (20 OCT 2025)
 
 - Add feature flag: `GENIE_PERSISTENCE_ENABLED=false` by default.
 - Add `server/utils/normalizePrompt.js` (trim + collapse whitespace). Default: do NOT lowercase.
@@ -139,7 +149,7 @@ Below is a safe, incremental rollout plan to implement the Succinct plan while m
 - Sanity: no change to runtime behavior when flag is false.
   Acceptance: repo builds and tests run; server starts with flag=false.
 
-**Phase 1** — Read-only DB lookup in `genieService` (1–2 days)
+**Phase 1** — Read-only DB lookup in `genieService` (1–2 days) | ✅ (21 OCT 2025)
 
 - Implement normalized, read-only DB lookup in `genieService.generate(prompt)`.
 - If found, return cached result; otherwise fall through to generation.
