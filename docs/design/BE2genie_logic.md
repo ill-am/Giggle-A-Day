@@ -244,3 +244,12 @@ Next short actionable items
 3. When the PR is approved, proceed to Phase 1: implement read-only lookups in `genieService` using `dbUtils` behind `GENIE_PERSISTENCE_ENABLED=false` and add integration tests.
 
 If you want I can open the branch and PR now (it contains only the shim and tests). Otherwise I'll wait for your go-ahead before creating the branch.
+
+## Implementation note: Task A / Task B (performed)
+
+Short log of small-scope work performed to bootstrap Phase 1:
+
+- Task A (branch `aetherV0/genie-taskA`): added `server/utils/normalizePrompt.js` and unit tests. This provides a deterministic normalize function used for prompt dedupe/lookups.
+- Task B (branch `aetherV0/genie-taskB`): implemented a read-only DB lookup in `server/genieService.generate` guarded by `GENIE_PERSISTENCE_ENABLED`. When enabled, the service normalizes the prompt, uses `server/utils/dbUtils.js` to search for a matching prompt, and returns cached AI results when present. DB failures are non-fatal and fall back to generation. Unit tests were added to cover DB hit and miss cases.
+
+These changes are staged on the branches above; they were implemented to be low-risk and behind an environment flag. Further steps (persistence ownership move, Prisma wiring in runtime, migrations) remain as documented in the phased plan.
