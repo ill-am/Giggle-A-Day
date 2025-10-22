@@ -86,11 +86,26 @@ const genieService = {
                 typeof aiRow.result === "string"
                   ? JSON.parse(aiRow.result)
                   : aiRow.result;
+              // Ensure cached results follow the same envelope shape as
+              // freshly-generated results: always include content.layout
+              // and a metadata object so callers/tests can rely on the
+              // contract.
+              const content = resultObj.content || resultObj || {};
+              if (!content.layout) content.layout = "poem-single-column";
+              const metadata = resultObj.metadata || {
+                model: "cached-1",
+                tokens: Math.max(
+                  10,
+                  Math.min(200, String(match.prompt || "").length)
+                ),
+              };
+
               return {
                 success: true,
                 data: {
-                  content: resultObj.content || resultObj,
+                  content,
                   copies: resultObj.copies || [],
+                  metadata,
                   promptId: match.id,
                   resultId: aiRow.id,
                 },
@@ -149,10 +164,21 @@ const genieService = {
 
         const runPersistence = async () => {
           try {
-            const dbUtils =
-              typeof _injectedDbUtils !== "undefined"
-                ? _injectedDbUtils
-                : require("./utils/dbUtils");
+            let dbUtils;
+            try {
+              dbUtils =
+                typeof _injectedDbUtils !== "undefined"
+                  ? _injectedDbUtils
+                  : require("./utils/dbUtils");
+            } catch (e) {
+              // Fallback to legacy crud if Prisma-backed dbUtils unavailable
+              // eslint-disable-next-line no-console
+              console.warn(
+                "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
+                e && e.message
+              );
+              dbUtils = require("./crud");
+            }
             // Create prompt record with dedupe-on-create handling.
             try {
               let p;
@@ -199,12 +225,13 @@ const genieService = {
 
               // Create AI result record linked to the prompt
               try {
-                const aiRes = (await dbUtils.createAIResult)
-                  ? await dbUtils.createAIResult(out.data.promptId, {
-                      content: out.data.content,
-                      copies: out.data.copies,
-                    })
-                  : null;
+                let aiRes = null;
+                if (dbUtils && typeof dbUtils.createAIResult === "function") {
+                  aiRes = await dbUtils.createAIResult(out.data.promptId, {
+                    content: out.data.content,
+                    copies: out.data.copies,
+                  });
+                }
                 if (aiRes && aiRes.id) out.data.resultId = aiRes.id;
               } catch (e) {
                 // non-fatal: log and continue
