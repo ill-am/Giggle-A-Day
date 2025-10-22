@@ -168,6 +168,24 @@ Below is a safe, incremental rollout plan to implement the Succinct plan while m
 - Update tests and ensure end-to-end behavior unchanged.
   Acceptance: controller no longer writes; genieService owns persistence.
 
+Phase 3 — Controller cleanup (actionables)
+
+- Goal: move persistence responsibility fully to `genieService.generate()` so the `/prompt` controller no longer performs DB writes. This centralizes dedupe/upsert logic and makes testing/rollout safer.
+
+- Quick actionable checklist:
+
+  1. Branch: create `aetherV0/genie-phase3-controller-cleanup` off `aetherV0/anew-default-basic`.
+  2. Controller change (safe option): update `server/index.js` `/prompt` handler to skip `crud.createPrompt` / `crud.createAIResult` when `GENIE_PERSISTENCE_ENABLED` is true:
+     - if (!process.env.GENIE_PERSISTENCE_ENABLED) { /_ existing crud writes _/ }
+     - This preserves old behavior when the flag is false and cleanly switches ownership when true.
+  3. Tests — controller unit tests: stub `genieService.generate` and assert controller returns its envelope; assert controller does NOT call `crud.*` in flag-on path.
+  4. Tests — persistence/integration: replace controller-write assertions with `genieService` persistence assertions; use `GENIE_PERSISTENCE_AWAIT=1` and `genieService._lastPersistencePromise` for deterministic checks.
+  5. CI & staging: ensure `prisma generate` and DB migrations are run in CI/staging before enabling the feature flag. Deploy to staging with `GENIE_PERSISTENCE_ENABLED=true` and validate.
+  6. Monitoring & rollback: add temporary persistence metrics/logging in `genieService` and roll back by toggling the flag to false if issues occur.
+
+- Acceptance criteria (short):
+  - With `GENIE_PERSISTENCE_ENABLED=true`, POST /prompt returns the same envelope (201 + { success: true, data }) and the controller does not perform DB writes; `genieService` performs read-first lookup and persist-on-miss (best-effort) and exposes `_lastPersistencePromise` for tests.
+
 **Phase 4** — DB dedupe (migration + upsert) (1–2 days)
 
 - Add DB migration: unique index on normalized prompt text.
