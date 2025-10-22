@@ -662,29 +662,10 @@ app.post("/prompt", async (req, res, next) => {
     // Ensure we have a data envelope to return
     const data = genieResult && genieResult.data ? { ...genieResult.data } : {};
 
-    // Attempt to persist prompt and ai result to DB for compatibility with
-    // downstream flows. Failures to persist should not block the demo response.
-    try {
-      const dbResult = await crud.createPrompt(prompt);
-      data.promptId = dbResult && dbResult.id ? dbResult.id : null;
-      try {
-        // Create an AI result record using the genie content as the result
-        const aiResult = await crud.createAIResult(data.promptId, {
-          content: data.content,
-          metadata: {},
-        });
-        data.resultId = aiResult && aiResult.id ? aiResult.id : null;
-      } catch (e) {
-        // Non-fatal: log and continue
-        console.warn(
-          "/prompt: failed to create AI result record",
-          e && e.message
-        );
-      }
-    } catch (e) {
-      // Non-fatal persistence failure; continue returning the demo payload
-      console.warn("/prompt: failed to persist prompt to DB", e && e.message);
-    }
+    // Persistence is owned by genieService.generate(). Controller no longer
+    // performs DB writes. genieService will perform read-first lookup and
+    // best-effort persist-on-miss (and exposes test hooks such as
+    // _lastPersistencePromise for deterministic tests).
 
     return res.status(201).json({ success: true, data });
   } catch (err) {
