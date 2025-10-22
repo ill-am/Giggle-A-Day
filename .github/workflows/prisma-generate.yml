@@ -33,4 +33,4 @@ jobs:
       - name: Run unit tests (skip Puppeteer)
         env:
           SKIP_PUPPETEER: "true"
-        run: npm --prefix server run test:run
+        run: npm run test:run
