@@ -1,11 +1,8 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-// We'll inject a mock Prisma instance directly into dbUtils using the
-// _setPrisma helper instead of relying on Vitest module mocks. This keeps
-// tests independent from `prisma generate` and the generated client.
-
+// Dynamic import and injectable Prisma mock so tests don't require prisma generate
 function createMockPrisma() {
-  const mock = {
+  return {
     prompt: {
       create: vi.fn(async ({ data }) => ({ id: 123, ...data })),
       findMany: vi.fn(async () => [
@@ -18,25 +15,24 @@ function createMockPrisma() {
         where.id === 456 ? { id: 456, promptId: 123, result: {} } : null
       ),
     },
-    // allow disconnect calls
     $disconnect: vi.fn(async () => {}),
   };
-  return mock;
 }
 
 describe("dbUtils (Prisma wrappers)", () => {
   let dbUtils;
 
   beforeEach(async () => {
-    // Dynamic import so we can inject a mock Prisma instance into the module
+    vi.resetModules();
     const mod = await import("../utils/dbUtils.js");
     dbUtils = mod.default ?? mod;
     const mockPrisma = createMockPrisma();
-    dbUtils._setPrisma(mockPrisma);
+    if (typeof dbUtils._setPrisma === "function")
+      dbUtils._setPrisma(mockPrisma);
   });
 
   afterEach(() => {
-    dbUtils._resetPrisma();
+    if (typeof dbUtils._resetPrisma === "function") dbUtils._resetPrisma();
   });
 
   it("createPrompt returns id", async () => {
