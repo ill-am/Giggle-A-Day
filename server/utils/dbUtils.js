@@ -3,7 +3,6 @@
 // inside the getter so test frameworks (Vitest) can mock the module before
 // this file attempts to instantiate the client.
 let prisma = null;
-const fs = require("fs");
 const crypto = require("crypto");
 const normalizePrompt = require("../utils/normalizePrompt");
 function getPrisma() {
