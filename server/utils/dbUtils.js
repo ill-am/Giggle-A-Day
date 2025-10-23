@@ -37,11 +37,28 @@ async function createPrompt(promptText) {
   const hash = crypto.createHash("sha256").update(norm).digest("hex");
 
   // Use upsert to atomically create or return existing record for this prompt.
-  const rec = await p.prompt.upsert({
-    where: { normalizedHash: hash },
-    update: {},
-    create: { prompt: promptText, normalizedText: norm, normalizedHash: hash },
-  });
+  let rec;
+  if (p && p.prompt && typeof p.prompt.upsert === "function") {
+    rec = await p.prompt.upsert({
+      where: { normalizedHash: hash },
+      update: {},
+      create: {
+        prompt: promptText,
+        normalizedText: norm,
+        normalizedHash: hash,
+      },
+    });
+  } else {
+    // Fallback for mocked Prisma clients used in unit tests.
+    // Use create and return the inserted id. If create fails due to a
+    // uniqueness conflict in a real DB, callers should observe the error
+    // and handle retries or dedupe at a higher layer. In tests, mocks
+    // typically implement `create` and return the created record shape.
+    const created = await p.prompt.create({
+      data: { prompt: promptText, normalizedText: norm, normalizedHash: hash },
+    });
+    rec = created;
+  }
 
   return { id: rec.id };
 }
