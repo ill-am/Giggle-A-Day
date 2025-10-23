@@ -3,6 +3,9 @@
 // inside the getter so test frameworks (Vitest) can mock the module before
 // this file attempts to instantiate the client.
 let prisma = null;
+const fs = require("fs");
+const crypto = require("crypto");
+const normalizePrompt = require("../utils/normalizePrompt");
 function getPrisma() {
   if (prisma) return prisma;
 
@@ -30,7 +33,17 @@ function getPrisma() {
  */
 async function createPrompt(promptText) {
   const p = getPrisma();
-  const rec = await p.prompt.create({ data: { prompt: promptText } });
+  // Compute a normalized form and a stable hash to use as a unique key.
+  const norm = normalizePrompt(promptText || "");
+  const hash = crypto.createHash("sha256").update(norm).digest("hex");
+
+  // Use upsert to atomically create or return existing record for this prompt.
+  const rec = await p.prompt.upsert({
+    where: { normalizedHash: hash },
+    update: {},
+    create: { prompt: promptText, normalizedText: norm, normalizedHash: hash },
+  });
+
   return { id: rec.id };
 }
 
