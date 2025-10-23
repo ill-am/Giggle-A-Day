@@ -15,6 +15,10 @@ jobs:
     defaults:
       run:
         working-directory: server
+    # NOTE: the job sets the working-directory to `server` above. Do NOT use
+    # `npm --prefix server ...` in the `run` steps below — that will produce a
+    # duplicated `server/server` path and cause npm to look for
+    # `server/server/package.json` (ENOENT).
     steps:
       - name: Checkout
         uses: actions/checkout@v4

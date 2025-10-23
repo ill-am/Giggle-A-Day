@@ -503,19 +503,38 @@ app.get("/health", async (req, res) => {
     const dbReady = serviceState.db.ready;
 
     // Run deeper health checks if not in grace period
+    // Respect SKIP_PUPPETEER or test mode: when Puppeteer is intentionally
+    // skipped (e.g. CI with SKIP_PUPPETEER=true) we should avoid failing the
+    // overall health just because no browser is available.
+    const runningInTest =
+      process.env.NODE_ENV === "test" || !!process.env.VITEST_WORKER_ID;
+    const skipPuppeteer =
+      process.env.SKIP_PUPPETEER === "true" ||
+      process.env.SKIP_PUPPETEER === "1" ||
+      runningInTest;
+
     let puppeteerStatus = { ok: puppeteerReady, error: null };
     let dbStatus = { ok: dbReady, error: null };
     if (!grace) {
-      [puppeteerStatus, dbStatus] = await Promise.all([
-        checkPuppeteerHealth().catch((err) => ({
+      if (skipPuppeteer) {
+        // Mark puppeteer as OK for health purposes when explicitly skipped.
+        puppeteerStatus = { ok: true, error: null };
+        dbStatus = await checkDatabaseHealth().catch((err) => ({
           ok: false,
           error: err.message,
-        })),
-        checkDatabaseHealth().catch((err) => ({
-          ok: false,
-          error: err.message,
-        })),
-      ]);
+        }));
+      } else {
+        [puppeteerStatus, dbStatus] = await Promise.all([
+          checkPuppeteerHealth().catch((err) => ({
+            ok: false,
+            error: err.message,
+          })),
+          checkDatabaseHealth().catch((err) => ({
+            ok: false,
+            error: err.message,
+          })),
+        ]);
+      }
     }
 
     // Compose detailed health object

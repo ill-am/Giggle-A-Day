@@ -15,11 +15,20 @@ confusion when editing or adding tests:
 
 Running tests locally
 
+When running commands from the repository root use the `--prefix server` form.
+When running from a CI job or a shell where your current directory is already
+the `server` folder, omit `--prefix` to avoid accidentally creating paths
+like `server/server`.
+
 ```bash
-# run all tests
+# From the repository root
 npm --prefix server run test
 
-# run a single test file
+# From inside the server/ directory (preferred in CI jobs that set working-directory)
+cd server
+npm run test
+
+# Run a single test file from repo root
 npm --prefix server run test -- __tests__/some.test.mjs
 ```
 
