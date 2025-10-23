@@ -70,14 +70,41 @@ Client Request
 ### Current Phase
 
 **Phase 4** — DB dedupe (migration + upsert) (1–2 days)
+**Phase 4** — DB dedupe (migration + upsert) (minimal plan)
 
-- Add DB migration: unique index on normalized prompt text.
-- Implement upsert behavior in `crud.createPrompt` to return existing record on conflict.
-  Acceptance: duplicates are deduped at DB level.
+Purpose: enforce DB-level uniqueness for the normalized prompt so identical prompts cannot create duplicate Prompt rows. This enables atomic upsert behavior and safer concurrency.
+
+Minimal plan (safe, since current DB starts empty):
+
+- Add a normalized unique column to the Prisma `Prompt` model. Recommended: add a `normalizedHash String @unique` (and optional `normalizedText String`). Storing a short SHA256/hex of the normalized text avoids indexing large text fields.
+- Generate Prisma client and create/apply the migration.
+- Implement atomic upsert in `server/utils/dbUtils.js` using the normalized hash as the unique key (Prisma `upsert` or equivalent). Ensure the function returns `{ id }`.
+- Add unit tests that mock Prisma (use `_setPrisma`) to verify upsert behavior and basic dedupe semantics.
+- Add a small concurrency/integration test (run against ephemeral Postgres in CI) to validate no duplicates under parallel requests.
+
+Acceptance: identical normalized prompts return the same `promptId`; no duplicate Prompt rows are created; existing functionality remains unchanged.
+
+Actionables (prioritized, with time estimates):
+
+1. Create feature branch `feature/genie-phase4-dedupe` — 5–10 minutes
+2. Edit Prisma schema to add `normalizedHash` (and optional `normalizedText`) — 15–30 minutes
+3. Implement `upsert` in `server/utils/dbUtils.js` (use `normalizePrompt()` + SHA256) — 30–90 minutes
+4. Add unit tests for `dbUtils.createPrompt` upsert behavior (mock Prisma) — 1–3 hours
+5. Generate and apply Prisma migration in dev/staging (since DB is empty this can be applied directly) — 15–60 minutes
+6. Add a concurrency/integration test in CI against ephemeral Postgres and ensure `prisma migrate` runs in CI — 1–2 hours
+7. Open PR with schema change, shim update, and tests; run staging validation and merge when green — review + staging validation: ~1 day
+
+Notes:
+
+- Because the current DB contains zero prompt records, no dedupe script is required before applying the unique constraint. If that changes later, include a dedupe step before migration.
+- Keep the `GENIE_PERSISTENCE_ENABLED` feature flag OFF until migration and tests are validated in staging.
+
+Acceptance criteria (short): identical normalized prompts yield the same `promptId`; no DB duplicates; safe rollout behind the feature flag.
 
 #### Technical Requirements:
 
 1. Database Migration
+
    - Add unique index on normalized prompt text
    - Schema update:
      ```prisma
@@ -89,22 +116,26 @@ Client Request
    - Migration must handle existing data
 
 2. Upsert Implementation
+
    - Modify crud.createPrompt for upsert behavior
    - Return existing record on conflict
    - Ensure atomic operations for concurrent requests
 
 3. Integration Requirements
+
    - Leverage existing normalizePrompt utility
    - Work with GENIE_PERSISTENCE_ENABLED flag
    - Integrate through dbUtils layer
 
 4. Testing Requirements
+
    - Concurrent submission validation
    - Duplicate detection verification
    - Normalized text variation testing
    - Edge case coverage (long prompts, special chars)
 
 5. Success Criteria
+
    - Identical normalized prompts yield same promptId
    - No database duplicates
    - Maintained functionality
