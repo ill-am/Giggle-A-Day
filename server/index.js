@@ -1477,7 +1477,20 @@ app.get("/api/ai_results", (req, res, next) => {
         });
       const total = filteredRows.length;
       const pages = Math.ceil(total / limit);
-      const paginatedRows = filteredRows.slice(offset, offset + limit);
+      let paginatedRows = filteredRows.slice(offset, offset + limit);
+      // Unwrap stored result objects for backward compatibility: if the
+      // stored row.result contains a { content: ... } envelope, return the
+      // unwrapped content to consumers that expect the canonical content.
+      paginatedRows = paginatedRows.map((r) => {
+        try {
+          const parsed = r && r.result ? r.result : null;
+          const unwrapped = parsed && parsed.content ? parsed.content : parsed;
+          return { ...r, result: unwrapped };
+        } catch (e) {
+          return r;
+        }
+      });
+
       res.status(200).json({
         success: true,
         data: paginatedRows,
@@ -1521,16 +1534,30 @@ app.get("/api/ai_results/:id", (req, res, next) => {
             details: { id },
           },
         });
-      res.status(200).json({
-        success: true,
-        data: {
-          ...row,
-          result:
-            typeof row.result === "string"
-              ? JSON.parse(row.result)
-              : row.result,
-        },
-      });
+      try {
+        const parsed =
+          typeof row.result === "string" ? JSON.parse(row.result) : row.result;
+        // If stored as { content: ... } unwrap; if stored as aiResponse.pages,
+        // prefer first page as canonical content.
+        if (parsed && parsed.content) {
+          return res
+            .status(200)
+            .json({ success: true, data: { ...row, result: parsed.content } });
+        }
+        if (parsed && Array.isArray(parsed.pages) && parsed.pages.length > 0) {
+          return res
+            .status(200)
+            .json({ success: true, data: { ...row, result: parsed.pages[0] } });
+        }
+        return res
+          .status(200)
+          .json({ success: true, data: { ...row, result: parsed } });
+      } catch (e) {
+        // Fallback: return row as-is
+        res
+          .status(200)
+          .json({ success: true, data: { ...row, result: row.result } });
+      }
     } catch (err) {
       err.status = 500;
       err.message = "Failed to retrieve AI result";
