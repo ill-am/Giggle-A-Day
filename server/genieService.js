@@ -38,6 +38,12 @@ const genieService = {
     if (ENABLE_PERSISTENCE) {
       try {
         let dbUtils;
+        // Debug: record which persistence implementation we'll use
+        // eslint-disable-next-line no-console
+        console.debug("genieService: selecting persistence implementation", {
+          injected: typeof _injectedDbUtils !== "undefined",
+          nodeEnv: process.env.NODE_ENV,
+        });
         try {
           dbUtils =
             typeof _injectedDbUtils !== "undefined"
@@ -165,25 +171,41 @@ const genieService = {
         const runPersistence = async () => {
           try {
             let dbUtils;
-            try {
-              dbUtils =
-                typeof _injectedDbUtils !== "undefined"
-                  ? _injectedDbUtils
-                  : require("./utils/dbUtils");
-            } catch (e) {
-              // Fallback to legacy crud if Prisma-backed dbUtils unavailable
-              // eslint-disable-next-line no-console
-              console.warn(
-                "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
-                e && e.message
-              );
+            // If a test injected mock is present, prefer it. This keeps
+            // unit tests deterministic by using the mock implementations.
+            if (typeof _injectedDbUtils !== "undefined") {
+              dbUtils = _injectedDbUtils;
+            } else if (process.env.NODE_ENV === "test") {
+              // In test mode without an injected mock, prefer the legacy
+              // sqlite-backed `crud` so API endpoints and persistence
+              // operate against the same storage.
               dbUtils = require("./crud");
+            } else {
+              try {
+                dbUtils = require("./utils/dbUtils");
+              } catch (e) {
+                // Fallback to legacy crud if Prisma-backed dbUtils unavailable
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
+                  e && e.message
+                );
+                dbUtils = require("./crud");
+              }
             }
             // Create prompt record with dedupe-on-create handling.
             try {
               let p;
               try {
+                // Debug: log presence of createPrompt
+                // eslint-disable-next-line no-console
+                console.debug(
+                  "genieService: dbUtils.createPrompt available?",
+                  typeof dbUtils.createPrompt
+                );
                 p = await dbUtils.createPrompt(String(prompt));
+                // eslint-disable-next-line no-console
+                console.debug("genieService: createPrompt returned", p);
               } catch (createErr) {
                 // If create failed due to a uniqueness/constraint error,
                 // attempt to recover by searching for an existing prompt
@@ -222,6 +244,35 @@ const genieService = {
               }
 
               if (p && p.id) out.data.promptId = p.id;
+
+              // Debug: log created prompt and verify it can be read back
+              try {
+                // If crud-like API available, attempt to read back the prompt
+                if (dbUtils && typeof dbUtils.getPromptById === "function") {
+                  const verify = await dbUtils
+                    .getPromptById(p.id)
+                    .catch(() => null);
+                  // eslint-disable-next-line no-console
+                  console.debug(
+                    "genieService: persistence created prompt result:",
+                    p,
+                    "verify:",
+                    verify
+                  );
+                } else {
+                  // eslint-disable-next-line no-console
+                  console.debug(
+                    "genieService: persistence created prompt (no getPromptById):",
+                    p
+                  );
+                }
+              } catch (e) {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "genieService: persistence verify failed",
+                  e && e.message
+                );
+              }
 
               // Create AI result record linked to the prompt
               try {
