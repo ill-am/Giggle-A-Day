@@ -1,22 +1,22 @@
 # Test Documentation (Consolidated)
 
-This document consolidates the individual test docs found under `server/__tests__` into a single reference.
+This document consolidates all tests found under `server/__tests__`.
 
-**Note:** Update TESTS.md further with a detailed list of test files and how they map to CI steps. (TODO)
+**Note:** This is a living document and must reflect the current state of tests. Please update as new tests are added or existing ones are modified. (Last updated: October 23, 2025)
 
-## Table of contents
+## Table of Contents
 
-- Prompt API tests (`prompt.test.js`)
-- AI Service tests (`aiService.test.js`)
-- Export integration test (`export.integration.test.js`)
-- Export endpoint script (`test-export-endpoint.js`)
-- Puppeteer smoke test (`puppeteer.smoke.test.js`)
-- Preview template unit test (`test-previewTemplate.js`)
-- Puppeteer PDF flow test (`test-puppeteer-pdf.js`)
+- Core Business Logic Tests (5 tests)
+- Service Integration Tests (4 tests)
+- Image Generation Tests (3 tests)
+- Export and PDF Tests (6 tests)
+- E2E Tests (1 test)
 
 ---
 
-## Prompt API tests (`prompt.test.js`)
+## Core Business Logic Tests
+
+### Prompt API (`prompt.test.js`)
 
 Purpose: Validate prompt CRUD + validation + state management.
 
@@ -37,7 +37,67 @@ npm run test:run -- prompt.test.js
 
 ---
 
-## AI Service tests (`aiService.test.js`)
+### Core Flow (`coreFlow.integration.test.js`)
+
+Purpose: End-to-end flow testing prompt -> preview -> export pipeline.
+
+Highlights:
+
+- Validates complete user interaction flow
+
+Dependencies: `vitest`, `supertest`.
+
+Run:
+
+```
+cd server
+npm run test:run -- coreFlow.integration.test.js
+```
+
+---
+
+### Preview Generation (`preview.test.js`)
+
+Purpose: Tests preview generation endpoints and validates HTML rendering for various content types.
+
+Run:
+
+```
+cd server
+npm run test:run -- preview.test.js
+```
+
+---
+
+### Jobs Management (`jobs.test.mjs`)
+
+Purpose: Tests job queue operations and validates job state transitions.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/jobs.test.mjs --run
+```
+
+---
+
+### Worker Processing (`worker.test.mjs`)
+
+Purpose: Tests SQLite worker job processing and validates job finalization and error handling.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/worker.test.mjs --run
+```
+
+---
+
+## Service Integration Tests
+
+### AI Service (`aiService.test.js`)
 
 Purpose: Validate the AI service abstraction (`MockAIService`) behavior and integration with prompt/AI result storage.
 
@@ -56,7 +116,89 @@ npm run test:run -- aiService.test.js
 
 ---
 
-## Export Integration Test (`export.integration.test.js`)
+### Genie Service (`genieService.persistence.dedupe.test.mjs`)
+
+Purpose: Tests deduplication in the persistence layer and validates caching and response consistency.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/genieService.persistence.dedupe.test.mjs --run
+```
+
+---
+
+### Service Lifecycle (`closeServices.test.js`)
+
+Purpose: Tests graceful shutdown of service components and validates resource cleanup.
+
+Run:
+
+```
+cd server
+npm run test:run -- closeServices.test.js
+```
+
+---
+
+### Job Requeuing (`jobs.requeue.test.mjs`)
+
+Purpose: Tests job requeuing on service startup and validates stale job handling.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/jobs.requeue.test.mjs --run
+```
+
+---
+
+## Image Generation Tests
+
+### Core Image Generation (`imageGenerator.test.mjs`)
+
+Purpose: Tests offline image generation capabilities and validates poem background creation.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/imageGenerator.test.mjs --run
+```
+
+---
+
+### Gemini AI Integration (`imageGenerator.gemini.test.mjs`)
+
+Purpose: Tests Gemini AI integration, validates fallback behavior, and verifies prompt generation.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/imageGenerator.gemini.test.mjs --run
+```
+
+---
+
+### Image Validation (`imageValidation.test.mjs`)
+
+Purpose: Validates image formats and constraints, and tests error handling for invalid inputs.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/imageValidation.test.mjs --run
+```
+
+---
+
+## Export and PDF Tests
+
+### Export Integration (`export.integration.test.js`)
 
 Purpose: End-to-end verification of the `/export` endpoint using Puppeteer.
 
@@ -80,7 +222,33 @@ CI note: The CI job must install a system Chrome/Chromium binary or set `CHROME_
 
 ---
 
-## Export text verification test (`export_text.test.mjs`)
+### PDF Quality (`pdfQuality.integration.test.mjs`)
+
+Purpose: Integration tests for PDF quality, validates content rendering, and tests PDF metadata and structure.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/pdfQuality.integration.test.mjs --run
+```
+
+---
+
+### Export Handler (`export-handler.test.js`)
+
+Purpose: Tests export endpoint request handling and validates error cases and edge conditions.
+
+Run:
+
+```
+cd server
+npm run test:run -- export-handler.test.js
+```
+
+---
+
+### Export Text Verification (`export_text.test.mjs`)
 
 Purpose: End-to-end verification of the `/api/export/book` endpoint that asserts:
 
@@ -107,52 +275,20 @@ Notes:
 
 ---
 
-## Export endpoint script (`test-export-endpoint.js`)
+### PDF Generator (`pdfGenerator.test.mjs`)
 
-Purpose: Manual script to POST to `/export` and write returned PDF to `samples/` for debugging.
-
-Run (manual):
-
-```
-cd server
-node __tests__/test-export-endpoint.js
-```
-
-Notes: Use for manual reproduction; prefer the integration test for automated checks.
-
----
-
-## Puppeteer Smoke Test (`puppeteer.smoke.test.js`)
-
-Purpose: Lightweight smoke test to ensure Puppeteer/Chrome can be launched.
+Purpose: Unit tests for PDF generation utilities, testing formatting and layout options.
 
 Run:
 
 ```
 cd server
-npm run test:run -- puppeteer.smoke.test.js
+npx vitest run __tests__/pdfGenerator.test.mjs --run
 ```
-
-CI note: CI must provide Chrome/Chromium or set `CHROME_PATH`.
 
 ---
 
-## Preview Template Test (`test-previewTemplate.js`)
-
-Purpose: Unit test for the `previewTemplate` helper that generates HTML used for previews and PDFs.
-
-Run:
-
-```
-cd server
-npm run test:run -- test-previewTemplate.js
-```
-
-Notes: Does not require Puppeteer.
-
----
-
-## Puppeteer PDF Flow Test (`test-puppeteer-pdf.js`)
+### Puppeteer PDF Flow (`test-puppeteer-pdf.js`)
 
 Purpose: Functional verification that a Puppeteer-driven PDF flow creates a file and returns a buffer.
 
@@ -167,8 +303,31 @@ CI note: Requires Chrome/Chromium.
 
 ---
 
-## General notes
+## E2E Tests
 
-- Tests run under Vitest. Use `npm test` for interactive watch or `npm run test:run` for CI-friendly runs.
-- Integration and Puppeteer-based tests need a Chrome/Chromium binary; the included workflow installs `chromium-browser` on Ubuntu.
-- Consider gating heavy tests behind an env var (e.g., `RUN_INTEGRATION=true`) in CI to reduce runtime when not needed.
+### Summer Poems Flow (`e2e.summer-poems.test.mjs`)
+
+Purpose: Full export flow with stubbed AI services, testing deterministic poem generation and export, and validating the complete user journey.
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/e2e.summer-poems.test.mjs --run
+```
+
+---
+
+```markdown
+## General Notes
+
+- Tests run under Vitest
+- Use `npm test` for interactive watch mode
+- Use `npm run test:run` for CI-friendly runs
+- Integration and Puppeteer-based tests need Chrome/Chromium
+- Some tests can be gated behind environment variables for CI optimization
+
+---
+
+Last updated: October 23, 2025
+```

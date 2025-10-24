@@ -34,6 +34,20 @@ jobs:
       - name: Install server deps
         run: npm --prefix server ci
 
+      - name: Prisma generate & migrate (if configured)
+        env:
+          # CI may not provide DATABASE_URL for PRs; only attempt migrate when set
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "Running prisma generate in server/"
+          npm --prefix server run -s prisma:generate || npx --prefix server prisma generate || true
+          if [ -n "$DATABASE_URL" ]; then
+            echo "DATABASE_URL set — attempting prisma migrate deploy"
+            npx --prefix server prisma migrate deploy
+          else
+            echo "DATABASE_URL not set — skipping prisma migrate (Postgres not configured for this run)"
+          fi
+
       - name: Run server tests
         env:
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: "true"
