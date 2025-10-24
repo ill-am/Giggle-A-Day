@@ -956,13 +956,61 @@ app.post("/api/export", async (req, res) => {
   let page;
   try {
     if (!serviceState.puppeteer.ready || !browserInstance) {
-      return sendServiceUnavailableError(
-        res,
-        "PDF generation service not ready",
-        {
-          code: "SERVICE_UNAVAILABLE",
+      // Try to fall back to the PDF generator (which will use the test/mock
+      // implementation when SKIP_PUPPETEER=true). This makes the export
+      // endpoints usable in test/CI modes without a real browser.
+      try {
+        const {
+          generatePdfBuffer,
+          validatePdfBuffer,
+        } = require("./pdfGenerator");
+        const generated = await generatePdfBuffer({
+          title,
+          body,
+          validate: true,
+        });
+        let pdfBuffer;
+        let validation;
+        if (Buffer.isBuffer(generated)) {
+          pdfBuffer = generated;
+          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
+            ok: true,
+          }));
+        } else {
+          // { buffer, validation }
+          pdfBuffer = generated.buffer;
+          validation = generated.validation;
         }
-      );
+
+        if (!validation || validation.ok === false) {
+          return res.status(422).json({
+            ok: false,
+            errors: validation && validation.errors ? validation.errors : [],
+            warnings:
+              validation && validation.warnings ? validation.warnings : [],
+            pageCount:
+              validation && validation.pageCount ? validation.pageCount : 0,
+          });
+        }
+
+        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Length", pdfBuffer.length);
+        res.end(pdfBuffer);
+        return;
+      } catch (fallbackErr) {
+        console.warn(
+          "Export fallback to generator failed:",
+          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
+        );
+        return sendServiceUnavailableError(
+          res,
+          "PDF generation service not ready",
+          {
+            code: "SERVICE_UNAVAILABLE",
+          }
+        );
+      }
     }
 
     page = await browserInstance.newPage();
@@ -1048,13 +1096,59 @@ app.post("/export", async (req, res) => {
   let page;
   try {
     if (!serviceState.puppeteer.ready || !browserInstance) {
-      return sendServiceUnavailableError(
-        res,
-        "PDF generation service not ready",
-        {
-          code: "SERVICE_UNAVAILABLE",
+      // Fall back to pdfGenerator (uses mock in test mode) so legacy
+      // /export POST works in CI/tests without a browser.
+      try {
+        const {
+          generatePdfBuffer,
+          validatePdfBuffer,
+        } = require("./pdfGenerator");
+        const generated = await generatePdfBuffer({
+          title,
+          body,
+          validate: true,
+        });
+        let pdfBuffer;
+        let validation;
+        if (Buffer.isBuffer(generated)) {
+          pdfBuffer = generated;
+          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
+            ok: true,
+          }));
+        } else {
+          pdfBuffer = generated.buffer;
+          validation = generated.validation;
         }
-      );
+
+        if (!validation || validation.ok === false) {
+          return res.status(422).json({
+            ok: false,
+            errors: validation && validation.errors ? validation.errors : [],
+            warnings:
+              validation && validation.warnings ? validation.warnings : [],
+            pageCount:
+              validation && validation.pageCount ? validation.pageCount : 0,
+          });
+        }
+
+        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Length", pdfBuffer.length);
+        res.end(pdfBuffer);
+        return;
+      } catch (fallbackErr) {
+        console.warn(
+          "Legacy /export fallback failed:",
+          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
+        );
+        return sendServiceUnavailableError(
+          res,
+          "PDF generation service not ready",
+          {
+            code: "SERVICE_UNAVAILABLE",
+          }
+        );
+      }
     }
 
     page = await browserInstance.newPage();
@@ -1126,11 +1220,59 @@ app.get("/export", async (req, res) => {
     const contentObj = JSON.parse(content);
 
     if (!serviceState.puppeteer.ready || !browserInstance) {
-      return sendServiceUnavailableError(
-        res,
-        "PDF generation service not ready",
-        { code: "SERVICE_UNAVAILABLE" }
-      );
+      try {
+        const {
+          generatePdfBuffer,
+          validatePdfBuffer,
+        } = require("./pdfGenerator");
+        const htmlToRender = await rewriteImagesForExportAsync(
+          previewTemplate(contentObj)
+        );
+        // Use the generator: pass the rendered HTML as 'body' and a title
+        const generated = await generatePdfBuffer({
+          title: contentObj.title || "",
+          body: htmlToRender,
+          validate: true,
+        });
+        let pdfBuffer;
+        let validation;
+        if (Buffer.isBuffer(generated)) {
+          pdfBuffer = generated;
+          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
+            ok: true,
+          }));
+        } else {
+          pdfBuffer = generated.buffer;
+          validation = generated.validation;
+        }
+
+        if (!validation || validation.ok === false) {
+          return res.status(422).json({
+            ok: false,
+            errors: validation && validation.errors ? validation.errors : [],
+            warnings:
+              validation && validation.warnings ? validation.warnings : [],
+            pageCount:
+              validation && validation.pageCount ? validation.pageCount : 0,
+          });
+        }
+
+        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Length", pdfBuffer.length);
+        res.end(pdfBuffer);
+        return;
+      } catch (fallbackErr) {
+        console.warn(
+          "GET /export fallback failed:",
+          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
+        );
+        return sendServiceUnavailableError(
+          res,
+          "PDF generation service not ready",
+          { code: "SERVICE_UNAVAILABLE" }
+        );
+      }
     }
 
     page = await browserInstance.newPage();

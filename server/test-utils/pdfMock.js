@@ -27,8 +27,15 @@ trailer
 `;
 
 async function generatePdfBuffer({ title, body, browser, validate } = {}) {
-  // ignore inputs for the mock; just return a small PDF buffer
-  return Buffer.from(DEFAULT_PDF, "utf8");
+  // ignore inputs for the mock; return a small PDF buffer. If the caller
+  // requests validation, return an object matching the real generator
+  // contract: { buffer, validation }
+  const buffer = Buffer.from(DEFAULT_PDF, "utf8");
+  if (validate) {
+    const validation = await validatePdfBuffer(buffer);
+    return { buffer, validation };
+  }
+  return buffer;
 }
 
 async function validatePdfBuffer(buffer) {

@@ -69,7 +69,7 @@ Client Request
 - Removed DB writes from controller
 - Validated end-to-end behavior unchanged
 
-**Phase 4** — DB dedupe (migration + upsert)  ✅ (24 OCT 2025)
+**Phase 4** — DB dedupe (migration + upsert) ✅ (24 OCT 2025)
 
 Purpose: enforce DB-level uniqueness for the normalized prompt so identical prompts cannot create duplicate Prompt rows. This enables atomic upsert behavior and safer concurrency.
 
@@ -484,3 +484,44 @@ and iterate until green. Say "Apply the patch and run tests" to proceed.
 ---
 
 Last updated: October 23, 2025
+
+## Phase 4 — completion (2025-10-24)
+
+Status: Phase 4 work (DB dedupe via normalizedHash + upsert) is complete and merged into `aetherV0/anew-default-basic`.
+
+Evidence / verification performed:
+
+- Prisma schema and migration present under `server/prisma/`.
+- `server/utils/dbUtils.js` implements an upsert path and exposes test helpers `_setPrisma` / `_resetPrisma` used by unit tests.
+- Unit tests covering the upsert behavior exist (`server/__tests__/dbUtils.upsert.test.mjs`) and exercise normalizedHash generation.
+- Local verification: `prisma generate` and migration apply were run during development; DB in dev/staging is expected to be empty for this rollout.
+
+With Phase 4 finished, the immediate next step is a short, focused Phase 5 and a small set of follow-ups we can complete in a two-hour sprint.
+
+## Two-hour sprint proposal (pick 1–2 items)
+
+These tasks are scoped to be completable within a two-hour block. Pick one to start and I will implement it.
+
+1. Finalize doc and housekeeping (20–30m)
+
+   - Update this design doc (done), add a short PR description, and push any outstanding commits.
+   - Add a small `shared/README.md` note about consolidated `test-results` artifacts.
+
+2. Add a small concurrency integration job for CI (45–75m)
+
+   - Add a GitHub Actions workflow `ci-postgres-concurrency.yml` that starts Postgres as a service, runs `npx --prefix server prisma migrate deploy`, and executes a single integration test that fires N parallel `POST /prompt` requests and asserts no duplicate Prompt rows are created.
+   - This gives high-confidence verification that the upsert path is safe under contention.
+
+3. Add/enable a focused integration test locally (60–90m)
+
+   - Add `server/__tests__/concurrency.integration.test.mjs` which uses the Prisma client (requires `npx --prefix server prisma migrate dev` locally) and runs N parallel `dbUtils.createPrompt` calls with the same prompt text, asserting a single row exists.
+
+4. Stabilize Playwright CI (30–60m)
+   - Replace manual Playwright install with the official `microsoft/playwright-action` or ensure the smoke script runs from `client/` (already done) and remove any root-level artifacts; update workflows and test once.
+
+Recommended pick for a 2-hour block
+
+- Start with item 2 (CI Postgres concurrency job) if you want the highest confidence that Phase 4 is safe in PRs — I can implement the workflow and a small test skeleton and commit the changes.
+- If you'd rather iterate locally first, pick item 3 (add the integration test) so you can run it inside the devcontainer before adding CI wiring.
+
+Which should I start on now? If you say "Start CI job" I'll add the workflow and the integration test skeleton, commit, and run a quick YAML/linters check. If you say "Add local test" I'll add the test file and run it locally (if Postgres is available in your devcontainer), and report back with results.
