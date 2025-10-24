@@ -1,0 +1,57 @@
+name: CI - Server (Postgres)
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dino_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dino_ci_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install server dependencies
+        run: npm ci --prefix server
+
+      - name: Wait for Postgres
+        run: |
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 -U postgres; then
+              echo "Postgres ready"; break
+            fi
+            sleep 2
+          done
+
+      - name: Prisma generate
+        run: npx --prefix server prisma generate --schema server/prisma/schema.prisma
+
+      - name: Prisma migrate deploy
+        run: npx --prefix server prisma migrate deploy --schema server/prisma/schema.prisma
+
+      - name: Run server tests (CI)
+        run: npm --prefix server run test:ci

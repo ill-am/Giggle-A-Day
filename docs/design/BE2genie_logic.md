@@ -69,10 +69,7 @@ Client Request
 - Removed DB writes from controller
 - Validated end-to-end behavior unchanged
 
-### Current Phase
-
-**Phase 4** — DB dedupe (migration + upsert) (in-progress)
-**Phase 4** — DB dedupe (migration + upsert) (minimal plan)
+**Phase 4** — DB dedupe (migration + upsert)  ✅ (24 OCT 2025)
 
 Purpose: enforce DB-level uniqueness for the normalized prompt so identical prompts cannot create duplicate Prompt rows. This enables atomic upsert behavior and safer concurrency.
 
@@ -134,6 +131,23 @@ Remaining work (next steps)
 - Add a small integration/concurrency test that runs against ephemeral Postgres in CI to validate real upsert/dedup under parallel requests. Update CI to run `prisma migrate` before tests. Estimated 1–3h.
 - Consider preferring an injected `_injectedDbUtils` (when present) in `genieService` persistence path so that unit tests that inject a mock `dbUtils` continue to work reliably. This is low-risk and can be added quickly if needed.
 - Review migration & rollback plan, add a dedupe script (non-destructive) to prepare for migration in non-empty databases (scaffolding exists at `server/scripts/dedupe_prompts.js`).
+
+If DB not empty (intent)
+
+- Intent: because this deployment is on a fresh project and there should be no historical Prompt/AIResult data, the agreed plan is to empty the relevant DB tables prior to finalizing Phase 4. This avoids complex dedupe runs for legacy data and ensures the unique `normalizedHash` constraint can be applied safely.
+- Scope: the tables to clear are, in dependency order: `PDFExport`, `Override`, `AIResult`, `Prompt`. Clearing will be done in CI/devcontainer with `DATABASE_URL` set and verified before applying the unique constraint in production.
+- Safety: this action is only to be taken on environments we control for this rollout (local dev, codespace, staging disposable DBs). Production DBs must follow the dedupe script and migration plan if they contain data.
+- Command (dev/devcontainer):
+
+```bash
+# verify count
+printf 'SELECT COUNT(*) FROM "Prompt";' | npx --prefix server prisma db execute --stdin --schema server/prisma/schema.prisma --url "$DATABASE_URL"
+
+# if non-zero, delete in dependency order and re-check
+printf 'BEGIN;\nDELETE FROM "PDFExport";\nDELETE FROM "Override";\nDELETE FROM "AIResult";\nDELETE FROM "Prompt";\nCOMMIT;\nSELECT COUNT(*) FROM "Prompt";' | npx --prefix server prisma db execute --stdin --schema server/prisma/schema.prisma --url "$DATABASE_URL"
+```
+
+- After clearing, re-run `npx --prefix server prisma migrate dev` (or CI migration flow) and run the full test suite before enabling `GENIE_PERSISTENCE_ENABLED` in staging/production.
 
 Status of local git workspace (as of this update):
 
@@ -451,13 +465,15 @@ and iterate until green. Say "Apply the patch and run tests" to proceed.
    - Performance monitoring approach
    - Concurrent operation safety
 
-### Upcoming Phases
+### Current Phase
 
 **Phase 5** — Optional in-process coalescing (0.5–1 day)
 
 - Implement per-prompt Promise map in genieService
 - Coalesce concurrent misses for same prompt
 - Use DB unique constraint as safety net
+
+### Upcoming Phases
 
 **Phase 6** — Docs, monitoring, cleanup (0.5–1 day)
 
