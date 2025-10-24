@@ -26,33 +26,31 @@ describe("concurrency integration (Postgres)", () => {
     if (typeof dbUtils._resetPrisma === "function") dbUtils._resetPrisma();
   });
 
-  it(
-    "creates only one Prompt row when many concurrent createPrompt() calls use the same text",
-    async () => {
-      const N = 6;
-      const promptText = `Concurrency test prompt ${Date.now()}`;
+  it("creates only one Prompt row when many concurrent createPrompt() calls use the same text", async () => {
+    const N = 6;
+    const promptText = `Concurrency test prompt ${Date.now()}`;
 
-      const calls = [];
-      for (let i = 0; i < N; i++) {
-        calls.push(dbUtils.createPrompt(promptText));
-      }
+    const calls = [];
+    for (let i = 0; i < N; i++) {
+      calls.push(dbUtils.createPrompt(promptText));
+    }
 
-      const results = await Promise.all(calls.map((p) => p.catch((e) => ({ error: e.message || String(e) }))));
+    const results = await Promise.all(
+      calls.map((p) => p.catch((e) => ({ error: e.message || String(e) })))
+    );
 
-      // Collect successful ids
-      const ids = results.map((r) => (r && r.id ? r.id : null)).filter(Boolean);
+    // Collect successful ids
+    const ids = results.map((r) => (r && r.id ? r.id : null)).filter(Boolean);
 
-      // Count prompt rows in DB; we cleaned the table in beforeAll so expect 1
-      const count = await prisma.prompt.count();
+    // Count prompt rows in DB; we cleaned the table in beforeAll so expect 1
+    const count = await prisma.prompt.count();
 
-      expect(count).toBe(1);
+    expect(count).toBe(1);
 
-      // If any ids were returned, they should all be the same (single canonical id)
-      const uniqueIds = Array.from(new Set(ids));
-      if (uniqueIds.length > 0) expect(uniqueIds.length).toBe(1);
-    },
-    120000
-  );
+    // If any ids were returned, they should all be the same (single canonical id)
+    const uniqueIds = Array.from(new Set(ids));
+    if (uniqueIds.length > 0) expect(uniqueIds.length).toBe(1);
+  }, 120000);
 });
 import { describe, it } from "vitest";
 
