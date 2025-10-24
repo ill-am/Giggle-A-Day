@@ -20,8 +20,29 @@ jobs:
 
       - name: Install root and client dependencies
         run: |
-          npm ci --no-audit --no-fund
-          cd client && npm ci --no-audit --no-fund
+          # Use npm ci when a package-lock.json is present; otherwise fall back
+          # to npm install. Some branches or PRs (e.g. when only a package.json
+          # is present) will fail with `npm ci` (EUSAGE), so this safe-guard
+          # avoids a hard failure in the non-blocking Playwright smoke job.
+          if [ -f package-lock.json ]; then
+            echo "Found root package-lock.json: running npm ci"
+            npm ci --no-audit --no-fund
+          else
+            echo "No root package-lock.json: running npm install"
+            npm install --no-audit --no-fund
+          fi
+
+          if [ -d client ]; then
+            if [ -f client/package-lock.json ]; then
+              echo "Found client/package-lock.json: running npm ci in client"
+              (cd client && npm ci --no-audit --no-fund)
+            else
+              echo "No client/package-lock.json: running npm install in client"
+              (cd client && npm install --no-audit --no-fund)
+            fi
+          else
+            echo "No client directory; skipping client install"
+          fi
 
       - name: Start server and client in background
         run: |
