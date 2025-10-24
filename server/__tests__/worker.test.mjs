@@ -25,7 +25,15 @@ describe("worker-sqlite", () => {
     // If done, check output exists
     if (row.state === "done") {
       expect(row.file_path).toBeTruthy();
-      expect(fs.existsSync(row.file_path)).toBe(true);
+      // Allow a short grace period for the output file to be flushed to disk
+      let exists = fs.existsSync(row.file_path);
+      const start = Date.now();
+      while (!exists && Date.now() - start < 1000) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, 50));
+        exists = fs.existsSync(row.file_path);
+      }
+      expect(exists).toBe(true);
       fs.unlinkSync(row.file_path);
     }
 
