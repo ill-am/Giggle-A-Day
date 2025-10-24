@@ -18,31 +18,26 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install root and client dependencies
+      - name: Install dependencies for repo root, server, and client
         run: |
-          # Use npm ci when a package-lock.json is present; otherwise fall back
-          # to npm install. Some branches or PRs (e.g. when only a package.json
-          # is present) will fail with `npm ci` (EUSAGE), so this safe-guard
-          # avoids a hard failure in the non-blocking Playwright smoke job.
-          if [ -f package-lock.json ]; then
-            echo "Found root package-lock.json: running npm ci"
-            npm ci --no-audit --no-fund
-          else
-            echo "No root package-lock.json: running npm install"
-            npm install --no-audit --no-fund
-          fi
-
-          if [ -d client ]; then
-            if [ -f client/package-lock.json ]; then
-              echo "Found client/package-lock.json: running npm ci in client"
-              (cd client && npm ci --no-audit --no-fund)
+          # Install deps only for directories that contain a package.json.
+          # Prefer npm ci when a package-lock.json exists, otherwise use npm install.
+          set -euo pipefail
+          DIRS=("." "server" "client")
+          for d in "${DIRS[@]}"; do
+            if [ -f "$d/package.json" ]; then
+              echo "Installing dependencies in $d"
+              if [ -f "$d/package-lock.json" ]; then
+                echo "Found $d/package-lock.json: running npm ci in $d"
+                (cd "$d" && npm ci --no-audit --no-fund)
+              else
+                echo "No $d/package-lock.json: running npm install in $d"
+                (cd "$d" && npm install --no-audit --no-fund)
+              fi
             else
-              echo "No client/package-lock.json: running npm install in client"
-              (cd client && npm install --no-audit --no-fund)
+              echo "No package.json in $d; skipping"
             fi
-          else
-            echo "No client directory; skipping client install"
-          fi
+          done
 
       - name: Start server and client in background
         run: |
