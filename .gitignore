@@ -58,3 +58,6 @@ server/prisma/prisma-client.js
 
 # Ignore server-generated prompt files and data directory
 server/data/
+
+# Ephemeral Playwright / test runner results
+**/test-results/

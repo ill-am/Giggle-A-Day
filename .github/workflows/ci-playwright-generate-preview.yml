@@ -61,8 +61,27 @@ jobs:
       - name: Run Playwright generate->preview smoke
         continue-on-error: true
         run: |
+          # Run the smoke script from the client/ directory so Playwright
+          # artifacts (if any) are placed under client/test-results/ by default.
           mkdir -p docs/focus/logs
-          node ./scripts/test-generate-preview.js --url http://localhost:5173
+          (cd client && node ../scripts/test-generate-preview.js --url http://localhost:5173)
+
+      - name: Move any repo-root test-results into shared/test-results
+        if: always()
+        run: |
+          mkdir -p shared/test-results
+          # Move root-level test-results (if created by earlier runs) into shared/
+          if [ -d test-results ]; then
+            mv test-results/* shared/test-results/ || true
+            rmdir test-results || true
+          fi
+          # Also consolidate client/server artifacts into shared for easier access
+          if [ -d client/test-results ]; then
+            mv client/test-results/* shared/test-results/ || true
+          fi
+          if [ -d server/test-results ]; then
+            mv server/test-results/* shared/test-results/ || true
+          fi
 
       - name: Upload artifacts
         if: always()
