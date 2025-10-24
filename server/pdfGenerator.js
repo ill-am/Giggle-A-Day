@@ -15,6 +15,20 @@ const serviceState = require("./index").serviceState || {};
 const fs = require("fs");
 const path = require("path");
 
+// Allow tests to use a mock PDF generator when a browser is unavailable.
+let mockPdf = null;
+try {
+  const useMock =
+    process.env.PDF_GENERATOR_IMPL === "mock" ||
+    (process.env.NODE_ENV === "test" && process.env.SKIP_PUPPETEER === "true");
+  if (useMock) {
+    // relative to server/ directory
+    mockPdf = require("./test-utils/pdfMock");
+  }
+} catch (e) {
+  mockPdf = null;
+}
+
 // PDF validation utilities use pdfjs-dist if available (devDependency).
 let pdfjs;
 try {
@@ -29,6 +43,15 @@ async function generatePdfBuffer({
   browser: providedBrowser,
   validate = false,
 } = {}) {
+  if (mockPdf && typeof mockPdf.generatePdfBuffer === "function") {
+    // Delegate to mock implementation in test-mode to avoid launching a browser.
+    return mockPdf.generatePdfBuffer({
+      title,
+      body,
+      browser: providedBrowser,
+      validate,
+    });
+  }
   let browser;
   let page;
   let launched = false;
@@ -113,6 +136,9 @@ async function generatePdfBuffer({
 module.exports = { generatePdfBuffer };
 
 async function validatePdfBuffer(buffer) {
+  if (mockPdf && typeof mockPdf.validatePdfBuffer === "function") {
+    return mockPdf.validatePdfBuffer(buffer);
+  }
   const result = { ok: true, errors: [], warnings: [], pageCount: 0 };
   if (!pdfjs) {
     result.warnings.push(
