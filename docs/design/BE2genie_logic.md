@@ -152,6 +152,123 @@ These files will be staged and committed in the feature branch.
 
 Last updated: October 23, 2025
 
+---
+
+## Phase 4 — finalization checklist & Postgres notes (2025-10-24)
+
+**Short summary**
+
+- Phase 4 core work is implemented on branch `feature/genie-phase4-dedupe`: schema additions (`normalizedText`, `normalizedHash @unique`), a generated migration, and an upsert-based `createPrompt` in `server/utils/dbUtils.js`. Unit tests for the upsert path and the `aiMockResponse` helper are present and pass locally.
+- Remaining work is verification and safe rollout: run migrations against a Postgres instance and prove no duplicates under concurrency (CI/staging), then toggle the feature flag behind a controlled rollout.
+
+Postgres / devcontainer findings (exact)
+
+- The devcontainer provisions a Postgres service (`.devcontainer/docker-compose.yml` uses `postgres:16`) and forwards port `5432`.
+- `devcontainer.json` sets `remoteEnv.DATABASE_URL` as:
+  `postgresql://${localEnv:POSTGRES_USER}:${localEnv:POSTGRES_PASSWORD}@db:5432/${localEnv:POSTGRES_DB}` — i.e., the container will expose a working `DATABASE_URL` pointing at the `db` service if `POSTGRES_*` env vars are supplied by the host or Codespace.
+- Prisma in `server/prisma/schema.prisma` reads `env("DATABASE_URL")` — migrations/`prisma generate` must run with `DATABASE_URL` set to target Postgres.
+
+**Why this matters**
+
+- Local tests pass because the code gracefully falls back to legacy SQLite-backed `crud` when Postgres or `@prisma/client` isn't available; that does not prove the new migration/upsert behaves under real Postgres concurrency.
+
+What must be done to finish Phase 4 (prioritized, short)
+
+1. CI: enable Postgres for PR/staging and run migrations
+
+   - Add a Postgres service to the PR job or provide a `DATABASE_URL` secret. Ensure the job runs:
+     - `npx --prefix server prisma generate`
+     - `npx --prefix server prisma migrate deploy` (or `prisma migrate dev` for iterative runs)
+   - Only run the concurrency integration test when `DATABASE_URL` is present.
+
+2. Implement and run the concurrency integration test (in CI against the Postgres service)
+
+   - Flesh out `server/__tests__/concurrency.integration.test.mjs` to:
+     - Send N parallel `POST /prompt` requests (or directly call `dbUtils.createPrompt`) with identical prompt text.
+     - Assert there is exactly one `Prompt` row for the normalized hash and all responses reference the same `promptId`.
+   - Run this in CI repeatedly (small N, then larger) to validate the upsert is effective under contention.
+
+3. Migration safety for non-empty DBs
+
+   - If any environment has existing Prompt rows, run a dedupe pass first (scaffold: `server/scripts/dedupe_prompts.js`). The dedupe script should:
+     - compute normalized hashes for existing rows,
+     - merge/retain a single canonical Prompt per normalizedHash,
+     - optionally update references (ai_results) to the canonical prompt id.
+   - Run the dedupe dry-run, verify results, then apply migration that adds the unique constraint.
+
+4. Gate release with feature flag and staged rollout
+
+   - Keep `GENIE_PERSISTENCE_ENABLED` OFF until CI + staging pass.
+   - Enable in staging and monitor logs/row counts for anomalies. Then enable in production.
+
+5. Small polish (quick, low-risk)
+   - Add unit test(s) for `buildMockAiResponse` (already added) and `dbUtils.createPrompt` behaviors (mock + integration). Ensure mocks support `upsert` call shape used in tests.
+   - Consider accepting an injected `_injectedDbUtils` or `_injectedDb` in `genieService` for deterministic unit tests (optional but helpful).
+
+Acceptance criteria (one-liners)
+
+- Identical normalized prompts yield the same `promptId` (unit+integration tests).
+- No duplicate `Prompt` rows are created under parallel requests in CI (integration concurrency test passes).
+- Migration applied in staging with dedupe run (if needed) and `GENIE_PERSISTENCE_ENABLED` toggled only after verification.
+
+Quick commands / how to verify locally (devcontainer)
+
+1. Provide local `.env` (repo root) with:
+
+```
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=dino_dev
+```
+
+2. Start the devcontainer or start the db service:
+
+```bash
+# inside Codespaces/Remote-Container: devcontainer should bring db up automatically
+docker compose -f .devcontainer/docker-compose.yml up -d db
+```
+
+3. Inside the devcontainer (or with `DATABASE_URL` set):
+
+```bash
+npx --prefix server prisma generate
+npx --prefix server prisma migrate dev --name phase4_add_normalized_hash
+bash server/scripts/db-health.sh   # quick connectivity/migration-check
+```
+
+CI snippet suggestion (high-level)
+
+- Use GitHub Actions `services: postgres` for the job and set `DATABASE_URL` in the job env to the service host (example):
+
+```yaml
+services:
+  postgres:
+    image: postgres:16
+    env:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dino_ci_test
+    ports: ["5432:5432"]
+
+# then in job env:
+DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dino_ci_test
+```
+
+Monitoring & rollback
+
+- Add a short metric/log: count of newly created Prompt rows per hour and alerts if growth > expected.
+- Rollback plan: 1) disable `GENIE_PERSISTENCE_ENABLED`, 2) revert schema change (drop unique constraint) if duplicates are found and dedupe cannot be reconciled quickly.
+
+Decision record & PR status
+
+- PR created from `feature/genie-phase4-dedupe` → `aetherV0/anew-default-basic` with migration, upsert implementation, and new tests. Link: https://github.com/ill-di/dinoWorld/pull/1
+
+Notes
+
+- The codebase already contains fallbacks so tests can run without a Postgres instance; that made local development fast but does not replace full Postgres verification. The checklist above prioritizes the minimal, high-confidence verification steps required to sign off Phase 4.
+
+If you want, I will implement the full concurrency test and add a dedicated PR-CI job that starts Postgres as a service and runs migrations + concurrency test automatically (requires no secrets). Say "Implement CI Postgres job and concurrency test" and I will proceed.
+
 ## ADDENDUM — Temporary deviation rationale, recommendation, and actionables
 
 Why the momentary deviation is necessary
