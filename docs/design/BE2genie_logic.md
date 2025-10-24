@@ -9,6 +9,8 @@ This document captures the current, actual implementation for the `/prompt` -> g
 - Business/Mock: `server/sampleService.js` — mock implementation; `async generateFromPrompt(prompt)` builds content (title/body), requests prompt save via `fileUtils.saveContentToFile(prompt)` (non-fatal), and returns `{ content, copies }`.
 - Utilities: `server/utils/fileUtils.js` — async `saveContentToFile(content)` implemented with `fs.promises` and an atomic temp-write/rename helper; `readLatest()` remains available (sync) to load the latest saved prompt for legacy routes.
 
+Implementation validated: 2025-10-24T12:00:00Z (UTC) — repository inspection confirmed the presence of the Phase 4 artifacts on branch `feature/genie-phase4-dedupe`: `server/prisma/schema.prisma` contains `normalizedHash`/`normalizedText`, the migration folder `server/prisma/migrations/20251023195558_add_normalized_hash/` exists, `server/utils/dbUtils.js` implements an upsert-based `createPrompt`, and `server/genieService.js` contains the persistence wiring. A small helper `server/utils/aiMockResponse.js` is present to build multi-page envelopes.
+
 ```
 Client Request
    │
