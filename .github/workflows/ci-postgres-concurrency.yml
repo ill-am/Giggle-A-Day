@@ -40,6 +40,17 @@ jobs:
           cd server
           npm ci --no-audit --no-fund
 
+      - name: Install Chrome for Puppeteer
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg2 ca-certificates
+          wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable || sudo apt-get install -y chromium-browser || true
+          # Set env var for puppeteer-core to find the browser
+          echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable" >> $GITHUB_ENV
+
       - name: Wait for Postgres
         run: |
           echo "Waiting for Postgres to be ready"
