@@ -48,7 +48,15 @@ jobs:
       - name: Install Playwright
         run: |
           npm install --no-audit --no-fund playwright@1.40.0
-          npx playwright install --with-deps
+          # Try to install browsers and system dependencies. On some runner
+          # images (ubuntu-24.04) Playwright's `--with-deps` step can fail due
+          # to package name differences (libffi7/libx264-163, etc). If that
+          # happens, fall back to installing browsers only so tests can still
+          # attempt to run and surface runtime errors separately.
+          if ! npx playwright install --with-deps; then
+            echo "playwright install --with-deps failed; falling back to browser-only install"
+            npx playwright install
+          fi
 
       - name: Run Playwright generate->preview smoke
         continue-on-error: true
