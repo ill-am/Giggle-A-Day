@@ -53,5 +53,20 @@ jobs:
       - name: Prisma migrate deploy
         run: npx --prefix server prisma migrate deploy --schema server/prisma/schema.prisma
 
+      - name: Install Chrome (for Puppeteer)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget gnupg ca-certificates
+          wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+          sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+        # ensure the path is available to later steps
+
+      - name: Export Puppeteer executable path
+        run: echo "PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable" >> $GITHUB_ENV
+
       - name: Run server tests (CI)
+        env:
+          PUPPETEER_EXECUTABLE_PATH: ${{ env.PUPPETEER_EXECUTABLE_PATH }}
         run: npm --prefix server run test:ci
