@@ -37,6 +37,10 @@ shared/dist/vitest.config.*
 /package-lock.json
 tmp/
 
+# Shared transient dirs for generated artifacts
+shared/tmp/
+shared/test-artifacts/
+
 # Devcontainer local secrets (do NOT commit)
 .devcontainer/.env
 
