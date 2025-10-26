@@ -1,3 +1,46 @@
+import { test, expect } from "vitest";
+import { PrismaClient } from "@prisma/client";
+
+// Integration test: requires a real Postgres DATABASE_URL. Skips when not present.
+const prisma = new PrismaClient();
+
+// Import dbUtils dynamically to support both CJS and ESM import shapes.
+const dbUtilsModule = await import("../utils/dbUtils.js");
+const dbUtils = dbUtilsModule.default || dbUtilsModule;
+
+test("concurrent createPrompt yields a single Prompt row (integration)", async () => {
+  if (!process.env.DATABASE_URL) {
+    // Not an error in local dev without DB; skip gracefully.
+    console.warn("Skipping concurrency.integration test: DATABASE_URL not set");
+    return;
+  }
+
+  const prompt = `concurrency-integration-test-${Date.now()}`;
+  const parallel = 12;
+
+  // Fire parallel createPrompt calls to exercise upsert/unique constraint behavior.
+  const promises = Array.from({ length: parallel }, () =>
+    dbUtils.createPrompt(String(prompt)).catch((err) => err)
+  );
+
+  await Promise.all(promises);
+
+  // Query the DB directly to verify dedupe: there should be exactly one row
+  // with the original prompt text.
+  const count = await prisma.prompt.count({
+    where: { prompt: String(prompt) },
+  });
+  expect(count).toBe(1);
+
+  // Cleanup created prompt(s) to keep test idempotent
+  const rows = await prisma.prompt.findMany({
+    where: { prompt: String(prompt) },
+  });
+  await Promise.all(
+    rows.map((r) => prisma.prompt.delete({ where: { id: r.id } }))
+  );
+  await prisma.$disconnect();
+}, 60000);
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import dbUtils from "../utils/dbUtils.js";
 
