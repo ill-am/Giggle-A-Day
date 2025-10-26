@@ -308,6 +308,33 @@ Add a CI job that runs the script and fails (or alerts) if the prompt count incr
 
 This repo includes a simple monitor helper; integrating it into long-term monitoring or an external alerting system (Prometheus, Datadog) is recommended for production usage.
 
+Decision: enable persistence (scheduled shortly)
+
+After reviewing tradeoffs and readiness, the decision is to enable `GENIE_PERSISTENCE_ENABLED` now — "now" meaning shortly after a short break (target: within a few hours on 2025-10-26). This balances prototype momentum with safety: the CI concurrency test, the prompt-count monitor, and migration artifacts are in place so we can safely exercise persistence in staging first.
+
+Tradeoffs (brief)
+
+- Speed vs Safety: enabling now slows immediate feature velocity slightly (migrations + monitoring) but surfaces DB/production issues earlier. Keeping it off keeps iteration fast but defers real-world validation.
+- Rollforward vs Rollback: If issues appear after enabling, rollback is quick by disabling `GENIE_PERSISTENCE_ENABLED`, but schema rollbacks are slower. We mitigate by running dedupe dry-runs and by applying migrations to a staging DB first.
+- Observability: enabling now requires active monitoring (prompt-count baseline, CI run verification). This requires a short-term human attention window (3–6 hours) after flip.
+
+Planned short timeline (what will happen in the next few hours)
+
+1. Wait ~a few hours (developer break window).
+2. In staging: run `npx --prefix server prisma migrate deploy` to apply migrations.
+3. Enable persistence in staging: set `GENIE_PERSISTENCE_ENABLED=1` (env or config).
+4. Record baseline prompt count:
+
+```bash
+DATABASE_URL=postgresql://... node server/scripts/print_prompt_count.js
+```
+
+5. Observe prompt-count and logs for 3–6 hours. If duplicate growth or errors appear, immediately set `GENIE_PERSISTENCE_ENABLED=0` and investigate.
+
+6. If staging is stable, plan production rollout using the same steps and a dedupe dry-run if the production DB is non-empty.
+
+With these safeguards in place we will proceed with enabling persistence on the schedule above.
+
 Decision record & PR status
 
 - PR created from `feature/genie-phase4-dedupe` → `aetherV0/anew-default-basic` with migration, upsert implementation, and new tests. Link: https://github.com/ill-di/dinoWorld/pull/1
