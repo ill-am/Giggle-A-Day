@@ -273,6 +273,41 @@ Monitoring & rollback
 - Add a short metric/log: count of newly created Prompt rows per hour and alerts if growth > expected.
 - Rollback plan: 1) disable `GENIE_PERSISTENCE_ENABLED`, 2) revert schema change (drop unique constraint) if duplicates are found and dedupe cannot be reconciled quickly.
 
+Post-merge status (2025-10-26)
+
+- PR and CI: A PR was opened for the concurrency test and CI workflow; the concurrency integration test passed locally and the PR was created and merged into `aetherV0/anew-default-basic`. CI runs the Postgres + migrate + test job for additional verification. Monitor the PR CI job for any runner-specific failures.
+
+- Recommended quick staged rollout plan:
+  1.  Ensure `npx --prefix server prisma migrate deploy` ran in staging and succeeded (migrations applied).
+  2.  Enable the feature flag in staging (temporarily set `GENIE_PERSISTENCE_ENABLED=1`).
+  3.  Run the prompt-count monitor once and record the baseline (see `server/scripts/print_prompt_count.js`).
+  4.  After enabling, monitor prompt counts hourly for the first 3–6 hours to detect unexpected duplicate creation.
+  5.  If prompt count growth is abnormal, immediately flip `GENIE_PERSISTENCE_ENABLED=0` and investigate logs / DB state.
+
+How to run the prompt-count monitor locally
+
+1. Ensure `DATABASE_URL` points to the target DB (staging or dev) and that `@prisma/client` is present.
+
+```bash
+# print current prompt count (JSON output)
+DATABASE_URL=postgresql://user:pass@host:5432/dbname node server/scripts/print_prompt_count.js
+```
+
+Example CI check (manual/one-off)
+
+Add a CI job that runs the script and fails (or alerts) if the prompt count increased unexpectedly compared to a stored baseline. Example (conceptual):
+
+```yaml
+# steps (concept)
+- name: Check prompt count
+   run: |
+      npx --prefix server prisma generate
+      DATABASE_URL=${{ secrets.DATABASE_URL }} node server/scripts/print_prompt_count.js > current.json
+      # Compare current.json to baseline stored in repo or artifacts and alert if growth > threshold
+```
+
+This repo includes a simple monitor helper; integrating it into long-term monitoring or an external alerting system (Prometheus, Datadog) is recommended for production usage.
+
 Decision record & PR status
 
 - PR created from `feature/genie-phase4-dedupe` → `aetherV0/anew-default-basic` with migration, upsert implementation, and new tests. Link: https://github.com/ill-di/dinoWorld/pull/1
