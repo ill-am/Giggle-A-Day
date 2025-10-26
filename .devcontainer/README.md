@@ -7,6 +7,8 @@ Key points
 - The devcontainer image (see `.devcontainer/Dockerfile`) installs Google Chrome stable and the native libraries required by Puppeteer/Playwright on Debian.
 - `devcontainer.json` and `docker-compose.yml` set `CHROME_PATH=/usr/bin/google-chrome-stable` and `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true` so the server and tests use the system Chrome instead of downloading Chromium during `npm install`.
 
+Note: see `server/README.md` for important server-side guidance (seed scripts, export/env recommendations, and CI best-practices). That README contains details the devcontainer does not run automatically and is recommended reading before running migrations or seeders.
+
 Running browser tests in the devcontainer
 
 1. Rebuild / start the devcontainer (VS Code or Codespaces will use `devcontainer.json`). The Dockerfile installs system Chrome during image build.

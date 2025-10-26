@@ -1,3 +1,61 @@
+name: CI — Postgres concurrency check
+
+on:
+  push:
+    branches: [ main, aetherV0/** ]
+  pull_request:
+    branches: [ main, aetherV0/** ]
+
+jobs:
+  concurrency-test:
+    name: Postgres + migration + concurrency test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aether_ci_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d aether_ci_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Point tests at the Postgres service
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aether_ci_test
+      # Make CI deterministic for export-related jobs
+      ALLOW_REMOTE_ASSETS: '0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install server deps
+        run: |
+          cd server
+          npm ci
+
+      - name: Generate Prisma client
+        run: npx --prefix server prisma generate
+
+      - name: Apply Prisma migrations (deploy)
+        run: npx --prefix server prisma migrate deploy
+
+      - name: Run concurrency integration test
+        run: |
+          npx --prefix server vitest run __tests__/concurrency.integration.test.mjs --run
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
 name: CI - Postgres concurrency check
 
 on:
