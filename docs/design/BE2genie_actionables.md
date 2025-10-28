@@ -31,7 +31,7 @@ Scope & Goals for this plan
 
 Prioritized Actionables (with detail when >2 hours)
 
-1) Implement Postgres concurrency integration test (4–8 hours)
+1. Implement Postgres concurrency integration test (4–8 hours)
 
 - Goal: Verify dedupe/upsert behavior under concurrency so we can safely enable `GENIE_PERSISTENCE_ENABLED` in staging/production.
 - Estimate: 4–8 hours (dev + local iteration + CI stabilization).
@@ -56,8 +56,7 @@ Prioritized Actionables (with detail when >2 hours)
   - Risk: Flaky parallel tests due to timing; mitigate with backoff, short random jitter, and using transactions where needed to make failure deterministic.
   - Risk: CI runner resource limits (parallelism or timeouts); reduce concurrency count in CI (e.g. N=6–10) vs ad-hoc local runs (N=50).
 
-
-2) Add Export API / enforce persisted reads (3–6 hours)
+2. Add Export API / enforce persisted reads (3–6 hours)
 
 - Goal: Guarantee exports are derived from persisted canonical content so dedupe/auditability guarantees are preserved.
 - Estimate: 3–6 hours (implementation, tests, docs).
@@ -77,8 +76,7 @@ Prioritized Actionables (with detail when >2 hours)
 - Risks and mitigations:
   - Risk: Some external callers depend on current behavior (passing raw content into `/export`), so maintain backward-compatible fallback while requiring canonical read for flows that provide a `promptId` or `resultId`.
 
-
-3) Wire CI job to run concurrency test and upload artifacts (2–6 hours)
+3. Wire CI job to run concurrency test and upload artifacts (2–6 hours)
 
 - Goal: Ensure the repository's existing CI workflows exercise the concurrency test reliably and fail PRs on regressions.
 - Estimate: 2–6 hours (mostly stabilization & artifact wiring).
@@ -93,8 +91,7 @@ Prioritized Actionables (with detail when >2 hours)
   2. Add a step to collect `server/test-artifacts/` into the Actions artifacts on failure.
   3. Tune concurrency N for CI runs to balance run time vs test fidelity.
 
-
-4) Docs & Runbook updates (1–2 hours)
+4. Docs & Runbook updates (1–2 hours)
 
 - Goal: Make it easy for contributors to run the new tests locally and to understand rollout requirements.
 - Estimate: 1–2 hours.
@@ -105,8 +102,7 @@ Prioritized Actionables (with detail when >2 hours)
   - `server/README.md` (add section for running concurrency integration test locally).
   - `docs/design/BE2genie_logic.md` (update 'Pending Verification' checklist to reflect test added and CI job name).
 
-
-5) Monitoring & rollback runbook (1–2 hours)
+5. Monitoring & rollback runbook (1–2 hours)
 
 - Goal: Prepare a short runbook for enabling `GENIE_PERSISTENCE_ENABLED` in staging/production, monitoring for duplicates, and a rollback procedure.
 - Estimate: 1–2 hours.
@@ -115,7 +111,6 @@ Prioritized Actionables (with detail when >2 hours)
     - Metrics to monitor (prompt row counts by normalizedHash, duplicate detection alerts).
     - Quick queries to detect duplicates (SQL example) and how to dedupe safely.
     - Rollback steps: unset `GENIE_PERSISTENCE_ENABLED`, identify orphaned AI results, and a plan to re-run dedupe script later.
-
 
 Quick local verification commands (how to run the concurrency test locally)
 
@@ -148,7 +143,95 @@ Owners / Suggested assignees
 - CI wiring and docs: (devops / CI engineer) — suggested: @devops
 
 If you want, I can now:
-- Implement the test scaffold (create the test file body and helper script) and run it locally against a dev Postgres (I will not edit production code except tests). OR
-- Scaffold the `genieService.getPersistedContent` implementation with tests.
 
-Ask before I implement any code changes; otherwise I will proceed with creating the test implementation scaffold next (confirm?).
+- Implement the test scaffold (create the test file body and helper script) and run it locally against a dev Postgres (I will not edit production code except tests). OR
+
+---
+
+# BE2genie — Actionables & Implementation Plan (REVISED)
+
+Last updated: 2025-10-28
+
+Purpose
+
+- Capture the revised, prioritized actionables required to safely verify and roll out the BE2genie persistence flow. This document is concise and prescriptive: Priority A work starts immediately and all new implementation work must be performed on its own feature branch.
+
+Scope and quick summary
+
+- Existing implementation: `server/genieService.js`, `server/utils/dbUtils.js` and Prisma-backed schema implement the read-first → generate → best-effort persist flow. Feature flags (`GENIE_PERSISTENCE_ENABLED`, `GENIE_PERSISTENCE_AWAIT`) and test hooks exist.
+- Remaining critical gaps: deterministic Postgres-backed concurrency tests, a safe dedupe/apply workflow for existing duplicates, export enforcement (exports must read persisted canonical content), and CI + observability to gate rollout.
+
+Key policy for new work
+
+- Priority A work must begin immediately.
+- All new implementation work must be implemented in its own feature branch. Suggested branch naming convention: `feat/genie/<short-description>` (e.g. `feat/genie/concurrency-test`).
+
+Priority A — Immediate (start now)
+
+1. Deterministic Postgres concurrency integration test (4–8h)
+
+- Goal: validate that `dbUtils.createPrompt` upsert/dedupe behavior is correct under concurrent creation attempts so we can safely enable persistence in staging/production.
+- What to do:
+  - Implement `server/__tests__/concurrency.integration.test.mjs` (or complete existing scaffold) to run N parallel operations that attempt to create the same normalized prompt (either via programmatic Prisma upserts and/or parallel POST /genie requests against the in-process server).
+  - Assert that at-most-one `prompt` row exists per `normalizedHash` after the test completes.
+  - Add diagnostic logging, retries/jitter to reduce flakiness, and cleanup steps (or use transient DB per run).
+- Acceptance criteria:
+  - Test runs reliably locally against Postgres and in CI (when `DATABASE_URL` is present).
+  - Test asserts single canonical prompt row per normalized hash.
+  - CI uploads test artifacts on failure for debugging.
+
+2. CI wiring for concurrency test (2–6h)
+
+- Goal: Gate PRs and enable regression detection using existing CI scaffolding.
+- What to do:
+  - Add or enable the concurrency test step in `.github/workflows/ci-postgres-concurrency.yml` (or extend the existing Postgres CI workflow), ensure `DATABASE_URL` is set for the job, and include `GENIE_PERSISTENCE_ENABLED=1` for realism.
+  - Ensure artifacts (`server/test-artifacts/`) are uploaded on failure.
+- Acceptance criteria: CI job runs the concurrency test and fails PRs on regressions.
+
+Priority B — Next (after A green / staging validated)
+
+3. Safe dedupe/apply tooling (8–16h)
+
+- Goal: Prepare production data for the unique `normalizedHash` index by reconciling duplicates safely.
+- What to do:
+  - Implement `server/scripts/dedupe_prompts.js` apply mode with `--preview`, `--apply`, and `--backup` flags.
+  - Choose canonical prompt per hash (eg. earliest `createdAt`), reassign `aIResult.promptId` rows from duplicates to canonical, merge/annotate metadata if needed, create SQL backups before mutating, and provide a rollback path.
+- Acceptance criteria: `--preview` shows exact actions; `--apply --backup` runs successfully on a staging snapshot and provides backups for rollback.
+
+4. Enforce export-from-persisted content (3–6h)
+
+- Goal: Ensure exports are auditable and derived from canonical persisted content.
+- What to do:
+  - Add `genieService.getPersistedContent(promptId|resultId)` (or an `ExportService`) to read canonical persisted results.
+  - Update export/preview endpoints to prefer persisted reads when `promptId` or `resultId` is supplied. Keep backward-compatible fallback when callers supply raw content explicitly.
+  - Add unit/integration tests verifying export reads persisted content when `promptId`/`resultId` are present.
+- Acceptance criteria: Export tests pass and export flow returns DB-sourced content for persisted IDs.
+
+Priority C — Operational / Observability (after A/B)
+
+5. Monitoring, metrics & runbook (6–12h)
+
+- Goal: Observe persistence behavior in staging/production and provide an operator rollback playbook.
+- What to do:
+  - Add minimal metrics (persistence success/failure counts, dedupe events, persistence latency) and structured logs for persistence paths.
+  - Add `docs/ops/genie_rollout.md` with SQL queries to detect duplicates, steps to run the dedupe script safely, and rollback instructions (unset `GENIE_PERSISTENCE_ENABLED` if issues found).
+- Acceptance criteria: Metrics emitted in test/CI runs and runbook provides clear detection + rollback steps.
+
+Operational notes and guidelines
+
+- Feature branch rule: create one focused branch per logical change (tests, CI, dedupe, export). Keep PRs small and self-contained. Use the suggested naming `feat/genie/<short>`.
+- Test-first approach: add tests for upsert/concurrency before changing production persistence code or migrations.
+- Safety-first for DB changes: always provide `--preview` dry-run and `--backup` files when running apply-mode DB scripts.
+
+Next actions (immediate)
+
+- Begin Priority A now: implement the concurrency integration test on a feature branch (e.g. `feat/genie/concurrency-test`).
+- After the local test is stable, open a PR and enable the CI workflow step to run the test in CI.
+
+Questions
+
+- None required to proceed with Priority A as described. If you have a preferred branch naming convention different from the suggested one, tell me now; otherwise I will use `feat/genie/concurrency-test` for the immediate work.
+
+Awaiting your confirmation to start Priority A (I will create the feature branch, implement tests, and run them locally against Postgres). If you prefer a different first task, tell me which one.
+
+---
