@@ -76,6 +76,29 @@
       <div style="margin-top:1.5rem; padding:1rem; border:1px solid #ccc; border-radius:8px; background:#fafafa;">
         <h3>AI Result</h3>
         <pre style="white-space:pre-wrap;">{aiResult}</pre>
+
+        <!-- Pre-actionable UI: Disabled Export and Edit buttons (Option 1) -->
+        <div class="action-buttons" style="margin-top:0.75rem; display:flex; gap:0.5rem;">
+          <button
+            class="stub-button"
+            aria-disabled="true"
+            disabled
+            title="Export — coming soon"
+            data-testid="export-button-stub"
+          >
+            Export
+          </button>
+
+          <button
+            class="stub-button"
+            aria-disabled="true"
+            disabled
+            title="Edit — coming soon"
+            data-testid="edit-button-stub"
+          >
+            Edit
+          </button>
+        </div>
       </div>
     {/if}
     {#if apiError}
