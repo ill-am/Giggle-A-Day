@@ -212,22 +212,30 @@ const genieService = {
             // unit tests deterministic by using the mock implementations.
             if (typeof _injectedDbUtils !== "undefined") {
               dbUtils = _injectedDbUtils;
-            } else if (process.env.NODE_ENV === "test") {
-              // In test mode without an injected mock, prefer the legacy
-              // sqlite-backed `crud` so API endpoints and persistence
-              // operate against the same storage.
-              dbUtils = require("./crud");
             } else {
-              try {
-                dbUtils = require("./utils/dbUtils");
-              } catch (e) {
-                // Fallback to legacy crud if Prisma-backed dbUtils unavailable
-                // eslint-disable-next-line no-console
-                console.warn(
-                  "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
-                  e && e.message
-                );
+              // By default, prefer the legacy `crud` while running under
+              // test mode to keep API endpoints consistent (many existing
+              // tests expect CRUD-backed storage). Allow overriding this
+              // behavior when an explicit environment flag requests that
+              // we exercise the Prisma-backed implementation in tests.
+              const usePrismaInTest =
+                process.env.USE_PRISMA_IN_TEST === "1" ||
+                process.env.USE_PRISMA_IN_TEST === "true";
+
+              if (process.env.NODE_ENV === "test" && !usePrismaInTest) {
                 dbUtils = require("./crud");
+              } else {
+                try {
+                  dbUtils = require("./utils/dbUtils");
+                } catch (e) {
+                  // Fallback to legacy crud if Prisma-backed dbUtils unavailable
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
+                    e && e.message
+                  );
+                  dbUtils = require("./crud");
+                }
               }
             }
             // Create prompt record with dedupe-on-create handling.
