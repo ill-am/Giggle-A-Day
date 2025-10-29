@@ -723,62 +723,21 @@ const previewTemplate = (content) => `
 app.get("/preview", async (req, res) => {
   const { content, resultId, promptId } = req.query;
 
-  // If content not provided, try to load it from DB using resultId or promptId
+  // If content not provided, prefer persisted content (resultId or promptId)
   let contentPayload = content || null;
   try {
-    if (!contentPayload && resultId) {
-      const id = parseInt(resultId, 10);
-      if (!isNaN(id)) {
-        try {
-          const row = await crud.getAIResultById(id);
-          if (row) {
-            // row.result may be a JSON string or an object
-            const resultObj =
-              typeof row.result === "string"
-                ? JSON.parse(row.result)
-                : row.result;
-            // Prefer resultObj.content if present
-            const usable =
-              resultObj && resultObj.content ? resultObj.content : resultObj;
-            contentPayload = JSON.stringify(usable);
-          }
-        } catch (e) {
-          // ignore DB lookup errors here; validation will handle missing content
-          console.warn(
-            "/preview: failed to load result by id",
-            id,
-            e && e.message
-          );
+    if (!contentPayload && (resultId || promptId)) {
+      try {
+        const persisted = await genieService.getPersistedContent({
+          promptId,
+          resultId,
+        });
+        if (persisted && persisted.content) {
+          contentPayload = JSON.stringify(persisted.content);
         }
-      }
-    }
-
-    if (!contentPayload && promptId) {
-      const pid = parseInt(promptId, 10);
-      if (!isNaN(pid)) {
-        try {
-          // Try to find latest AI result for this prompt
-          const results = await crud.getAIResults();
-          const filtered = results
-            .filter((r) => r.prompt_id === pid)
-            .sort((a, b) => (a.id || 0) - (b.id || 0));
-          const latest = filtered.length ? filtered[filtered.length - 1] : null;
-          if (latest) {
-            const resultObj =
-              typeof latest.result === "string"
-                ? JSON.parse(latest.result)
-                : latest.result;
-            const usable =
-              resultObj && resultObj.content ? resultObj.content : resultObj;
-            contentPayload = JSON.stringify(usable);
-          }
-        } catch (e) {
-          console.warn(
-            "/preview: failed to load latest result for prompt",
-            pid,
-            e && e.message
-          );
-        }
+      } catch (e) {
+        // non-fatal: log and continue to validation which will return a helpful error
+        console.warn("/preview: getPersistedContent failed", e && e.message);
       }
     }
 
@@ -943,8 +902,42 @@ app.post("/api/export", async (req, res) => {
     sendProcessingError,
     sendServiceUnavailableError,
   } = require("./utils/errorHandler");
+  // Allow callers to reference persisted content by promptId/resultId.
+  // If promptId/resultId present, require persisted content; otherwise accept title/body.
+  const {
+    title: bodyTitle,
+    body: bodyBody,
+    promptId,
+    resultId,
+  } = req.body || {};
+  let title = bodyTitle;
+  let body = bodyBody;
 
-  const { title, body } = req.body || {};
+  if (promptId || resultId) {
+    // Enforce persisted read when IDs provided
+    const persisted = await genieService.getPersistedContent({
+      promptId,
+      resultId,
+    });
+    if (!persisted || !persisted.content) {
+      return sendValidationError(
+        res,
+        "Persisted content not found for provided promptId/resultId",
+        {
+          promptId,
+          resultId,
+        }
+      );
+    }
+    // Persisted content may be wrapped or be the content object
+    const contentObj =
+      persisted.content && persisted.content.content
+        ? persisted.content.content
+        : persisted.content;
+    title = contentObj.title;
+    body = contentObj.body;
+  }
+
   if (!title || !body) {
     return sendValidationError(res, "Content must include title and body", {
       provided: Object.keys(req.body || {}),
@@ -1085,7 +1078,39 @@ app.post("/export", async (req, res) => {
     sendServiceUnavailableError,
   } = require("./utils/errorHandler");
 
-  const { title, body } = req.body || {};
+  // Support persisted content by id when provided by legacy clients
+  const {
+    title: bodyTitle,
+    body: bodyBody,
+    promptId,
+    resultId,
+  } = req.body || {};
+  let title = bodyTitle;
+  let body = bodyBody;
+
+  if (promptId || resultId) {
+    const persisted = await genieService.getPersistedContent({
+      promptId,
+      resultId,
+    });
+    if (!persisted || !persisted.content) {
+      return sendValidationError(
+        res,
+        "Persisted content not found for provided promptId/resultId",
+        {
+          promptId,
+          resultId,
+        }
+      );
+    }
+    const contentObj =
+      persisted.content && persisted.content.content
+        ? persisted.content.content
+        : persisted.content;
+    title = contentObj.title;
+    body = contentObj.body;
+  }
+
   if (!title || !body) {
     return sendValidationError(res, "Content must include title and body", {
       provided: Object.keys(req.body || {}),
@@ -1204,7 +1229,7 @@ app.get("/export", async (req, res) => {
   // Backwards-compatible GET /export that accepts ?content=<json>
   // Harmonized to use the standardized error response helpers and
   // to return binary PDF with proper headers.
-  const { content } = req.query;
+  const { content, promptId, resultId } = req.query;
   const {
     sendValidationError,
     sendProcessingError,
@@ -1217,7 +1242,29 @@ app.get("/export", async (req, res) => {
 
   let page;
   try {
-    const contentObj = JSON.parse(content);
+    let contentObj = content ? JSON.parse(content) : null;
+
+    // If promptId/resultId provided prefer persisted content and require it to exist
+    if (!contentObj && (promptId || resultId)) {
+      const persisted = await genieService.getPersistedContent({
+        promptId,
+        resultId,
+      });
+      if (!persisted || !persisted.content) {
+        return sendValidationError(
+          res,
+          "Persisted content not found for provided promptId/resultId",
+          {
+            promptId,
+            resultId,
+          }
+        );
+      }
+      contentObj =
+        persisted.content && persisted.content.content
+          ? persisted.content.content
+          : persisted.content;
+    }
 
     if (!serviceState.puppeteer.ready || !browserInstance) {
       try {

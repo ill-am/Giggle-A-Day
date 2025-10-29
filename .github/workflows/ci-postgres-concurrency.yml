@@ -2,9 +2,9 @@ name: CI — Postgres concurrency check
 
 on:
   push:
-    branches: [ main, aetherV0/** ]
+    branches: [ 'aetherV0/**' ]
   pull_request:
-    branches: [ main, aetherV0/** ]
+    branches: [ 'aetherV0/**' ]
 
 jobs:
   concurrency-test:
@@ -60,7 +60,9 @@ name: CI - Postgres concurrency check
 
 on:
   pull_request:
+    branches: [ 'aetherV0/**' ]
     types: [opened, synchronize, reopened]
+  workflow_dispatch: {}
 
 jobs:
   postgres-concurrency:
@@ -130,7 +132,23 @@ jobs:
           # Use migrate deploy to apply existing migrations
           npx --prefix server prisma migrate deploy --schema=server/prisma/schema.prisma
 
-      - name: Run concurrency integration test
+      - name: Run concurrency HTTP integration test
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          USE_PRISMA_IN_TEST: '1'
+          SKIP_PUPPETEER: 'true'
+          GENIE_PERSISTENCE_AWAIT: '1'
         run: |
+          echo "Running HTTP concurrency integration test against Postgres"
           cd server
-          npx vitest run __tests__/concurrency.integration.test.mjs --reporter dot
+          npx vitest run __tests__/concurrency.http.integration.test.mjs --reporter dot
+
+      - name: Upload test artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-test-artifacts
+          path: |
+            server/logs/**
+            server/tmp-exports/**
+            server/vitest-*.json

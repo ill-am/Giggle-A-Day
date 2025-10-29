@@ -66,7 +66,12 @@ Prioritized Actionables (with detail when >2 hours)
   - Risk: Flaky parallel tests due to timing; mitigate with backoff, short random jitter, and using transactions where needed to make failure deterministic.
   - Risk: CI runner resource limits (parallelism or timeouts); reduce concurrency count in CI (e.g. N=6–10) vs ad-hoc local runs (N=50).
 
-2. Add Export API / enforce persisted reads (3–6 hours)
+2.  Add Export API / enforce persisted reads (3–6 hours)
+
+- NOTE: Follow-up tasks to implement
+
+  - #1: Add unit test asserting `genieService.getPersistedContent` fallback to legacy `crud` when Prisma returns no rows or is unavailable. This prevents regressions during migration.
+  - #3: Add integration tests that POST /export and GET /preview with `promptId`/`resultId` to assert exports derive from persisted content. These tests should exercise both Prisma and legacy `crud` paths (use `_setDbUtils` to inject mocks where needed).
 
 - Goal: Guarantee exports are derived from persisted canonical content so dedupe/auditability guarantees are preserved.
 - Estimate: 3–6 hours (implementation, tests, docs).
@@ -199,6 +204,8 @@ Priority A — Immediate (start now) ✅ (TUE 28th OCT 2025)
 - Acceptance criteria: CI job runs the concurrency test and fails PRs on regressions.
 
 Priority B — Next (after A green / staging validated) 🟩
+
+Note: Priority B is the next work to perform. A PR to merge these changes will be opened only after both Priority A and Priority B have been completed and validated.
 
 3. Safe dedupe/apply tooling (8–16h)
 

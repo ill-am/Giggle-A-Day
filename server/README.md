@@ -60,6 +60,29 @@ node -e "const {PrismaClient}=require('@prisma/client');(async()=>{const p=new P
 
 - The server's test suite uses Vitest. Some integration/concurrency tests require a running Postgres instance; set `DATABASE_URL` or `POSTGRES_URL` when running those tests.
 
+### Genie concurrency runbook (Priority B)
+
+This project includes a concurrency verification test for the Genie orchestration (Priority A). The following runbook notes describe how to run and validate the concurrency test locally and in CI, and lists the important env vars used by the test and CI job.
+
+- Purpose: run the HTTP-level concurrency test that fires parallel `POST /prompt` requests and validates at-most-one persisted prompt (or falls back to legacy storage checks).
+- Where: `server/__tests__/concurrency.http.integration.test.mjs`.
+
+Quick local steps
+
+1. Ensure Postgres is reachable and `DATABASE_URL` points at a dev/test database (or run with the legacy storage fallback if you don't have Postgres available).
+2. From the repo root run (example):
+
+```bash
+# Run the concurrency test against Postgres (opt-in)
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/poema_test \
+  USE_PRISMA_IN_TEST=1 SKIP_PUPPETEER=true npm --prefix server run test:run -- ./__tests__/concurrency.http.integration.test.mjs
+```
+
+Notes
+
+- The test is tolerant: if the running server persists via the legacy `crud` path the test will fall back to inspecting legacy storage and skip the strict Postgres-only assertion. For strict Postgres verification enable `USE_PRISMA_IN_TEST=1` and run against a Postgres instance.
+- For CI runs prefer a fresh, isolated Postgres instance. See `.github/ci/genie_concurrency.md` for CI-specific notes.
+
 ## Devcontainer
 
 - The devcontainer setup includes a `db` service. The seeder will not be run automatically by the devcontainer; run it manually if you want seeded example data.
