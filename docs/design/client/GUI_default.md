@@ -102,7 +102,7 @@
 
 ```
 ┌──────────────────────────────────────┐
-│        AetherPress (V0.1)           │
+│        AetherPress (V0.1)            │
 │ From Imagination to Publication...   │
 │ Current user: None                   │
 │ Backend health: ok                   │

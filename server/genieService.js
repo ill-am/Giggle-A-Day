@@ -603,6 +603,72 @@ const genieService = {
   },
 
   // Backwards-compatible wrapper that delegates to utils/fileUtils
+  async export({ prompt, promptId, resultId, validate = false } = {}) {
+    // Centralized export orchestration: prefer persisted content, fall back
+    // to generation, then render PDF using the pdfGenerator utility.
+    try {
+      let contentObj = null;
+
+      // Prefer persisted canonical content when IDs provided
+      if (promptId || resultId) {
+        const persisted = await genieService.getPersistedContent({
+          promptId,
+          resultId,
+        });
+        if (persisted && persisted.content) {
+          contentObj =
+            persisted.content && persisted.content.content
+              ? persisted.content.content
+              : persisted.content;
+        }
+      }
+
+      // If caller provided a content object directly via `prompt`, accept it
+      if (!contentObj && prompt && typeof prompt === "object") {
+        // shape: { title, body }
+        contentObj = prompt;
+      }
+
+      // Otherwise, generate content from prompt text
+      if (!contentObj && prompt && typeof prompt === "string") {
+        const genResult = await genieService.generate(prompt);
+        // genieService.generate returns envelope { success, data }
+        if (genResult && genResult.data && genResult.data.content)
+          contentObj = genResult.data.content;
+        else if (genResult && genResult.content) contentObj = genResult.content;
+      }
+
+      if (!contentObj || !contentObj.title || !contentObj.body) {
+        const e = new Error(
+          "Export requires content (title & body) or a valid prompt/persisted id"
+        );
+        // @ts-ignore
+        e.status = 400;
+        throw e;
+      }
+
+      // Require pdfGenerator lazily to avoid pulling heavy deps at module load
+      const { generatePdfBuffer } = require("./pdfGenerator");
+      const title = contentObj.title || "Export";
+      const body = contentObj.body || "";
+
+      const generated = await generatePdfBuffer({ title, body, validate });
+      if (validate) {
+        if (generated && generated.buffer)
+          return { buffer: generated.buffer, validation: generated.validation };
+        // Some implementations return { buffer, validation } already
+        if (generated && generated.validation) return generated;
+      }
+
+      return {
+        buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
+      };
+    } catch (err) {
+      // Surface errors to the controller
+      throw err;
+    }
+  },
+
   saveContentToFile(content) {
     return saveContentToFile(content);
   },

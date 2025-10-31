@@ -4,6 +4,10 @@
   import { modeStore } from './stores/modeStore.js';
   import ModeIndicator from './components/ModeIndicator.svelte';
 
+  import { contentStore } from './stores/index.js';
+  import { submitPrompt as apiSubmitPrompt } from './lib/api.js';
+  import ExportButton from './components/ExportButton.svelte';
+
   // Fetch backend health status on mount
   let health = null;
   let apiError = null;
@@ -30,14 +34,13 @@
     apiError = null;
     loadingAI = true;
     try {
-      const res = await fetch('/prompt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt })
-      });
-      if (!res.ok) throw new Error(`AI error: ${res.status}`);
-      const data = await res.json();
-      aiResult = data.result || JSON.stringify(data);
+  // Use shared API helper which normalizes the response shape
+  const result = await apiSubmitPrompt(prompt);
+      // result is normalized to { content, copies, metadata, promptId, resultId }
+      aiResult = JSON.stringify(result, null, 2);
+      // Populate the shared content store so UI components (ExportButton)
+      // can reactively enable export and other actions.
+      contentStore.set(result);
     } catch (err) {
       apiError = err.message;
     } finally {
@@ -77,17 +80,9 @@
         <h3>AI Result</h3>
         <pre style="white-space:pre-wrap;">{aiResult}</pre>
 
-        <!-- Pre-actionable UI: Disabled Export and Edit buttons (Option 1) -->
+        <!-- Action UI: Export wired to ExportButton; Edit still stubbed -->
         <div class="action-buttons" style="margin-top:0.75rem; display:flex; gap:0.5rem;">
-          <button
-            class="stub-button"
-            aria-disabled="true"
-            disabled
-            title="Export — coming soon"
-            data-testid="export-button-stub"
-          >
-            Export
-          </button>
+          <ExportButton />
 
           <button
             class="stub-button"

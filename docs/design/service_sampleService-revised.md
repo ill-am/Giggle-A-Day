@@ -3,26 +3,26 @@
 ## Service Objective
 
 ```ascii
-┌─────────────────────────────────────────┐
-│             sampleService               │
-├─────────────────────────────────────────┤
-│ Content Formation                       │
+┌────────────────────────────────────────┐
+│             sampleService              │
+├────────────────────────────────────────┤
+│ Content Formation                      │
 │  ├─ Structured prompt handling         │
 │  ├─ Consistent format generation       │
 │  └─ Multiple variation support         │
 │                                        │
-│ Intent Declaration                      │
-│  ├─ Persistence requirements          │
-│  ├─ Storage specifications            │
-│  └─ Delivery format markers           │
-└─────────────────────────────────────────┘
+│ Intent Declaration                     │
+│  ├─ Persistence requirements           │
+│  ├─ Storage specifications             │
+│  └─ Delivery format markers            │
+└────────────────────────────────────────┘
 ```
 
 ### Reference Architecture
 
 ```ascii
 ┌──────────┐     ┌──────────────┐     ┌───────────────┐
-│  Client  │────▶│ GenieService │────▶│ sampleService │
+│  Client  │───▶│ GenieService  │───▶│ sampleService │
 └──────────┘     └──────────────┘     └───────────────┘
                        │
                        ▼
@@ -151,11 +151,11 @@ interface EnhancedContent extends Content {
 
 ```ascii
 ┌──────────────────────────┐
-│     Intent System       │
+│     Intent System        │
 ├──────────────────────────┤
-│ ! Storage Intent        │
-│ ! Format Requirements   │
-│ ! Validation Rules     │
+│ ! Storage Intent         │
+│ ! Format Requirements    │
+│ ! Validation Rules       │
 └──────────────────────────┘
 ```
 
@@ -176,11 +176,11 @@ interface StorageIntent {
 
 ```ascii
 ┌──────────────────────────┐
-│  Validation Framework   │
+│  Validation Framework    │
 ├──────────────────────────┤
-│ ! Content Validation    │
-│ ! Format Verification   │
-│ ! Intent Validation    │
+│ ! Content Validation     │
+│ ! Format Verification    │
+│ ! Intent Validation      │
 └──────────────────────────┘
 ```
 
@@ -199,6 +199,7 @@ interface StorageIntent {
    - Add validation rules
 
 3. **Validation Framework** (1-2 hours)
+
    - Content validation
    - Format verification
    - Intent validation
@@ -218,6 +219,7 @@ interface StorageIntent {
    - Validated intents
 
 3. **Service Integration**
+
    - Clean handoff to GenieService
    - Clear content contracts
    - Documented intentions
