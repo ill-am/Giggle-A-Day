@@ -1082,24 +1082,59 @@ app.post("/export", async (req, res) => {
   // swap generation services (sample/demo/ebook) without changing the
   // controller logic.
   try {
-    const { prompt, promptId, resultId, content, validate } = req.body || {};
+    const { prompt, promptId, resultId, content, validate, title, body } =
+      req.body || {};
     const arg = {};
     if (prompt) arg.prompt = prompt;
     if (promptId) arg.promptId = promptId;
     if (resultId) arg.resultId = resultId;
+    // Accept a direct content object via `content` or legacy title/body fields
     if (content) arg.prompt = content; // accept direct content object
+    else if (
+      (typeof title === "string" && title) ||
+      (typeof body === "string" && body)
+    ) {
+      // Backwards-compat: allow callers to POST { title, body } directly
+      arg.prompt = { title: title || "", body: body || "" };
+    }
 
     const exportResult = await genieService.export({
       ...arg,
       validate: !!validate,
     });
 
-    const buffer =
+    let buffer =
       exportResult && exportResult.buffer ? exportResult.buffer : null;
     if (!buffer) {
       return sendProcessingError(res, "PDF Generation Failed: empty buffer", {
         code: "PDF_GENERATION_ERROR",
       });
+    }
+
+    // Ensure we have a Buffer and a valid length before setting headers
+    if (!Buffer.isBuffer(buffer)) {
+      try {
+        buffer = Buffer.from(buffer);
+      } catch (e) {
+        return sendProcessingError(
+          res,
+          "PDF Generation Failed: invalid buffer",
+          {
+            code: "PDF_GENERATION_ERROR",
+            details: { type: typeof buffer },
+          }
+        );
+      }
+    }
+
+    if (typeof buffer.length !== "number") {
+      return sendProcessingError(
+        res,
+        "PDF Generation Failed: invalid buffer length",
+        {
+          code: "PDF_GENERATION_ERROR",
+        }
+      );
     }
 
     res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
