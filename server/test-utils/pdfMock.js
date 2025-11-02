@@ -38,12 +38,38 @@ function makeFillerBytes(targetBytes) {
   return token.repeat(repeats).slice(0, targetBytes);
 }
 
-async function generatePdfBuffer({ title, body, browser, validate } = {}) {
+async function generatePdfBuffer({
+  title,
+  body,
+  browser,
+  validate,
+  envelope,
+} = {}) {
+  // If an envelope is provided, compose a body string from pages for the
+  // mock output so tests that assert pageCount/size can exercise multi-page
+  // behavior without launching Puppeteer.
+  let contentStr = "";
+  if (envelope && Array.isArray(envelope.pages)) {
+    contentStr = envelope.pages
+      .map((p) => {
+        const blocks = (p.blocks || [])
+          .map((b) => String(b.content || ""))
+          .join(" ");
+        return (p.title || "") + "\n" + blocks;
+      })
+      .join("\n---PAGE---\n");
+  } else if (body) {
+    contentStr = body;
+  } else if (title) {
+    contentStr = title;
+  }
+
   // Determine a target size: ensure bytesPerPage > 10000 (default minBytesPerPage)
   const TARGET_BYTES = 14000;
   const filler = makeFillerBytes(TARGET_BYTES);
-  // Insert filler into the PDF content stream. Compute stream length as bytes of the text
-  const streamContent = `BT /F1 12 Tf 50 700 Td (${filler}) Tj ET\n`;
+  const streamContent = `BT /F1 12 Tf 50 700 Td (${filler}\n${String(
+    contentStr
+  )}) Tj ET\n`;
   const streamLength = Buffer.byteLength(streamContent, "utf8");
   const pdfString =
     BASE_PDF_HEADER.replace("__STREAM_LENGTH__", String(streamLength)) +

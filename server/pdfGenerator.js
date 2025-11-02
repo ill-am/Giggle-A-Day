@@ -42,14 +42,17 @@ async function generatePdfBuffer({
   body,
   browser: providedBrowser,
   validate = false,
+  envelope,
 } = {}) {
   if (mockPdf && typeof mockPdf.generatePdfBuffer === "function") {
     // Delegate to mock implementation in test-mode to avoid launching a browser.
+    // Pass `envelope` through so the mock can render multi-page envelopes.
     return mockPdf.generatePdfBuffer({
       title,
       body,
       browser: providedBrowser,
       validate,
+      envelope,
     });
   }
   let browser;
@@ -94,7 +97,28 @@ async function generatePdfBuffer({
     }
 
     page = await browser.newPage();
-    const contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
+    // If a canonical envelope was provided, render one HTML page per envelope page
+    let contentHtml;
+    if (envelope && Array.isArray(envelope.pages)) {
+      const pagesHtml = envelope.pages
+        .map((p) => {
+          const blocks = (p.blocks || [])
+            .map((b) => {
+              if (b.type === "html") return String(b.content || "");
+              if (b.type === "text")
+                return `<div>${String(b.content || "")}</div>`;
+              return `<pre>${String(b.content || "")}</pre>`;
+            })
+            .join("\n");
+          return `<section style=\"page-break-after: always;\"><h1>${String(
+            p.title || ""
+          )}</h1>${blocks}</section>`;
+        })
+        .join("\n");
+      contentHtml = `<!doctype html><html><body>${pagesHtml}</body></html>`;
+    } else {
+      contentHtml = `<!doctype html><html><body><h1>${title}</h1><div>${body}</div></body></html>`;
+    }
     await page.setContent(contentHtml, { waitUntil: "networkidle0" });
     const buffer = await page.pdf({ format: "A4", printBackground: true });
     if (page && launched) await page.close();
