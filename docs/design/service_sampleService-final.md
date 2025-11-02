@@ -6,6 +6,8 @@ Last updated: November 1, 2025
 
 Provide a concise, implementable design that enforces separation of responsibilities and specifies the contracts for generation, user edits, and export.
 
+**Note:** See `TESTS_legacy.md` (in corresponding shared/, client/, and server/ `__tests__` folder) and `WORKFLOWS_legacy.md` for details on test dependencies and CI workflow requirements that need revision. These documents outline the necessary updates to test suites and CI/CD pipelines to align with this design.
+
 ### Principles
 
 - Orchestrator-only: `genieService` coordinates selection, normalization, validation, persistence orchestration and export orchestration. It must not implement business rules for content composition.
@@ -110,7 +112,55 @@ Block { type: 'text'|'html'|'image'|'embed'|'raw', content: string|object, metad
 
 - `genieService` must orchestrate only; services must be pure content producers; plumbing must perform all side-effects.
 - A single normalizer exists and is used by all entry points before validation/export.
-- Tests cover legacy inputs and the canonical flow using the mock PDF implementation in CI.  [???]
+- Tests cover legacy inputs and the canonical flow using the mock PDF implementation in CI. [???]
+
+### System Architecture (Final Implementation)
+
+```ascii
+┌─────────────┐         ┌───────────────────────────────────────┐
+│   Client    │         │              Controller               │
+│  Frontend   │◄─────►  │         (server/index.js)             │
+└─────────────┘         └───────────────┬───────────────────────┘
+                                        │
+                                        ▼
+┌──────────────────────────────────────────────────────────────┐
+│                       genieService                           │
+│                                                              │
+│  ┌─────────────┐      ┌─────────────┐    ┌─────────────┐     │
+│  │ Normalizer  │      │ Validator   │    │ Orchestrator│     │
+│  └─────┬───────┘      └──────┬──────┘    └─────┬───────┘     │
+└────────┼─────────────────────┼─────────────────┼─────────────┘
+         │                     │                 │
+         ▼                     ▼                 ▼
+┌────────────────┐   ┌────────────────┐   ┌────────────────┐
+│    Services    │   │    Plumbing    │   │   Persistence  │
+│                │   │                │   │                │
+│ ┌──────────┐   │   │ │PDF Gen   │   │   │ │DB Utils  │   │
+│ │sample    │   │   │ │PDF Gen   │   │   │ │DB Utils  │   │
+│ └──────────┘   │   │ └──────────┘   │   │ └──────────┘   │
+│ ┌──────────┐   │   │ ┌──────────┐   │   │ ┌──────────┐   │
+│ │demo      │   │   │ │File Utils│   │   │ │Envelope  │   │
+│ └──────────┘   │   │ └──────────┘   │   │ │Store     │   │
+│ ┌──────────┐   │   │                │   │ └──────────┘   │
+│ │ebook     │   │   │                │   │                │
+│ └──────────┘   │   │                │   │                │
+└───────┬────────┘   └───────┬────────┘   └────────┬───────┘
+        │                    │                     │
+        └────────────────────┼─────────────────────┘
+                             │
+                             ▼
+                    Pure Data Flow Only
+                   (Canonical Envelopes)
+```
+
+Key Data Flow Properties:
+
+- Services produce pure content (Envelopes)
+- genieService handles all orchestration
+- Plumbing modules handle all side-effects
+- All data normalized before processing
+- One-way dependencies (no circular)
+- Clear separation of concerns
 
 ## ADDENDUM: Format and Flow Patterns in Export Process
 
