@@ -1,4 +1,6 @@
-const { saveContentToFile } = require("./utils/fileUtils");
+// Services MUST be pure: return canonical Envelope and optional actions.
+// This module provides a minimal, testable implementation of the Generation
+// contract: async generate(prompt) -> { envelope, metadata? }
 
 function buildContent(prompt, opts = {}) {
   const maxWords = opts.titleWords || 6;
@@ -11,33 +13,48 @@ function buildContent(prompt, opts = {}) {
 }
 
 function makeCopies(content, n = 3) {
-  // Return n copies of the content object for the demo
-  return Array.from({ length: n }, () => content);
+  return Array.from({ length: n }, () => ({ ...content }));
 }
 
-async function generateFromPrompt(prompt) {
-  // Business logic: request that the prompt be saved, but do not fail
-  // generation if the save fails (non-fatal persistence).
-  try {
-    // saveContentToFile may be async; await it if it returns a Promise
-    const res = saveContentToFile(prompt);
-    if (res && typeof res.then === "function") await res;
-  } catch (e) {
-    // Non-fatal: log and continue
-    // eslint-disable-next-line no-console
-    console.warn(
-      "sampleService: failed to save prompt to file:",
-      e && e.message
-    );
-  }
+function buildPagesFromCopies(copies) {
+  return copies.map((c, idx) => ({
+    id: `p${idx + 1}`,
+    title: c.title,
+    blocks: [
+      {
+        type: "text",
+        content: c.body,
+      },
+    ],
+  }));
+}
 
-  const content = buildContent(prompt);
-  const copies = makeCopies(content, 3);
-  return { content, copies };
+async function generate(prompt, opts = {}) {
+  // Pure: do not perform any I/O or persistence here.
+  const content = buildContent(prompt, opts);
+  const copies = makeCopies(content, opts.copies || 3);
+  const pages = buildPagesFromCopies(copies);
+
+  const envelope = {
+    // id assigned later by persistence
+    version: 1,
+    metadata: { model: "sample-v1" },
+    pages,
+  };
+
+  const metadata = { generatedAt: new Date().toISOString() };
+  return { envelope, metadata };
+}
+
+// Keep a backward-compatible wrapper name for callers that used the old API.
+async function generateFromPrompt(prompt, opts = {}) {
+  return generate(prompt, opts);
 }
 
 module.exports = {
   buildContent,
   makeCopies,
+  buildPagesFromCopies,
+  generate,
   generateFromPrompt,
 };

@@ -6,7 +6,7 @@ Last updated: November 1, 2025
 
 Provide a concise, implementable design that enforces separation of responsibilities and specifies the contracts for generation, user edits, and export.
 
-**Note:** Legacy input shapes are no longer supported. Clients and tests MUST provide the canonical Envelope shape (see "Canonical envelope" below). The legacy migration documents (`TESTS_legacy.md` in the module `__tests__` folders and `WORKFLOWS_legacy.md`) are retained for historical reference only; they should be updated to remove legacy-path guidance and to describe canonical-only tests and CI jobs.
+**Note:** See `TESTS_legacy.md` (in corresponding shared/, client/, and server/ `__tests__` folder) and `WORKFLOWS_legacy.md` for details on test dependencies and CI workflow requirements that need revision. These documents outline the necessary updates to test suites and CI/CD pipelines to align with this design.
 
 ### Principles
 
@@ -161,35 +161,6 @@ Key Data Flow Properties:
 - All data normalized before processing
 - One-way dependencies (no circular)
 - Clear separation of concerns
-
-## REFERENCE
-
-Concise findings and supporting artifacts for implementers and agents.
-
-- Findings:
-
-  - The codebase must accept only the canonical Envelope at runtime; legacy shapes are deprecated and removed (policy).
-  - Many tests, mocks, and CI workflows still contain legacy-shaped fixtures (e.g., `{ title, body }`) and must be updated to canonical fixtures.
-  - Priority targets are server export/preview tests, `server/index.js` controller entry points, `genieService`, `server/test-utils/pdfMock.js`, and client preview/test scripts.
-
-- Supporting artifacts (created/updated):
-
-  - `docs/design/service_sampleService-final.md` (this file) — canonical-only policy and migration plan.
-  - `client/__tests__/TESTS_legacy.md`, `shared/__tests__/TESTS_legacy.md`, `server/__tests__/TESTS_legacy.md` — historical migration notes and prioritized test lists.
-  - `.github/workflows/WORKFLOWS_legacy.md`, `.github/workflows/WORKFLOWS-revised.md` — workflow audits and suggested CI changes.
-  - PR branch: `feat/genie/ci-concurrency` → merged into `aetherV0/anew-default-basic` (documentation changes pushed/merged).
-
-- High-priority files to update (representative):
-
-  - `server/index.js`, `server/genieService.js`, `server/sampleService.js`, `server/worker.js`
-  - `server/__tests__/*` (export, preview, integration tests referencing legacy payloads)
-  - `server/test-utils/pdfMock.js` (update to accept canonical envelope fixtures)
-  - `client/__tests__/*` and smoke scripts that post legacy-shaped payloads
-
-- Quick agent reminders:
-  - Provide canonical Envelope fixtures under `server/__tests__/fixtures/` (or `shared/test-utils/fixtures/`) and replace legacy fixtures first in the highest-priority tests.
-  - Add `server/utils/normalizeToPages.js` and wire it to controllers as a temporary adapter only if a short transition is absolutely needed; otherwise update tests/code to canonical fixtures and add strict validation at controller boundaries.
-  - Use `PDF_GENERATOR_IMPL=mock` in CI while converting tests to avoid heavy integration runs.
 
 ## ADDENDUM: Format and Flow Patterns in Export Process
 
