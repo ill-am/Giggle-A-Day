@@ -1,4 +1,4 @@
-# service_sampleService — Final design (refined)
+## service_sampleService — Final design (refined)
 
 Last updated: November 1, 2025
 
@@ -6,19 +6,19 @@ Last updated: November 1, 2025
 
 Provide a concise, implementable design that enforces separation of responsibilities and specifies the contracts for generation, user edits, and export.
 
-### Principles
+## Principles
 
 - Orchestrator-only: `genieService` coordinates selection, normalization, validation, persistence orchestration and export orchestration. It must not implement business rules for content composition.
 - Services-only business logic: `sampleService`, `demoService`, `ebookService` are responsible for generating content (the business model), not for I/O or persistence.
 - Plumbing-only I/O: `pdfGenerator`, DB/file utils, and similar modules perform side-effects (write file, persist to DB, generate PDF). They are invoked by `genieService` or background jobs but contain no content business logic.
 
-### Separation of responsibilities (one line each)
+## Separation of responsibilities (one line each)
 
 - genieService: orchestrate and normalize. Input routing, calling services, calling persistence helper, calling pdf generator, returning results.
 - Services (sample/demo/ebook): produce canonical envelopes; pure functions that return content (no file/DB writes by default).
 - Plumbing: persist envelopes, write files, produce PDFs, and other side-effecting operations.
 
-### Canonical envelope (single source-of-truth)
+## Canonical envelope (single source-of-truth)
 
 All generated and edited content MUST be represented as the canonical envelope before persistence or export:
 
@@ -38,7 +38,7 @@ layout?: object
 
 Block { type: 'text'|'html'|'image'|'embed'|'raw', content: string|object, metadata?: object }
 
-### Contracts (succinct)
+## Contracts (succinct)
 
 1. Generation contract (services)
 
@@ -61,12 +61,12 @@ Block { type: 'text'|'html'|'image'|'embed'|'raw', content: string|object, metad
 - Side-effects: persistence (writes) must be centralized: `genieService` calls a single persistence helper in plumbing to write envelopes and obtain `id`/`version`.
 - PDF creation: `genieService` calls `pdfGenerator.generatePdfBuffer(canonicalEnvelope, { validate })` and returns results.
 
-### Errors & Validation
+## Errors & Validation
 
 - Validation: use compact validation objects { ok, errors[], warnings[] } returned alongside successful exports. Invalid payloads return 4xx with details. Server failures return 5xx.
 - Errors: structured error object { status, code?, message, details? }.
 
-### Enforcement points (where to implement)
+## Enforcement points (where to implement)
 
 - Controller boundaries (`server/index.js`) — accept legacy shapes; call normalizer helper; forward explicit parameters (`resultId`, `content`, `prompt`).
 - `genieService.generate()` — call service, assert canonical envelope returned.
@@ -74,14 +74,14 @@ Block { type: 'text'|'html'|'image'|'embed'|'raw', content: string|object, metad
 - Services — must return envelopes only; move any current file/DB writes out of services into plumbing.
 - `pdfGenerator` — accept canonical envelope only; perform PDF creation and (optionally) validation.
 
-### Migration plan & quick to-dos (estimates) [???]
+## Migration plan & quick to-dos (estimates) [???]
 
 1. Add `server/utils/normalizeToPages.js`: normalize legacy shapes -> canonical envelope. Test: 1.5–2.5h
 2. Move side-effecting saves out of services (e.g., `sampleService` file save) into plumbing; add persistence helper and call from `genieService`: 1.0–2.0h
 3. Wire normalizer into `genieService.export()` and controllers; add unit tests exercising legacy -> normalize -> mock export: 1.5–3.0h
 4. Add compact JSON Schema for Envelope and integrate in tests: 1.0–2.0h
 
-### Examples (minimal)
+## Examples (minimal)
 
 1. Generated envelope
 
@@ -106,11 +106,11 @@ Block { type: 'text'|'html'|'image'|'embed'|'raw', content: string|object, metad
 { "resultId": "r_1", "validate": true }
 ```
 
-### Acceptance criteria for final design
+## Acceptance criteria for final design
 
 - `genieService` must orchestrate only; services must be pure content producers; plumbing must perform all side-effects.
 - A single normalizer exists and is used by all entry points before validation/export.
-- Tests cover legacy inputs and the canonical flow using the mock PDF implementation in CI.  [???]
+- Tests cover legacy inputs and the canonical flow using the mock PDF implementation in CI.
 
 ## ADDENDUM: Format and Flow Patterns in Export Process
 
