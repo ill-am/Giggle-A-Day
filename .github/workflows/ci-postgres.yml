@@ -25,6 +25,7 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/dino_ci_test
+      USE_PRISMA_IN_TEST: "true"
 
     steps:
       - name: Checkout

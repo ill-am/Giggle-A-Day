@@ -723,62 +723,21 @@ const previewTemplate = (content) => `
 app.get("/preview", async (req, res) => {
   const { content, resultId, promptId } = req.query;
 
-  // If content not provided, try to load it from DB using resultId or promptId
+  // If content not provided, prefer persisted content (resultId or promptId)
   let contentPayload = content || null;
   try {
-    if (!contentPayload && resultId) {
-      const id = parseInt(resultId, 10);
-      if (!isNaN(id)) {
-        try {
-          const row = await crud.getAIResultById(id);
-          if (row) {
-            // row.result may be a JSON string or an object
-            const resultObj =
-              typeof row.result === "string"
-                ? JSON.parse(row.result)
-                : row.result;
-            // Prefer resultObj.content if present
-            const usable =
-              resultObj && resultObj.content ? resultObj.content : resultObj;
-            contentPayload = JSON.stringify(usable);
-          }
-        } catch (e) {
-          // ignore DB lookup errors here; validation will handle missing content
-          console.warn(
-            "/preview: failed to load result by id",
-            id,
-            e && e.message
-          );
+    if (!contentPayload && (resultId || promptId)) {
+      try {
+        const persisted = await genieService.getPersistedContent({
+          promptId,
+          resultId,
+        });
+        if (persisted && persisted.content) {
+          contentPayload = JSON.stringify(persisted.content);
         }
-      }
-    }
-
-    if (!contentPayload && promptId) {
-      const pid = parseInt(promptId, 10);
-      if (!isNaN(pid)) {
-        try {
-          // Try to find latest AI result for this prompt
-          const results = await crud.getAIResults();
-          const filtered = results
-            .filter((r) => r.prompt_id === pid)
-            .sort((a, b) => (a.id || 0) - (b.id || 0));
-          const latest = filtered.length ? filtered[filtered.length - 1] : null;
-          if (latest) {
-            const resultObj =
-              typeof latest.result === "string"
-                ? JSON.parse(latest.result)
-                : latest.result;
-            const usable =
-              resultObj && resultObj.content ? resultObj.content : resultObj;
-            contentPayload = JSON.stringify(usable);
-          }
-        } catch (e) {
-          console.warn(
-            "/preview: failed to load latest result for prompt",
-            pid,
-            e && e.message
-          );
-        }
+      } catch (e) {
+        // non-fatal: log and continue to validation which will return a helpful error
+        console.warn("/preview: getPersistedContent failed", e && e.message);
       }
     }
 
@@ -943,8 +902,42 @@ app.post("/api/export", async (req, res) => {
     sendProcessingError,
     sendServiceUnavailableError,
   } = require("./utils/errorHandler");
+  // Allow callers to reference persisted content by promptId/resultId.
+  // If promptId/resultId present, require persisted content; otherwise accept title/body.
+  const {
+    title: bodyTitle,
+    body: bodyBody,
+    promptId,
+    resultId,
+  } = req.body || {};
+  let title = bodyTitle;
+  let body = bodyBody;
 
-  const { title, body } = req.body || {};
+  if (promptId || resultId) {
+    // Enforce persisted read when IDs provided
+    const persisted = await genieService.getPersistedContent({
+      promptId,
+      resultId,
+    });
+    if (!persisted || !persisted.content) {
+      return sendValidationError(
+        res,
+        "Persisted content not found for provided promptId/resultId",
+        {
+          promptId,
+          resultId,
+        }
+      );
+    }
+    // Persisted content may be wrapped or be the content object
+    const contentObj =
+      persisted.content && persisted.content.content
+        ? persisted.content.content
+        : persisted.content;
+    title = contentObj.title;
+    body = contentObj.body;
+  }
+
   if (!title || !body) {
     return sendValidationError(res, "Content must include title and body", {
       provided: Object.keys(req.body || {}),
@@ -1084,118 +1077,78 @@ app.post("/export", async (req, res) => {
     sendProcessingError,
     sendServiceUnavailableError,
   } = require("./utils/errorHandler");
-
-  const { title, body } = req.body || {};
-  if (!title || !body) {
-    return sendValidationError(res, "Content must include title and body", {
-      provided: Object.keys(req.body || {}),
-      required: ["title", "body"],
-    });
-  }
-
-  let page;
+  // Delegate to genieService.export which centralizes content selection
+  // and PDF generation. This reduces duplication and makes it easier to
+  // swap generation services (sample/demo/ebook) without changing the
+  // controller logic.
   try {
-    if (!serviceState.puppeteer.ready || !browserInstance) {
-      // Fall back to pdfGenerator (uses mock in test mode) so legacy
-      // /export POST works in CI/tests without a browser.
+    const { prompt, promptId, resultId, content, validate, title, body } =
+      req.body || {};
+    const arg = {};
+    if (prompt) arg.prompt = prompt;
+    if (promptId) arg.promptId = promptId;
+    if (resultId) arg.resultId = resultId;
+    // Accept a direct content object via `content` or legacy title/body fields
+    if (content) arg.prompt = content; // accept direct content object
+    else if (
+      (typeof title === "string" && title) ||
+      (typeof body === "string" && body)
+    ) {
+      // Backwards-compat: allow callers to POST { title, body } directly
+      arg.prompt = { title: title || "", body: body || "" };
+    }
+
+    const exportResult = await genieService.export({
+      ...arg,
+      validate: !!validate,
+    });
+
+    let buffer =
+      exportResult && exportResult.buffer ? exportResult.buffer : null;
+    if (!buffer) {
+      return sendProcessingError(res, "PDF Generation Failed: empty buffer", {
+        code: "PDF_GENERATION_ERROR",
+      });
+    }
+
+    // Ensure we have a Buffer and a valid length before setting headers
+    if (!Buffer.isBuffer(buffer)) {
       try {
-        const {
-          generatePdfBuffer,
-          validatePdfBuffer,
-        } = require("./pdfGenerator");
-        const generated = await generatePdfBuffer({
-          title,
-          body,
-          validate: true,
-        });
-        let pdfBuffer;
-        let validation;
-        if (Buffer.isBuffer(generated)) {
-          pdfBuffer = generated;
-          validation = await validatePdfBuffer(pdfBuffer).catch(() => ({
-            ok: true,
-          }));
-        } else {
-          pdfBuffer = generated.buffer;
-          validation = generated.validation;
-        }
-
-        if (!validation || validation.ok === false) {
-          return res.status(422).json({
-            ok: false,
-            errors: validation && validation.errors ? validation.errors : [],
-            warnings:
-              validation && validation.warnings ? validation.warnings : [],
-            pageCount:
-              validation && validation.pageCount ? validation.pageCount : 0,
-          });
-        }
-
-        res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Length", pdfBuffer.length);
-        res.end(pdfBuffer);
-        return;
-      } catch (fallbackErr) {
-        console.warn(
-          "Legacy /export fallback failed:",
-          fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr
-        );
-        return sendServiceUnavailableError(
+        buffer = Buffer.from(buffer);
+      } catch (e) {
+        return sendProcessingError(
           res,
-          "PDF generation service not ready",
+          "PDF Generation Failed: invalid buffer",
           {
-            code: "SERVICE_UNAVAILABLE",
+            code: "PDF_GENERATION_ERROR",
+            details: { type: typeof buffer },
           }
         );
       }
     }
 
-    page = await browserInstance.newPage();
-    if (!page) throw new Error("Failed to create browser page");
-
-    const contentObj = { title, body };
-    const htmlToRender = await rewriteImagesForExportAsync(
-      previewTemplate(contentObj)
-    );
-    const EXPORT_BASE_URL =
-      process.env.EXPORT_BASE_URL ||
-      `http://localhost:${process.env.PORT || 3000}`;
-    await page.setContent(htmlToRender, {
-      waitUntil: "networkidle2",
-      timeout: 60000,
-      url: EXPORT_BASE_URL,
-    });
-
-    const pdfBuffer = await page.pdf({ format: "A4", printBackground: true });
-
-    try {
-      const { validatePdfBuffer } = require("./pdfGenerator");
-      const validation = await validatePdfBuffer(pdfBuffer);
-      if (!validation || validation.ok === false) {
-        return res.status(422).json({
-          ok: false,
-          errors: validation.errors || [],
-          warnings: validation.warnings || [],
-          pageCount: validation.pageCount || 0,
-        });
-      }
-    } catch (valErr) {
-      console.warn("PDF validation failed to run:", valErr && valErr.message);
+    if (typeof buffer.length !== "number") {
+      return sendProcessingError(
+        res,
+        "PDF Generation Failed: invalid buffer length",
+        {
+          code: "PDF_GENERATION_ERROR",
+        }
+      );
     }
 
     res.setHeader("Content-Disposition", `inline; filename=export.pdf`);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Length", pdfBuffer.length);
-    res.end(pdfBuffer);
+    res.setHeader("Content-Length", buffer.length);
+    res.end(buffer);
     return;
   } catch (err) {
-    console.error("Export generation error", err);
+    const status = err && err.status ? err.status : 500;
+    if (status === 400) return sendValidationError(res, err.message);
+    console.error("Export generation error (delegated)", err && err.message);
     return sendProcessingError(res, `PDF Generation Failed: ${err.message}`, {
       code: "PDF_GENERATION_ERROR",
     });
-  } finally {
-    if (page) await page.close();
   }
 });
 
@@ -1204,7 +1157,7 @@ app.get("/export", async (req, res) => {
   // Backwards-compatible GET /export that accepts ?content=<json>
   // Harmonized to use the standardized error response helpers and
   // to return binary PDF with proper headers.
-  const { content } = req.query;
+  const { content, promptId, resultId } = req.query;
   const {
     sendValidationError,
     sendProcessingError,
@@ -1217,7 +1170,29 @@ app.get("/export", async (req, res) => {
 
   let page;
   try {
-    const contentObj = JSON.parse(content);
+    let contentObj = content ? JSON.parse(content) : null;
+
+    // If promptId/resultId provided prefer persisted content and require it to exist
+    if (!contentObj && (promptId || resultId)) {
+      const persisted = await genieService.getPersistedContent({
+        promptId,
+        resultId,
+      });
+      if (!persisted || !persisted.content) {
+        return sendValidationError(
+          res,
+          "Persisted content not found for provided promptId/resultId",
+          {
+            promptId,
+            resultId,
+          }
+        );
+      }
+      contentObj =
+        persisted.content && persisted.content.content
+          ? persisted.content.content
+          : persisted.content;
+    }
 
     if (!serviceState.puppeteer.ready || !browserInstance) {
       try {

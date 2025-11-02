@@ -53,6 +53,8 @@ jobs:
           npm --prefix server run -s prisma:generate || npx --prefix server prisma generate || true
           if [ -n "$DATABASE_URL" ]; then
             echo "DATABASE_URL set — attempting prisma migrate deploy"
+            # Enable Prisma-backed test paths for the server when a real DB is provided
+            echo "USE_PRISMA_IN_TEST=true" >> $GITHUB_ENV
             npx --prefix server prisma migrate deploy
           else
             echo "DATABASE_URL not set — skipping prisma migrate (Postgres not configured for this run)"

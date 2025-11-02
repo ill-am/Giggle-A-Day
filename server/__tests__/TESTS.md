@@ -2,19 +2,62 @@
 
 This document consolidates all tests found under `server/__tests__`.
 
-**Note:** This is a living document and must reflect the current state of tests. Please update as new tests are added or existing ones are modified. (Last updated: October 23, 2025)
+**Note:** This is a living document and must reflect the current state of tests. Please update as new tests are added or existing ones are modified. (Last updated: November 2, 2025)
 
 ## Table of Contents
 
-- Core Business Logic Tests (5 tests)
-- Service Integration Tests (4 tests)
-- Image Generation Tests (3 tests)
-- Export and PDF Tests (6 tests)
+- Core Business Logic Tests (8 tests)
+- Service Integration Tests (6 tests)
+- Image Generation Tests (4 tests)
+- Export and PDF Tests (8 tests)
 - E2E Tests (1 test)
 
 ---
 
 ## Core Business Logic Tests
+
+### HTTP Concurrency (`concurrency.http.integration.test.mjs`)
+
+Purpose: Tests concurrent HTTP request handling, particularly for prompt creation endpoints.
+
+Highlights:
+
+- Tests parallel POST requests to `/prompt` endpoint
+- Validates upsert semantics in Postgres database
+- Ensures at most one prompt row is created for concurrent identical requests
+- Tests health endpoint reliability
+
+Dependencies: `vitest`, `supertest`, `Prisma`
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/concurrency.http.integration.test.mjs --run
+```
+
+Note: Requires DATABASE_URL environment variable to be set for Postgres testing.
+
+---
+
+### AI Mock Response (`aiMockResponse.test.mjs`)
+
+Purpose: Validates the mock AI response generation utility used in testing.
+
+Highlights:
+
+- Tests default single-page response generation
+- Validates page count limits
+- Ensures consistent response structure
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/aiMockResponse.test.mjs --run
+```
+
+---
 
 ### Prompt API (`prompt.test.js`)
 
@@ -60,11 +103,24 @@ npm run test:run -- coreFlow.integration.test.js
 
 Purpose: Tests preview generation endpoints and validates HTML rendering for various content types.
 
+---
+
+### Preview Integration (`preview.integration.test.js`)
+
+Purpose: End-to-end integration tests for the preview functionality.
+
+Highlights:
+
+- Tests complete preview generation pipeline
+- Validates preview rendering with real data
+- Tests preview caching behavior
+- Ensures proper error handling in integration scenarios
+
 Run:
 
 ```
 cd server
-npm run test:run -- preview.test.js
+npm run test:run -- preview.integration.test.js
 ```
 
 ---
@@ -116,7 +172,46 @@ npm run test:run -- aiService.test.js
 
 ---
 
-### Genie Service (`genieService.persistence.dedupe.test.mjs`)
+### Genie Service Base Persistence (`genieService.persistence.test.mjs`)
+
+Purpose: Tests the basic persistence functionality of the Genie service.
+
+Highlights:
+
+- Tests caching behavior with DB results
+- Validates read-only lookup operations
+- Tests fallback to generator when no cache exists
+- Verifies correct service initialization and cleanup
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/genieService.persistence.test.mjs --run
+```
+
+---
+
+### Genie Service Await (`genieService.persistence.await.test.mjs`)
+
+Purpose: Tests asynchronous waiting behavior in the Genie service persistence layer.
+
+Highlights:
+
+- Tests async result waiting mechanisms
+- Validates timeout behavior
+- Tests concurrent result fetching
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/genieService.persistence.await.test.mjs --run
+```
+
+---
+
+### Genie Service Deduplication (`genieService.persistence.dedupe.test.mjs`)
 
 Purpose: Tests deduplication in the persistence layer and validates caching and response consistency.
 
@@ -161,11 +256,24 @@ npx vitest run __tests__/jobs.requeue.test.mjs --run
 
 Purpose: Tests offline image generation capabilities and validates poem background creation.
 
+---
+
+### Raster Image Generation (`imageGenerator.raster.test.mjs`)
+
+Purpose: Tests specific raster image generation functionality.
+
+Highlights:
+
+- Tests raster image generation pipelines
+- Validates image dimensions and formats
+- Tests different raster processing options
+- Ensures proper error handling for raster operations
+
 Run:
 
 ```
 cd server
-npx vitest run __tests__/imageGenerator.test.mjs --run
+npx vitest run __tests__/imageGenerator.raster.test.mjs --run
 ```
 
 ---
@@ -197,6 +305,44 @@ npx vitest run __tests__/imageValidation.test.mjs --run
 ---
 
 ## Export and PDF Tests
+
+### Export Smoke Tests (`export_smoke.test.mjs`)
+
+Purpose: Quick smoke tests for the export functionality to ensure basic operation.
+
+Highlights:
+
+- Validates basic export endpoint functionality
+- Tests minimal export scenarios
+- Ensures export process completes successfully
+
+Run:
+
+```
+cd server
+npx vitest run __tests__/export_smoke.test.mjs --run
+```
+
+---
+
+### Export Endpoint Tests (`test-export-endpoint.js`)
+
+Purpose: Comprehensive testing of the export endpoint functionality.
+
+Highlights:
+
+- Tests various export configurations
+- Validates error handling
+- Tests response formats and headers
+
+Run:
+
+```
+cd server
+npm run test:run -- test-export-endpoint.js
+```
+
+---
 
 ### Export Integration (`export.integration.test.js`)
 

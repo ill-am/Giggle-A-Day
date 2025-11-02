@@ -1,3 +1,44 @@
+/**
+ * genieService - generation and persistence coordination
+ *
+ * Migration / persisted-read behavior note
+ * --------------------------------------
+ * This module supports two persistence access patterns used during the
+ * migration from legacy sqlite-based `crud` helpers to a Prisma-backed
+ * `utils/dbUtils` shim. The helper `getPersistedContent({ promptId, resultId })`
+ * implements a read-first strategy to locate canonical persisted AI
+ * results for preview/export endpoints.
+ *
+ * Priority and fallback rules
+ * 1. If a Prisma-backed `dbUtils` is available and returns rows, those are
+ *    treated as the canonical source of truth (prefer Prisma results).
+ * 2. If Prisma is present but returns no rows (or the Prisma query fails),
+ *    the function will attempt to require and query the legacy `./crud`
+ *    implementation so persisted rows written by older code paths remain
+ *    discoverable. This makes the system tolerant during migration and in
+ *    test environments where some code still writes to sqlite.
+ * 3. If an injected test `dbUtils` is provided (via `_setDbUtils`) it will
+ *    be used to keep unit tests deterministic.
+ *
+ * Test/runtime flags
+ * - USE_PRISMA_IN_TEST=true  : forces using Prisma in test mode (otherwise
+ *                              legacy `crud` is preferred in tests)
+ * - GENIE_PERSISTENCE_AWAIT   : when truthy, tests will await persistence
+ *                              synchronously (default in NODE_ENV=test)
+ * - GENIE_PERSISTENCE_ENABLED : global on/off switch for persistence
+ *
+ * Rationale
+ * The conservative fallback ensures that during a rolling migration (or
+ * mixed test environments) persisted data is always discoverable whether
+ * it's been written by the new Prisma client or the legacy sqlite helpers.
+ * This reduces surprising 400 validation failures in preview/export when
+ * callers reference `promptId`/`resultId` written by older code paths.
+ *
+ * Recommended follow-ups
+ * - Add a small unit test asserting the fallback path (Prisma present but
+ *   returns no rows -> legacy `crud` queried). See actionables for follow-up
+ *   TODOs to add that test and a dedupe/runbook workflow.
+ */
 let sampleService = require("./sampleService");
 const { saveContentToFile } = require("./utils/fileUtils");
 const normalizePrompt = require("./utils/normalizePrompt");
@@ -212,22 +253,30 @@ const genieService = {
             // unit tests deterministic by using the mock implementations.
             if (typeof _injectedDbUtils !== "undefined") {
               dbUtils = _injectedDbUtils;
-            } else if (process.env.NODE_ENV === "test") {
-              // In test mode without an injected mock, prefer the legacy
-              // sqlite-backed `crud` so API endpoints and persistence
-              // operate against the same storage.
-              dbUtils = require("./crud");
             } else {
-              try {
-                dbUtils = require("./utils/dbUtils");
-              } catch (e) {
-                // Fallback to legacy crud if Prisma-backed dbUtils unavailable
-                // eslint-disable-next-line no-console
-                console.warn(
-                  "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
-                  e && e.message
-                );
+              // By default, prefer the legacy `crud` while running under
+              // test mode to keep API endpoints consistent (many existing
+              // tests expect CRUD-backed storage). Allow overriding this
+              // behavior when an explicit environment flag requests that
+              // we exercise the Prisma-backed implementation in tests.
+              const usePrismaInTest =
+                process.env.USE_PRISMA_IN_TEST === "1" ||
+                process.env.USE_PRISMA_IN_TEST === "true";
+
+              if (process.env.NODE_ENV === "test" && !usePrismaInTest) {
                 dbUtils = require("./crud");
+              } else {
+                try {
+                  dbUtils = require("./utils/dbUtils");
+                } catch (e) {
+                  // Fallback to legacy crud if Prisma-backed dbUtils unavailable
+                  // eslint-disable-next-line no-console
+                  console.warn(
+                    "genieService: dbUtils unavailable in persistence step, falling back to legacy crud",
+                    e && e.message
+                  );
+                  dbUtils = require("./crud");
+                }
               }
             }
             // Create prompt record with dedupe-on-create handling.
@@ -412,7 +461,214 @@ const genieService = {
     }
   },
 
+  /**
+   * Read persisted content by promptId or resultId.
+   * Returns an object: { content, metadata, promptId, resultId } or null.
+   */
+  async getPersistedContent({ promptId, resultId } = {}) {
+    try {
+      let dbUtils;
+      if (typeof _injectedDbUtils !== "undefined") dbUtils = _injectedDbUtils;
+      else {
+        try {
+          dbUtils = require("./utils/dbUtils");
+        } catch (e) {
+          // Fallback to legacy crud
+          dbUtils = require("./crud");
+        }
+      }
+
+      // If resultId provided, prefer direct lookup
+      if (resultId) {
+        try {
+          // dbUtils.getAIResultById exists on both Prisma shim and crud
+          const row = await dbUtils.getAIResultById(parseInt(resultId, 10));
+          if (row && row.result) {
+            const resultObj =
+              typeof row.result === "string"
+                ? JSON.parse(row.result)
+                : row.result;
+            const content =
+              resultObj && resultObj.content ? resultObj.content : resultObj;
+            return {
+              content,
+              metadata: resultObj.metadata || null,
+              promptId: row.promptId || null,
+              resultId: row.id,
+            };
+          }
+        } catch (e) {
+          // non-fatal; continue to promptId path
+        }
+      }
+
+      if (promptId) {
+        const pid = parseInt(promptId, 10);
+        if (isNaN(pid)) return null;
+
+        // Prefer Prisma-backed direct query when available. If Prisma is
+        // present but returns no rows (e.g. tests wrote to legacy sqlite via
+        // `crud`) attempt a fallback to the legacy `crud` so persisted rows
+        // created by older code paths are still discoverable.
+        try {
+          if (dbUtils && typeof dbUtils._getPrisma === "function") {
+            const prisma = dbUtils._getPrisma();
+            let rows = [];
+            try {
+              rows = await prisma.aIResult.findMany({
+                where: { promptId: pid },
+                orderBy: { id: "asc" },
+              });
+            } catch (prismaErr) {
+              // If Prisma query fails (no connection, migrations, etc), we'll
+              // fall through to the legacy crud fallback below.
+              rows = [];
+            }
+
+            const latest = rows && rows.length ? rows[rows.length - 1] : null;
+            if (latest) {
+              const resultObj =
+                typeof latest.result === "string"
+                  ? JSON.parse(latest.result)
+                  : latest.result;
+              const content =
+                resultObj && resultObj.content ? resultObj.content : resultObj;
+              return {
+                content,
+                metadata: resultObj.metadata || null,
+                promptId: pid,
+                resultId: latest.id,
+              };
+            }
+
+            // No Prisma rows found: attempt legacy crud fallback below by
+            // continuing execution (do not return). This handles mixed
+            // environments during migration where tests or runtime may still
+            // write to sqlite via `crud`.
+          }
+        } catch (e) {
+          // fall back to legacy crud path
+        }
+
+        // Legacy crud fallback: try to require the legacy `crud` module and
+        // query its getAIResults implementation. This covers test and legacy
+        // environments where persisted rows were written by `crud` into the
+        // sqlite DB while a Prisma client may be present but not used.
+        try {
+          let legacyDb = null;
+          try {
+            legacyDb = require("./crud");
+          } catch (requireErr) {
+            legacyDb = null;
+          }
+
+          const candidate = legacyDb || dbUtils;
+          if (candidate && typeof candidate.getAIResults === "function") {
+            const results = await candidate.getAIResults();
+            const filtered = (results || []).filter(
+              (r) =>
+                r.prompt_id === pid ||
+                r.promptId === pid ||
+                r.promptId === String(pid)
+            );
+            // results are ordered by created_at desc in crud.getAIResults, ensure latest
+            const latest = filtered.length ? filtered[0] : null;
+            if (latest) {
+              const resultObj =
+                typeof latest.result === "string"
+                  ? JSON.parse(latest.result)
+                  : latest.result;
+              const content =
+                resultObj && resultObj.content ? resultObj.content : resultObj;
+              return {
+                content,
+                metadata: resultObj.metadata || null,
+                promptId: pid,
+                resultId: latest.id,
+              };
+            }
+          }
+        } catch (e) {
+          // non-fatal
+        }
+      }
+
+      return null;
+    } catch (e) {
+      // Non-fatal; return null so callers can fallback
+      // eslint-disable-next-line no-console
+      console.warn("genieService.getPersistedContent failed", e && e.message);
+      return null;
+    }
+  },
+
   // Backwards-compatible wrapper that delegates to utils/fileUtils
+  async export({ prompt, promptId, resultId, validate = false } = {}) {
+    // Centralized export orchestration: prefer persisted content, fall back
+    // to generation, then render PDF using the pdfGenerator utility.
+    try {
+      let contentObj = null;
+
+      // Prefer persisted canonical content when IDs provided
+      if (promptId || resultId) {
+        const persisted = await genieService.getPersistedContent({
+          promptId,
+          resultId,
+        });
+        if (persisted && persisted.content) {
+          contentObj =
+            persisted.content && persisted.content.content
+              ? persisted.content.content
+              : persisted.content;
+        }
+      }
+
+      // If caller provided a content object directly via `prompt`, accept it
+      if (!contentObj && prompt && typeof prompt === "object") {
+        // shape: { title, body }
+        contentObj = prompt;
+      }
+
+      // Otherwise, generate content from prompt text
+      if (!contentObj && prompt && typeof prompt === "string") {
+        const genResult = await genieService.generate(prompt);
+        // genieService.generate returns envelope { success, data }
+        if (genResult && genResult.data && genResult.data.content)
+          contentObj = genResult.data.content;
+        else if (genResult && genResult.content) contentObj = genResult.content;
+      }
+
+      if (!contentObj || !contentObj.title || !contentObj.body) {
+        const e = new Error(
+          "Export requires content (title & body) or a valid prompt/persisted id"
+        );
+        // @ts-ignore
+        e.status = 400;
+        throw e;
+      }
+
+      // Require pdfGenerator lazily to avoid pulling heavy deps at module load
+      const { generatePdfBuffer } = require("./pdfGenerator");
+      const title = contentObj.title || "Export";
+      const body = contentObj.body || "";
+
+      const generated = await generatePdfBuffer({ title, body, validate });
+      if (validate) {
+        if (generated && generated.buffer)
+          return { buffer: generated.buffer, validation: generated.validation };
+        // Some implementations return { buffer, validation } already
+        if (generated && generated.validation) return generated;
+      }
+
+      return {
+        buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
+      };
+    } catch (err) {
+      // Surface errors to the controller
+      throw err;
+    }
+  },
+
   saveContentToFile(content) {
     return saveContentToFile(content);
   },
