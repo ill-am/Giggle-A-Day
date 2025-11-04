@@ -603,11 +603,37 @@ const genieService = {
   },
 
   // Backwards-compatible wrapper that delegates to utils/fileUtils
-  async export({ prompt, promptId, resultId, validate = false } = {}) {
+  async export({
+    prompt,
+    promptId,
+    resultId,
+    envelope,
+    validate = false,
+  } = {}) {
     // Centralized export orchestration: prefer persisted content, fall back
     // to generation, then render PDF using the pdfGenerator utility.
     try {
       let contentObj = null;
+
+      // If caller provided a canonical envelope directly, use it immediately
+      if (envelope && envelope.pages && Array.isArray(envelope.pages)) {
+        // Accept canonical envelope directly; downstream plumbing will render
+        // the envelope into a PDF. Bypass legacy title/body normalization.
+        // Note: we still allow validate flag to be passed through.
+        const { generatePdfBuffer } = require("./pdfGenerator");
+        const generated = await generatePdfBuffer({ envelope, validate });
+        if (validate) {
+          if (generated && generated.buffer)
+            return {
+              buffer: generated.buffer,
+              validation: generated.validation,
+            };
+          if (generated && generated.validation) return generated;
+        }
+        return {
+          buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
+        };
+      }
 
       // Prefer persisted canonical content when IDs provided
       if (promptId || resultId) {
