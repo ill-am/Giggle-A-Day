@@ -40,7 +40,15 @@
       aiResult = JSON.stringify(result, null, 2);
       // Populate the shared content store so UI components (ExportButton)
       // can reactively enable export and other actions.
-      contentStore.set(result);
+      // `result` is an envelope: { content, copies, metadata, promptId, resultId }
+      // Export expects a content object with top-level { title, body }.
+      // Unwrap common envelope shapes to ensure the store contains the
+      // expected payload shape (defensive but minimal change).
+      const contentToStore =
+        (result && (result.content || (result.data && result.data.content))) ||
+        result ||
+        null;
+      contentStore.set(contentToStore);
     } catch (err) {
       apiError = err.message;
     } finally {
