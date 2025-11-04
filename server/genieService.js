@@ -76,6 +76,30 @@ const genieService = {
       throw e;
     }
 
+    // Non-fatal: persist a copy of the raw prompt to disk for auditing/debug.
+    // Use the async file util `saveContentToFile` and do not block normal
+    // generation. In test mode (AWAIT_PERSISTENCE) we await to keep tests
+    // deterministic.
+    try {
+      const p = String(prompt);
+      const savePromise = saveContentToFile(p).catch((err) => {
+        // Log but do not fail generation
+        // eslint-disable-next-line no-console
+        console.warn(
+          "genieService: saveContentToFile failed",
+          err && err.message
+        );
+      });
+      if (AWAIT_PERSISTENCE) await savePromise;
+    } catch (e) {
+      // Defensive log; do not surface to caller
+      // eslint-disable-next-line no-console
+      console.warn(
+        "genieService: saveContentToFile invocation error",
+        e && e.message
+      );
+    }
+
     // If persistence/lookup is enabled, attempt a read-only DB lookup first.
     if (ENABLE_PERSISTENCE) {
       try {
