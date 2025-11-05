@@ -29,57 +29,46 @@ function buildPagesFromCopies(copies) {
   }));
 }
 
-async function generate(promptOrEnvelope, opts = {}) {
+async function generate(envelopeReq = {}, opts = {}) {
   // Pure: do not perform any I/O or persistence here.
-  // Support two call shapes:
-  // 1) string prompt (legacy internal callers) -> return { envelope, metadata }
-  // 2) { in_envelope, out_envelope } -> populate out_envelope and return full envelope
-
-  // If caller passed envelope request
+  // Accept only the canonical envelope request: { in_envelope, out_envelope }
   if (
-    promptOrEnvelope &&
-    typeof promptOrEnvelope === "object" &&
-    promptOrEnvelope.in_envelope
+    !envelopeReq ||
+    typeof envelopeReq !== "object" ||
+    !envelopeReq.in_envelope
   ) {
-    const inEnv = promptOrEnvelope.in_envelope || {};
-    const outEnv = promptOrEnvelope.out_envelope || {};
-
-    const content = buildContent(inEnv.prompt || "", opts);
-    const copies = makeCopies(content, opts.copies || 3);
-    const pages = buildPagesFromCopies(copies);
-
-    // Populate out_envelope with canonical pages and metadata
-    outEnv.pages = pages;
-    outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
-
-    const envelope = {
-      version: 1,
-      in_envelope: inEnv,
-      out_envelope: outEnv,
-    };
-    const metadata = { generatedAt: new Date().toISOString() };
-    return { envelope, metadata };
+    const e = new Error(
+      "Invalid input: expected { in_envelope, out_envelope }"
+    );
+    // @ts-ignore
+    e.status = 400;
+    throw e;
   }
 
-  // Legacy string prompt path: produce canonical envelope for compatibility
-  const content = buildContent(promptOrEnvelope, opts);
+  const inEnv = envelopeReq.in_envelope || {};
+  const outEnv = envelopeReq.out_envelope || {};
+
+  const content = buildContent(inEnv.prompt || "", opts);
   const copies = makeCopies(content, opts.copies || 3);
   const pages = buildPagesFromCopies(copies);
 
-  const envelope = {
-    // id assigned later by persistence
-    version: 1,
-    metadata: { model: "sample-v1" },
-    pages,
-  };
+  // Populate out_envelope with canonical pages and metadata
+  outEnv.pages = pages;
+  outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
 
+  const envelope = {
+    version: 1,
+    in_envelope: inEnv,
+    out_envelope: outEnv,
+  };
   const metadata = { generatedAt: new Date().toISOString() };
   return { envelope, metadata };
 }
 
 // Keep a backward-compatible wrapper name for callers that used the old API.
-async function generateFromPrompt(prompt, opts = {}) {
-  return generate(prompt, opts);
+// Wrapper kept for API compatibility but now requires an envelope request.
+async function generateFromPrompt(envelopeReq, opts = {}) {
+  return generate(envelopeReq, opts);
 }
 
 module.exports = {
