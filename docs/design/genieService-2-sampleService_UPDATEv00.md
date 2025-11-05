@@ -2,6 +2,8 @@
 
 **Important**  The change, though important, is relatively minor - its implementation is trivial.
 
+**Remember to:** a minimal unit test and an integration smoke test
+
 Policy (one line): genieService will forward a single, versioned JSON envelope of the shape { in_envelope: {...}, out_envelope: {...} }; legacy `{content,copies,pages,metadata}` is no longer supported and must be expunged immediately.
 
 Recap — contract and flow (succinct)
