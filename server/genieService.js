@@ -13,7 +13,7 @@
  * 1. If a Prisma-backed `dbUtils` is available and returns rows, those are
  *    treated as the canonical source of truth (prefer Prisma results).
  * 2. If Prisma is present but returns no rows (or the Prisma query fails),
- *    the function will attempt to require and query the legacy `./crud`
+ * *    the function will attempt to require and query the legacy `./crud`
  *    implementation so persisted rows written by older code paths remain
  *    discoverable. This makes the system tolerant during migration and in
  *    test environments where some code still writes to sqlite.
@@ -39,6 +39,20 @@
  *   returns no rows -> legacy `crud` queried). See actionables for follow-up
  *   TODOs to add that test and a dedupe/runbook workflow.
  */
+
+/**
+ * @typedef {Object} Content
+ * @property {string} title
+ * @property {string} body
+ * @property {string} [layout]
+ */
+/**
+ * @typedef {Object} GenEnvelope
+ * @property {boolean} success
+ * @property {{content: Content, aiResponse?: any, copies?: any[], metadata?: any, promptId?: number, resultId?: number}} data
+ * @property {Content} [content]
+ */
+
 let sampleService = require("./sampleService");
 const { saveContentToFile } = require("./utils/fileUtils");
 const normalizePrompt = require("./utils/normalizePrompt");
@@ -68,6 +82,11 @@ const AWAIT_PERSISTENCE = (() => {
 const genieService = {
   // For the demo, generate delegates to sampleService. In future this can
   // orchestrate real AI/image jobs via aetherService.
+  /**
+   * Generate content for a prompt.
+   * @param {string} prompt
+   * @returns {Promise<GenEnvelope>}
+   */
   async generate(prompt) {
     if (!prompt || !String(prompt).trim()) {
       const e = new Error("Prompt is required");
@@ -79,26 +98,18 @@ const genieService = {
     // Non-fatal: persist a copy of the raw prompt to disk for auditing/debug.
     // Use the async file util `saveContentToFile` and do not block normal
     // generation. In test mode (AWAIT_PERSISTENCE) we await to keep tests
-    // deterministic.
-    try {
-      const p = String(prompt);
-      const savePromise = saveContentToFile(p).catch((err) => {
-        // Log but do not fail generation
-        // eslint-disable-next-line no-console
-        console.warn(
-          "genieService: saveContentToFile failed",
-          err && err.message
-        );
-      });
-      if (AWAIT_PERSISTENCE) await savePromise;
-    } catch (e) {
-      // Defensive log; do not surface to caller
+    // deterministic. Any IO error is handled by the save promise's catch
+    // so we don't need an outer try/catch here.
+    const p = String(prompt);
+    const savePromise = saveContentToFile(p).catch((err) => {
+      // Log but do not fail generation
       // eslint-disable-next-line no-console
       console.warn(
-        "genieService: saveContentToFile invocation error",
-        e && e.message
+        "genieService: saveContentToFile failed",
+        err && err.message
       );
-    }
+    });
+    if (AWAIT_PERSISTENCE) await savePromise;
 
     // If persistence/lookup is enabled, attempt a read-only DB lookup first.
     if (ENABLE_PERSISTENCE) {
@@ -488,6 +499,7 @@ const genieService = {
   /**
    * Read persisted content by promptId or resultId.
    * Returns an object: { content, metadata, promptId, resultId } or null.
+   * @param {{promptId?: number|string, resultId?: number|string}} [opts]
    */
   async getPersistedContent({ promptId, resultId } = {}) {
     try {
@@ -627,6 +639,10 @@ const genieService = {
   },
 
   // Backwards-compatible wrapper that delegates to utils/fileUtils
+  /**
+   * Export content or a generated prompt to a PDF buffer.
+   * @param {{prompt?: string|Content, promptId?: number|string, resultId?: number|string, envelope?: any, validate?: boolean}} [opts]
+   */
   async export({
     prompt,
     promptId,
@@ -636,87 +652,90 @@ const genieService = {
   } = {}) {
     // Centralized export orchestration: prefer persisted content, fall back
     // to generation, then render PDF using the pdfGenerator utility.
-    try {
-      let contentObj = null;
+    let contentObj = null;
+    // Lazily require pdfGenerator once for this invocation to avoid
+    // duplicate identifier complaints from static analysis when using
+    // destructured requires in multiple branches.
+    const pdfGenerator = /** @type {any} */ (require("./pdfGenerator"));
 
-      // If caller provided a canonical envelope directly, use it immediately
-      if (envelope && envelope.pages && Array.isArray(envelope.pages)) {
-        // Accept canonical envelope directly; downstream plumbing will render
-        // the envelope into a PDF. Bypass legacy title/body normalization.
-        // Note: we still allow validate flag to be passed through.
-        const { generatePdfBuffer } = require("./pdfGenerator");
-        const generated = await generatePdfBuffer({ envelope, validate });
-        if (validate) {
-          if (generated && generated.buffer)
-            return {
-              buffer: generated.buffer,
-              validation: generated.validation,
-            };
-          if (generated && generated.validation) return generated;
-        }
-        return {
-          buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
-        };
-      }
-
-      // Prefer persisted canonical content when IDs provided
-      if (promptId || resultId) {
-        const persisted = await genieService.getPersistedContent({
-          promptId,
-          resultId,
-        });
-        if (persisted && persisted.content) {
-          contentObj =
-            persisted.content && persisted.content.content
-              ? persisted.content.content
-              : persisted.content;
-        }
-      }
-
-      // If caller provided a content object directly via `prompt`, accept it
-      if (!contentObj && prompt && typeof prompt === "object") {
-        // shape: { title, body }
-        contentObj = prompt;
-      }
-
-      // Otherwise, generate content from prompt text
-      if (!contentObj && prompt && typeof prompt === "string") {
-        const genResult = await genieService.generate(prompt);
-        // genieService.generate returns envelope { success, data }
-        if (genResult && genResult.data && genResult.data.content)
-          contentObj = genResult.data.content;
-        else if (genResult && genResult.content) contentObj = genResult.content;
-      }
-
-      if (!contentObj || !contentObj.title || !contentObj.body) {
-        const e = new Error(
-          "Export requires content (title & body) or a valid prompt/persisted id"
-        );
-        // @ts-ignore
-        e.status = 400;
-        throw e;
-      }
-
-      // Require pdfGenerator lazily to avoid pulling heavy deps at module load
-      const { generatePdfBuffer } = require("./pdfGenerator");
-      const title = contentObj.title || "Export";
-      const body = contentObj.body || "";
-
-      const generated = await generatePdfBuffer({ title, body, validate });
+    // If caller provided a canonical envelope directly, use it immediately
+    if (envelope && envelope.pages && Array.isArray(envelope.pages)) {
+      // Accept canonical envelope directly; downstream plumbing will render
+      // the envelope into a PDF. Bypass legacy title/body normalization.
+      // Note: we still allow validate flag to be passed through.
+      const generated = await pdfGenerator.generatePdfBuffer({
+        envelope,
+        validate,
+      });
       if (validate) {
         if (generated && generated.buffer)
-          return { buffer: generated.buffer, validation: generated.validation };
-        // Some implementations return { buffer, validation } already
+          return {
+            buffer: generated.buffer,
+            validation: generated.validation,
+          };
         if (generated && generated.validation) return generated;
       }
-
       return {
         buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
       };
-    } catch (err) {
-      // Surface errors to the controller
-      throw err;
     }
+
+    // Prefer persisted canonical content when IDs provided
+    if (promptId || resultId) {
+      const persisted = await genieService.getPersistedContent({
+        promptId,
+        resultId,
+      });
+      if (persisted && persisted.content) {
+        contentObj =
+          persisted.content && persisted.content.content
+            ? persisted.content.content
+            : persisted.content;
+      }
+    }
+
+    // If caller provided a content object directly via `prompt`, accept it
+    if (!contentObj && prompt && typeof prompt === "object") {
+      // shape: { title, body }
+      contentObj = prompt;
+    }
+
+    // Otherwise, generate content from prompt text
+    if (!contentObj && prompt && typeof prompt === "string") {
+      const genResult = await genieService.generate(prompt);
+      // genieService.generate returns envelope { success, data }
+      if (genResult && genResult.data && genResult.data.content)
+        contentObj = genResult.data.content;
+      else if (genResult && genResult.content) contentObj = genResult.content;
+    }
+
+    if (!contentObj || !contentObj.title || !contentObj.body) {
+      const e = new Error(
+        "Export requires content (title & body) or a valid prompt/persisted id"
+      );
+      // @ts-ignore
+      e.status = 400;
+      throw e;
+    }
+
+    const title = contentObj.title || "Export";
+    const body = contentObj.body || "";
+
+    const generated = await pdfGenerator.generatePdfBuffer({
+      title,
+      body,
+      validate,
+    });
+    if (validate) {
+      if (generated && generated.buffer)
+        return { buffer: generated.buffer, validation: generated.validation };
+      // Some implementations return { buffer, validation } already
+      if (generated && generated.validation) return generated;
+    }
+
+    return {
+      buffer: Buffer.isBuffer(generated) ? generated : generated.buffer,
+    };
   },
 
   saveContentToFile(content) {
