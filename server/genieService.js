@@ -211,15 +211,45 @@ const genieService = {
         typeof _injectedSampleService !== "undefined"
           ? _injectedSampleService
           : sampleService;
-      const result = await svc.generateFromPrompt(prompt);
 
-      // Ensure returned envelope includes expected fields (metadata, layout)
-      const content = result.content || {};
+      // Build canonical in_envelope and call the worker with an envelope
+      const in_envelope = { prompt: String(prompt) };
+      const envelopeReq = { in_envelope, out_envelope: {} };
+      const result = await svc.generateFromPrompt(envelopeReq);
+
+      // Normalize returned result: prefer envelope.out_envelope when present
+      let returned = result || {};
+      // Some services may return { envelope, metadata } or { envelope: {...} }
+      if (returned.envelope) returned = returned.envelope;
+
+      const svcOut = returned.out_envelope || returned;
+
+      // Ensure returned content/layout and metadata defaults
+      const content = (svcOut && svcOut.content) || {};
       if (!content.layout) content.layout = "poem-single-column";
-      const metadata = result.metadata || {
+      const metadata = svcOut.metadata || {
         model: "mock-1",
         tokens: Math.max(10, Math.min(200, String(prompt || "").length)),
       };
+
+      // Normalize returned pages/copies/content into a compat shape used below
+      const normalized = {};
+      if (Array.isArray(svcOut.pages)) {
+        normalized.pages = svcOut.pages;
+        normalized.copies = svcOut.pages.map((p) => ({
+          title:
+            p.title || (p.blocks && p.blocks[0] && p.blocks[0].content) || "",
+          body: (p.blocks && p.blocks[0] && p.blocks[0].content) || "",
+          layout: p.layout || content.layout,
+        }));
+        normalized.pagesCount = svcOut.pages.length;
+      }
+      if (Array.isArray(svcOut.copies)) {
+        normalized.copies = svcOut.copies;
+        normalized.pagesCount = svcOut.copies.length;
+      }
+      if (svcOut.content) normalized.content = svcOut.content;
+      if (svcOut.metadata) normalized.metadata = svcOut.metadata;
 
       // Build a backward-compatible output envelope and include a richer
       // aiResponse envelope that can be multi-page. Use copies from the

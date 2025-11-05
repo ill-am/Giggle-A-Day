@@ -29,9 +29,40 @@ function buildPagesFromCopies(copies) {
   }));
 }
 
-async function generate(prompt, opts = {}) {
+async function generate(promptOrEnvelope, opts = {}) {
   // Pure: do not perform any I/O or persistence here.
-  const content = buildContent(prompt, opts);
+  // Support two call shapes:
+  // 1) string prompt (legacy internal callers) -> return { envelope, metadata }
+  // 2) { in_envelope, out_envelope } -> populate out_envelope and return full envelope
+
+  // If caller passed envelope request
+  if (
+    promptOrEnvelope &&
+    typeof promptOrEnvelope === "object" &&
+    promptOrEnvelope.in_envelope
+  ) {
+    const inEnv = promptOrEnvelope.in_envelope || {};
+    const outEnv = promptOrEnvelope.out_envelope || {};
+
+    const content = buildContent(inEnv.prompt || "", opts);
+    const copies = makeCopies(content, opts.copies || 3);
+    const pages = buildPagesFromCopies(copies);
+
+    // Populate out_envelope with canonical pages and metadata
+    outEnv.pages = pages;
+    outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
+
+    const envelope = {
+      version: 1,
+      in_envelope: inEnv,
+      out_envelope: outEnv,
+    };
+    const metadata = { generatedAt: new Date().toISOString() };
+    return { envelope, metadata };
+  }
+
+  // Legacy string prompt path: produce canonical envelope for compatibility
+  const content = buildContent(promptOrEnvelope, opts);
   const copies = makeCopies(content, opts.copies || 3);
   const pages = buildPagesFromCopies(copies);
 
