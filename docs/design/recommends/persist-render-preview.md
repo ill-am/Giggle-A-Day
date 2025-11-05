@@ -5,7 +5,10 @@ Implemented: To-be-determined
 
 Summary
 
-- Three focused changes to improve reliability and clarity: (1) persist a placeholder result before generation so runs are trackable, (2) require or convert service output into finalized renderable HTML/assets for the PDF renderer, and (3) keep preview endpoints lightweight and separate from full PDF generation/validation.
+- Three focused changes to improve reliability and clarity: 
+(1) persist a placeholder result before generation so runs are trackable, 
+(2) require or convert service output into finalized renderable HTML/assets for the PDF renderer, and 
+(3) keep preview endpoints lightweight and separate from full PDF generation/validation.
 
 ## Persist early
 
