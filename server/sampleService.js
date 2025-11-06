@@ -1,6 +1,6 @@
-// Services MUST be pure: return canonical Envelope and optional actions.
+// Services MUST be pure: return canonical out_envelope and optional actions.
 // This module provides a minimal, testable implementation of the Generation
-// contract: async generate(prompt) -> { envelope, metadata? }
+// contract: async generate(envelopeReq) -> { out_envelope, metadata? }
 
 function buildContent(prompt, opts = {}) {
   const maxWords = opts.titleWords || 6;
@@ -56,13 +56,9 @@ async function generate(envelopeReq = {}, opts = {}) {
   outEnv.pages = pages;
   outEnv.metadata = outEnv.metadata || { model: "sample-v1" };
 
-  const envelope = {
-    version: 1,
-    in_envelope: inEnv,
-    out_envelope: outEnv,
-  };
+  // Return the canonical shape: { out_envelope: { ... }, metadata? }
   const metadata = { generatedAt: new Date().toISOString() };
-  return { envelope, metadata };
+  return { out_envelope: outEnv, metadata };
 }
 
 // Keep a backward-compatible wrapper name for callers that used the old API.
